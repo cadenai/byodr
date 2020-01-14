@@ -82,45 +82,36 @@ class MessageServerSocket(websocket.WebSocketHandler):
     def on_close(self):
         logger.info("Log client disconnected.")
 
-    @staticmethod
-    def _float(v, scale=1):
-        return None if v is None else float(v) * scale
-
-    @staticmethod
-    def _int(v, scale=1):
-        return None if v is None else int(v) * scale
-
     def on_message(self, *args):
         try:
             pilot = self.pilot_state[0] if bool(self.pilot_state) else None
-            response = {}
-            if pilot is not None:
-                response = {
-                    'ctl': 0,
-                    'debug1': 0.,
-                    'debug2': 0.,
-                    'debug3': 0.,
-                    'debug4': 0.,
-                    'debug5': 0.,
-                    'debug6': 0.,
-                    'debug7': 0.,
-                    'rec_act': False,
-                    'rec_mod': None,
-                    'ste': pilot.get('steering'),
-                    'thr': pilot.get('throttle'),
-                    'rev': 0,
-                    'vel_y': 0.,
-                    'x': 0.,
-                    'y': 0.,
-                    'speed': 0.,
-                    'max_speed': 0.,
-                    'head': 0.,
-                    'route': None,
-                    'route_np': None,
-                    'route_np_sim': 0.,
-                    'route_np_debug1': 0.,
-                    'turn': 'intersection.ahead',
-                }
+            vehicle = self.vehicle_state[0] if bool(self.vehicle_state) else None
+            response = {
+                'ctl': 0,
+                'debug1': 0.,
+                'debug2': 0.,
+                'debug3': 0.,
+                'debug4': 0.,
+                'debug5': 0.,
+                'debug6': 0.,
+                'debug7': 0.,
+                'rec_act': False,
+                'rec_mod': None,
+                'ste': 0 if pilot is None else pilot.get('steering'),
+                'thr': 0 if pilot is None else pilot.get('throttle'),
+                'rev': 0,
+                'vel_y': 0 if vehicle is None else vehicle.get('velocity'),
+                'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
+                'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
+                'speed': 0.,
+                'max_speed': 0.,
+                'head': 0 if vehicle is None else vehicle.get('heading'),
+                'route': None,
+                'route_np': None,
+                'route_np_sim': 0.,
+                'route_np_debug1': 0.,
+                'turn': 'intersection.ahead',
+            }
             self.write_message(json.dumps(response))
         except Exception:
             logger.error("MessageServerSocket:on_message:{}".format(traceback.format_exc()))

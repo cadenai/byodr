@@ -423,27 +423,33 @@ class DriverManager(object):
         self._driver = self._get_driver(control=control)
         threading.Thread(target=self._activate).start()
 
-    def close_sessions(self):
-        for _c in ('driver.mode.dnn', 'driver.mode.dagger'):
-            if _c in self._driver_cache:
-                self._driver_cache[_c].deactivate()
-
-    def get_control(self):
-        return self._driver_ctl
-
-    def get_navigation_settings(self):
-        return self._driver.get_navigation_settings()
-
-    def next_recorder(self):
-        return self._driver.next_recorder()
-
-    def create_blob(self):
+    def _create_blob(self):
         blob = Blob()
         self._driver.get_noop(blob)
         return blob
 
-    def get_next_action(self, blob):
-        return self._driver.get_next_action(blob)
+    # def close_sessions(self):
+    #     for _c in ('driver.mode.dnn', 'driver.mode.dagger'):
+    #         if _c in self._driver_cache:
+    #             self._driver_cache[_c].deactivate()
+
+    # def get_navigation_settings(self):
+    #     return self._driver.get_navigation_settings()
+
+    # def next_recorder(self):
+    #     return self._driver.next_recorder()
+
+    def get_next_action(self, command):
+        blob = self._create_blob()
+        # Say 250 ms is the connectivity minimum.
+        if command is not None and time.time() - command.get('time') < .250:
+            blob.driver = self._driver_ctl
+            blob.steering = command.get('steering')
+            blob.throttle = command.get('throttle')
+            self._driver.get_next_action(blob)
+        # Otherwise steering and throttle are set to zero - per the noop.
+        drive = dict(steering=blob.steering, throttle=blob.throttle)
+        return drive, blob
 
     def quit(self):
         for driver in self._driver_cache.values():
@@ -487,17 +493,9 @@ def main():
         try:
             proc_start = time.time()
             # Run the main step.
-            blob = driver.create_blob()
-            drive = drive_queue[0] if bool(drive_queue) else None
-            # Say 250 ms is the connectivity minimum.
-            if drive is not None and time.time() - drive.get('time') < .25:
-                blob.driver = driver.get_control()
-                blob.steering = drive.get('steering')
-                blob.throttle = drive.get('throttle')
-                driver.get_next_action(blob)
-            # Otherwise steering and throttle are set to zero - per the noop command that created the blob.
-            output_topic.publish(json.dumps(dict(steering=blob.steering, throttle=blob.throttle)))
-            state_topic.publish(json.dumps(blob))
+            output, state = driver.get_next_action(drive_queue[0] if bool(drive_queue) else None)
+            output_topic.publish(json.dumps(output))
+            state_topic.publish(json.dumps(state))
             # Synchronize per clock rate.
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))

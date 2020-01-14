@@ -1,4 +1,3 @@
-# docker build -t byodr/carla .
 FROM ros:melodic
 
 RUN apt-get update && apt-get install -y \
@@ -9,8 +8,5 @@ WORKDIR /app
 COPY . app/
 
 RUN pip install --no-cache-dir -r requirements.txt
-# pip install -r https://raw.githubusercontent.com/carla-simulator/carla/0.9.6/PythonClient/requirements.txt
-# pip install git+https://github.com/carla-simulator/carla.git@0.9.6#"egg=carla_client&subdirectory=PythonClient"
 
-#EXPOSE 9100
-
+RUN python -m easy_install --user --no-deps carla-0.9.6-py2.7-linux-x86_64.egg

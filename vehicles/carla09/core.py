@@ -28,25 +28,7 @@ class CarlaHandler(object):
         self._actor_lock = multiprocessing.Lock()
         self._actor_last_location = None
         self._actor_distance_traveled = 0.
-        self._spawn_location = (0, None)
-
-    def on_tick(self, _):
-        if self._actor is not None and self._actor.is_alive:
-            with self._actor_lock:
-                location = self._actor.get_location()
-                if self._actor_last_location is not None:
-                    _x, _y = self._actor_last_location
-                    self._actor_distance_traveled += math.sqrt((location.x - _x) ** 2 + (location.y - _y) ** 2)
-                self._actor_last_location = (location.x, location.y)
-
-    def start(self):
-        self._reset()
-
-    def quit(self):
-        self._destroy()
-
-    def on_drive(self, cmd):
-        pass
+        self._spawn_index = 0
 
     def _reset_agent_travel(self):
         logger.info("Actor distance traveled is {:8.3f}.".format(self._actor_distance_traveled))
@@ -60,14 +42,6 @@ class CarlaHandler(object):
             if sensor.is_alive:
                 sensor.destroy()
 
-    # def on_ctl_switch(self, control, **kwargs):
-    #     if control == Control.CTL_JOYSTICK:
-    #         self._spawn_location = (0, None)
-    #     if self._actor is not None:
-    #         self._actor.set_autopilot(control == Control.CTL_AUTOPILOT)
-    #     with self._actor_lock:
-    #         self._reset_agent_travel()
-
     def _reset(self):
         logger.info('Resetting ...')
         self._destroy()
@@ -75,9 +49,8 @@ class CarlaHandler(object):
         blueprint_library = self._world.get_blueprint_library()
         vehicle_bp = blueprint_library.find('vehicle.tesla.model3')
         spawn_points = self._world.get_map().get_spawn_points()
-        spawn_idx = self._spawn_location[0] + 1 if (self._spawn_location[0] + 1) < len(spawn_points) else 0
+        spawn_idx = self._spawn_index + 1 if (self._spawn_index + 1) < len(spawn_points) else 0
         spawn_point = spawn_points[spawn_idx]
-        self._spawn_location = (spawn_idx, spawn_point)
         logger.info("Spawn point is '{}'.".format(spawn_point))
         self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
         # Attach the camera's - defaults at https://carla.readthedocs.io/en/latest/cameras_and_sensors/.
@@ -115,41 +88,65 @@ class CarlaHandler(object):
             logger.warn(e)
         return np.zeros(shape=self._image_shape, dtype=np.uint8)
 
-    def _fill(self, blob):
-        actor = self._actor
-        if actor is None:
-            blob.x_coordinate = -1
-            blob.y_coordinate = -1
-            blob.heading = 0
-            blob.velocity_y = 0
-        else:
-            location = actor.get_location()
-            blob.x_coordinate = location.x
-            blob.y_coordinate = location.y
-            blob.heading = actor.get_transform().rotation.yaw
-            blob.velocity_y = self._carla_vel()
-
     def _carla_vel(self):
         velocity = self._actor.get_velocity()
         return math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2) / 1.6 / 3.6
 
-    def _publish(self, blob):
+    def _position(self):
+        location = None if self._actor is None else self._actor.get_location()
+        return (-1, -1) if location is None else (location.x, location.y)
+
+    def _heading(self):
+        return 0 if self._actor is None else self._actor.get_transform().rotation.yaw
+
+    def _velocity(self):
+        return 0 if self._actor is None else self._carla_vel()
+
+    def start(self):
+        self._reset()
+
+    def quit(self):
+        self._destroy()
+
+    def on_tick(self, _):
+        if self._actor is not None and self._actor.is_alive:
+            with self._actor_lock:
+                location = self._actor.get_location()
+                if self._actor_last_location is not None:
+                    _x, _y = self._actor_last_location
+                    self._actor_distance_traveled += math.sqrt((location.x - _x) ** 2 + (location.y - _y) ** 2)
+                self._actor_last_location = (location.x, location.y)
+
+    # def on_ctl_switch(self, control, **kwargs):
+    #     if control == Control.CTL_JOYSTICK:
+    #         self._spawn_location = (0, None)
+    #     if self._actor is not None:
+    #         self._actor.set_autopilot(control == Control.CTL_AUTOPILOT)
+    #     with self._actor_lock:
+    #         self._reset_agent_travel()
+
+    #                 if blob.control == Control.CTL_AUTOPILOT:
+    #                     vehicle_control = self._actor.get_control()
+    #                     blob.throttle = vehicle_control.throttle
+    #                     blob.steering = vehicle_control.steer
+    #                     blob.desired_speed = self._carla_vel()
+    #                     blob.road_speed = blob.desired_speed
+
+    def get_state(self):
+        x, y = self._position()
+        return dict(x_coordinate=x, y_coordinate=y, heading=self._heading(), velocity=self._velocity())
+
+    def on_drive(self, cmd):
         if self._actor is not None:
             try:
-                if blob.control == Control.CTL_AUTOPILOT:
-                    vehicle_control = self._actor.get_control()
-                    blob.throttle = vehicle_control.throttle
-                    blob.steering = vehicle_control.steer
-                    blob.desired_speed = self._carla_vel()
-                    blob.road_speed = blob.desired_speed
+                steering, throttle = cmd.get('steering'), cmd.get('throttle')
+                control = carla.VehicleControl()
+                control.steer = steering
+                if throttle > 0:
+                    control.throttle = throttle
                 else:
-                    control = carla.VehicleControl()
-                    control.steer = blob.steering
-                    if blob.throttle > 0:
-                        control.throttle = blob.throttle
-                    else:
-                        control.brake = abs(blob.throttle)
-                    self._actor.apply_control(control)
+                    control.brake = abs(throttle)
+                self._actor.apply_control(control)
             except Exception as e:
                 logger.error("{}".format(e))
 
@@ -182,17 +179,15 @@ def main():
     vehicle.start()
     callback_id = world.on_tick(lambda ts: vehicle.on_tick(ts))
 
-    _ros_init()
-
     # self._camera_topic = rospy.Publisher('aav/vehicle/camera/center', RosString, queue_size=1)
-    # self._vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
+    _ros_init()
+    vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
 
     def on_drive(data):
-        cmd = json.loads(data.data)
-        vehicle.on_drive(cmd)
+        vehicle.on_drive(json.loads(data.data))
+        vehicle_topic.publish(json.dumps(vehicle.get_state()))
 
     rospy.Subscriber('aav/pilot/command/drive', RosString, on_drive)
-
     rospy.spin()
 
     # Done.

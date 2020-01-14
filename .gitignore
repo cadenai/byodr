@@ -106,3 +106,4 @@ venv.bak/
 
 # folders
 data_root
+!/vehicles/carla09/carla-0.9.6-py2.7-linux-x86_64.egg
