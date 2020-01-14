@@ -1,6 +1,7 @@
-# build with
-docker build -t caden/pilot .
+# build
+docker build -t mwlc/byodr-pilot .
 
-# run on cmd line
-docker run -it -v $HOME/Development/Caden/caden/pilot:/app --name caden-pilot --network caden-net \
---env ROS_MASTER_URI=http://ros-master:11311 ros:melodic bin/bash
+# run
+docker run -it -v $(pwd):/app \
+--env ROS_MASTER_URI=http://ros_master:11311 \
+--network byodr_net --name byodr_pilot ros:melodic bin/bash

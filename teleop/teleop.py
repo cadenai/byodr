@@ -45,10 +45,10 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        logger.info("Control client connected.")
+        logger.info("Client connected.")
 
     def on_close(self):
-        logger.info("Control client disconnected.")
+        logger.info("Client disconnected.")
 
     def on_message(self, json_message):
         if not quit_event.is_set():

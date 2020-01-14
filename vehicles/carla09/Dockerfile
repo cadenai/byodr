@@ -1,4 +1,4 @@
-# docker build -t caden/carla .
+# docker build -t byodr/carla .
 FROM ros:melodic
 
 RUN apt-get update && apt-get install -y \

@@ -1,6 +1,7 @@
-# build with
-docker build -t caden/teleop .
+# build
+docker build -t mwlc/byodr-teleop .
 
-# run on cmd line
-docker run -it -v $HOME/Development/Caden/caden/teleop:/app --name caden-teleop --network caden-net -p 9100:9100 \
---env ROS_MASTER_URI=http://ros-master:11311 ros:melodic bin/bash
+# run
+docker run -it -v $(pwd):/app -p 9100:9100 \
+--env ROS_MASTER_URI=http://ros_master:11311 \
+--network byodr_net --name byodr_teleop ros:melodic bin/bash

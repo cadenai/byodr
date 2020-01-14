@@ -105,7 +105,7 @@ class CarlaHandler(object):
             img = np.frombuffer(self._images[0].raw_data, dtype=np.dtype("uint8"))
             _height, _width = self._image_shape[:2]
             img = np.reshape(img, (_height, _width, 4))  # To bgr_a format.
-            # The image standard within caden is hwc bgr.
+            # The image standard is hwc bgr.
             img = img[:, :, :3]
             return img
         except IndexError:

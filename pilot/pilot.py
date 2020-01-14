@@ -11,6 +11,7 @@ from abc import ABCMeta, abstractmethod
 
 import pid_controller.pid as pic
 import rospy
+from jsoncomment import JsonComment
 from std_msgs.msg import String as RosString
 
 logger = logging.getLogger(__name__)
@@ -87,14 +88,13 @@ class AbstractDriverBase(object):
         self._active = False
         self._previous_config = None
 
-    def log_config(self):
-        return False
-
     def set_config(self, **kwargs):
-        # Print the changes in configuration.
-        if self.log_config() and self._previous_config is not None:
-            for key in sorted(filter(lambda k: kwargs.get(k, None) != self._previous_config.get(k, None), kwargs.keys())):
-                logger.info("{} = {}".format(key, kwargs[key]))
+        # Print the changes in configuration or all when not previous configuration is known.
+        entries = kwargs.keys()
+        if self._previous_config is not None:
+            entries = filter(lambda k: kwargs.get(k, None) != self._previous_config.get(k, None), kwargs.keys())
+        for key in sorted(entries):
+            logger.info("{} = {}".format(key, kwargs[key]))
         self._previous_config = kwargs
 
     @staticmethod
@@ -353,9 +353,6 @@ class StaticCruiseDriver(AbstractCruiseControl):
     def __init__(self):
         super(StaticCruiseDriver, self).__init__('driver.mode.cruise')
 
-    def log_config(self):
-        return True
-
     def next_recorder(self, mode=None):
         return 'record.mode.driving'
 
@@ -376,12 +373,13 @@ class StaticCruiseDriver(AbstractCruiseControl):
 
 
 class DriverManager(object):
-    def __init__(self):
+    def __init__(self, config_file):
+        self._config_file = config_file
         self._driver_cache = {}
         self._driver_lock = multiprocessing.RLock()
+        self._driver = None
         self._driver_ctl = 'driver.mode.console'
-        self._driver = self._get_driver(self._driver_ctl)
-        self._driver.activate()
+        self._switch_ctl(self._driver_ctl)
 
     def _get_driver(self, control=None):
         if control in self._driver_cache:
@@ -401,10 +399,12 @@ class DriverManager(object):
         self._driver_cache[control] = driver
         return driver
 
-    def _activate(self, cfg):
+    def _activate(self):
         try:
             self._driver_lock.acquire()
             if self._driver is not None:
+                with open(self._config_file, 'r') as cfg_file:
+                    cfg = JsonComment(json).loads(cfg_file.read())
                 self._driver.set_config(**cfg)
                 self._driver.activate()
         except Exception as e:
@@ -413,15 +413,15 @@ class DriverManager(object):
             self._driver_lock.release()
 
     def on_command(self, cmd):
-        pass
+        logger.info(cmd)
 
-    def _switch_ctl(self, control, cfg):
+    def _switch_ctl(self, control):
         # The switch must be immediate. Do not force wait on the previous driver to deactivate.
         if self._driver is not None:
             threading.Thread(target=self._driver.deactivate).start()
         self._driver_ctl = control
         self._driver = self._get_driver(control=control)
-        threading.Thread(target=self._activate, args=(cfg,)).start()
+        threading.Thread(target=self._activate).start()
 
     def close_sessions(self):
         for _c in ('driver.mode.dnn', 'driver.mode.dagger'):
@@ -464,10 +464,11 @@ def _ros_init():
 
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
+    parser.add_argument('--config', type=str, required=True, help='Config file location.')
     parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
     args = parser.parse_args()
 
-    driver = DriverManager()
+    driver = DriverManager(config_file=args.config)
 
     _ros_init()
     drive_queue = collections.deque(maxlen=1)
