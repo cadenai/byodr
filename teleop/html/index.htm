@@ -1,0 +1,181 @@
+<html>
+<!-- Adapted from https://github.com/Bronkoknorb/PyImageStream -->
+<head>
+    <meta charset="UTF-8">
+    <title>Caden</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="jquery-3.4.1.min.js"></script>
+    <script type="text/javascript" src="performance-polyfill.js"></script>
+</head>
+<body>
+<div id="container" class="centered">
+    <div id="column">
+        <div id="bar">
+            <img id="arrow" class="left"/>
+            <div id="desired_speed">
+                <div id="desired_speed_value">0</div>
+                <div id="desired_speed_text">MAX</div>
+            </div>
+            <div id="current_speed">
+                <div id="current_speed_value">0</div>
+                <div id="current_speed_units">km/h</div>
+            </div>
+            <img id="steeringWheel" class="right"/>
+        </div>
+        <img id="liveImg" width="1200" height="600"/>
+    </div>
+    <div id="navigation">
+        <img class="bottom" />
+        <img class="top" />
+    </div>
+    <div id="debug_values">
+        <div id="debug_fps">fps: <span id="frame_fps">0</span></div>
+        <div id="debug_quality">qua: <span id="frame_quality">0</span></div>
+    </div>
+</div>
+</body>
+<script type="text/javascript">
+var el_image = document.getElementById("liveImg");
+var el_fps_text = document.getElementById("frame_fps");
+var el_quality_text = document.getElementById("frame_quality");
+var el_speed_text = document.getElementById("current_speed_value")
+var el_max_speed_text = document.getElementById("desired_speed_value")
+var el_steering_wheel = document.getElementById("steeringWheel");
+var el_turn_arrow = document.getElementById("arrow");
+
+// This is for the websocket requests.
+var target_fps = 10;
+var url_params = new URL(document.location).searchParams;
+if (url_params.has('fps')) {
+    target_fps = url_params.get('fps');
+}
+var display_resolution = 'default'
+if (url_params.has('display')) {
+    display_resolution = url_params.get('display');
+}
+var min_jpeg_quality = 30;
+var max_jpeg_quality = 90;
+if (url_params.has('quality')) {
+    max_jpeg_quality = url_params.get('quality');
+}
+var jpeg_quality = (min_jpeg_quality + max_jpeg_quality) / 2;
+
+var request_start_time = performance.now();
+var request_time = 0;
+var request_time_smoothing = 0.5; // larger=more smoothing
+var request_target_timeout = 1000 / target_fps;
+var log_request_timeout = 100;
+
+var wsProtocol = (location.protocol === "https:") ? "wss://" : "ws://";
+var wsCamPath = wsProtocol + location.hostname + ":9100/ws/cam";
+var wsLogPath = wsProtocol + location.hostname + ":9100/ws/log";
+var navImgPath = location.protocol + "//" + location.hostname + ":9100/ws/nav";
+
+console.log("Using cam uri: " + wsCamPath + ".")
+var wsCam = new WebSocket(wsCamPath);
+wsCam.binaryType = 'arraybuffer';
+
+console.log("Using log uri: " + wsLogPath + ".")
+var wsLog = new WebSocket(wsLogPath);
+
+client_view = {};
+client_view.active_navigation_point = '_not_set_';
+client_view.command_turn = null;
+client_view.command_ctl = null;
+
+function requestImage() {
+    var actual_fps = Math.round(1000 / request_time);
+    var q_step = Math.min(1, Math.max(-1, actual_fps - target_fps));
+    jpeg_quality = Math.min(max_jpeg_quality, Math.max(min_jpeg_quality, jpeg_quality + q_step));
+    el_quality_text.textContent = jpeg_quality;
+    // E.g. '{"quality": 50, "display": "vga"}'
+    wsCam.send('{"quality": ' + jpeg_quality + ', "display": "' + display_resolution + '"}');
+}
+
+wsCam.onopen = function() {
+    console.log("The camera socket connection was established.");
+    request_start_time = performance.now();
+    requestImage();
+};
+
+wsCam.onmessage = function(evt) {
+    var arrayBuffer = evt.data;
+    var blob  = new Blob([new Uint8Array(arrayBuffer)], {type: "image/jpeg"});
+    el_image.src = window.URL.createObjectURL(blob);
+
+    var end_time = performance.now();
+    var duration = end_time - request_start_time;
+    // smooth with moving average
+    request_time = (request_time * request_time_smoothing) + (duration * (1.0 - request_time_smoothing));
+    request_start_time = end_time;
+    el_fps_text.textContent = Math.round(1000 / Math.max(request_time, request_target_timeout));
+
+    var timeout = Math.max(0, request_target_timeout - request_time);
+    setTimeout(requestImage, timeout);
+};
+
+function requestLog() {
+    wsLog.send('{}')
+}
+
+wsLog.onopen = function() {
+    console.log("The log socket connection was established.");
+    requestLog();
+};
+
+wsLog.onmessage = function(evt) {
+    var command = JSON.parse(evt.data);
+    // console.max_speed is the maximum speed
+    // console.speed is the desired speed
+    // console.vel_y is the actual vehicle speed
+    // console.log(command);
+    // Math.ceil(command.max_speed);
+    el_speed_text.textContent = command.speed.toFixed(1);
+    el_max_speed_text.textContent = command.max_speed.toFixed(1);
+    if (client_view.command_turn != command.turn) {
+        client_view.command_turn = command.turn;
+        switch(command.turn) {
+            case "intersection.left":
+                el_turn_arrow.src = 'im_arrow_left.png';
+                break;
+            case "intersection.right":
+                el_turn_arrow.src = 'im_arrow_right.png';
+                break;
+            default:
+                el_turn_arrow.src = 'im_arrow_up.png';
+                break;
+        }
+    }
+    //
+    var steer_penalty = command.debug1 < 1;
+    var str_command_ctl = command.ctl + '_' + steer_penalty;
+    if (client_view.command_ctl != str_command_ctl) {
+        client_view.command_ctl = str_command_ctl;
+        el_steering_wheel.src = 'im_wheel_a.png';
+        if (command.ctl == 5) {
+            if (steer_penalty) {
+                el_steering_wheel.src = 'im_wheel_b.png';
+            } else {
+                el_steering_wheel.src = 'im_wheel_c.png';
+            }
+        }
+    }
+    var display_rotation = Math.floor(command.ste * 90.0)
+    el_steering_wheel.style.transform = "rotate(" + display_rotation + "deg)";
+    //
+    if (command.route_np != client_view.active_navigation_point) {
+        // console.log(command.route_np);
+        client_view.active_navigation_point = command.route_np;
+        var img_url = navImgPath + '?t=' + Math.random();
+        if ($("div#navigation img.top").hasClass('transparent')) {
+            $("div#navigation img.top").attr('src', img_url);
+        } else {
+            $("div#navigation img.bottom").attr('src', img_url);
+        }
+        $("div#navigation img.top").toggleClass("transparent");
+    }
+    //
+    setTimeout(requestLog, log_request_timeout);
+}
+</script>
+</html>

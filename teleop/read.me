@@ -1,0 +1,6 @@
+# build with
+docker build -t caden/teleop .
+
+# run on cmd line
+docker run -it -v $HOME/Development/Caden/caden/teleop:/app --name caden-teleop --network caden-net -p 9100:9100 \
+--env ROS_MASTER_URI=http://ros-master:11311 ros:melodic bin/bash

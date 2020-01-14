@@ -1,0 +1,6 @@
+# build with
+docker build -t caden/pilot .
+
+# run on cmd line
+docker run -it -v $HOME/Development/Caden/caden/pilot:/app --name caden-pilot --network caden-net \
+--env ROS_MASTER_URI=http://ros-master:11311 ros:melodic bin/bash

@@ -1,0 +1,8 @@
+# setup the network - persists across daemon restarts
+docker network create --driver bridge caden-net
+
+# run the ros master
+docker run -d -p 11311:11311 --network caden-net --name ros-master --rm ros:melodic roscore
+
+# test with
+docker run --rm --network caden-net --env ROS_MASTER_URI=http://ros-master:11311 ros:melodic rostopic list

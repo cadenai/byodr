@@ -1,0 +1,123 @@
+<html>
+<!-- Adapted from https://github.com/Bronkoknorb/PyImageStream -->
+<head>
+    <meta charset="UTF-8">
+    <title>Caden</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="jquery-3.4.1.min.js"></script>
+    <script type="text/javascript" src="performance-polyfill.js"></script>
+</head>
+<body>
+<div id="container" class="centered">
+    <div id="column">
+        <div id="bar">
+            <img id="arrow" class="left"/>
+            <div id="desired_speed">
+                <div id="desired_speed_value">0</div>
+                <div id="desired_speed_text">MAX</div>
+            </div>
+            <div id="current_speed">
+                <div id="current_speed_value">0</div>
+                <div id="current_speed_units">km/h</div>
+            </div>
+            <img id="steeringWheel" class="right"/>
+        </div>
+        <img id="liveImg" width="800" height="600"/>
+    </div>
+    <div id="navigation">
+        <img class="bottom" />
+        <img class="top" />
+    </div>
+</div>
+<script type="text/javascript">
+var el_live_image = document.getElementById("liveImg");
+var el_speed_text = document.getElementById("current_speed_value")
+var el_max_speed_text = document.getElementById("desired_speed_value")
+var el_steering_wheel = document.getElementById("steeringWheel");
+var el_turn_arrow = document.getElementById("arrow");
+
+// Request server updates at 10Hz.
+var log_request_timeout = 100;
+
+var wsProtocol = (location.protocol === "https:") ? "wss://" : "ws://";
+var wsLogPath = wsProtocol + location.hostname + ":9100/ws/log";
+var wsCamPath = location.protocol + "//" + location.hostname + ":9100/ws/jpeg";
+var navImgPath = location.protocol + "//" + location.hostname + ":9100/ws/nav";
+
+console.log("Using log uri: " + wsLogPath + ".")
+console.log("Using cam uri: " + wsCamPath + ".")
+
+var wsLog = new WebSocket(wsLogPath);
+el_live_image.src = wsCamPath
+
+client_view = {};
+client_view.active_navigation_point = '_not_set_';
+client_view.command_turn = null;
+client_view.command_ctl = null;
+
+
+function requestLog() {
+    wsLog.send('{}')
+}
+
+wsLog.onopen = function() {
+    console.log("The log socket connection was established.");
+    requestLog();
+};
+
+wsLog.onmessage = function(evt) {
+    var command = JSON.parse(evt.data);
+    // console.max_speed is the maximum speed
+    // console.speed is the desired speed
+    // console.vel_y is the actual vehicle speed
+    // console.log(command);
+    el_speed_text.textContent = command.speed.toFixed(1);
+    el_max_speed_text.textContent = Math.ceil(command.max_speed);
+    if (client_view.command_turn != command.turn) {
+        client_view.command_turn = command.turn;
+        switch(command.turn) {
+            case "intersection.left":
+                el_turn_arrow.src = 'im_arrow_left.png';
+                break;
+            case "intersection.right":
+                el_turn_arrow.src = 'im_arrow_right.png';
+                break;
+            default:
+                el_turn_arrow.src = 'im_arrow_up.png';
+                break;
+        }
+    }
+    //
+    var steer_penalty = command.debug1 < 1;
+    var str_command_ctl = command.ctl + '_' + steer_penalty;
+    if (client_view.command_ctl != str_command_ctl) {
+        client_view.command_ctl = str_command_ctl;
+        el_steering_wheel.src = 'im_wheel_a.png';
+        if (command.ctl == 5) {
+            if (steer_penalty) {
+                el_steering_wheel.src = 'im_wheel_b.png';
+            } else {
+                el_steering_wheel.src = 'im_wheel_c.png';
+            }
+        }
+    }
+    var display_rotation = Math.floor(command.ste * 90.0)
+    el_steering_wheel.style.transform = "rotate(" + display_rotation + "deg)";
+    //
+    if (command.route_np != client_view.active_navigation_point) {
+        // console.log(command.route_np);
+        client_view.active_navigation_point = command.route_np;
+        var img_url = navImgPath + '?t=' + Math.random();
+        if ($("div#navigation img.top").hasClass('transparent')) {
+            $("div#navigation img.top").attr('src', img_url);
+        } else {
+            $("div#navigation img.bottom").attr('src', img_url);
+        }
+        $("div#navigation img.top").toggleClass("transparent");
+    }
+    //
+    setTimeout(requestLog, log_request_timeout);
+}
+</script>
+</body>
+</html>
