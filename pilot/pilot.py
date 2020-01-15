@@ -376,6 +376,7 @@ class StaticCruiseDriver(AbstractCruiseControl):
 class DriverManager(object):
     def __init__(self, config_file):
         self._config_file = config_file
+        self._drive_queue = collections.deque(maxlen=1)
         self._driver_cache = {}
         self._driver_lock = multiprocessing.RLock()
         self._driver = None
@@ -413,9 +414,6 @@ class DriverManager(object):
         finally:
             self._driver_lock.release()
 
-    def on_command(self, cmd):
-        logger.info(cmd)
-
     def _switch_ctl(self, control):
         # The switch must be immediate. Do not force wait on the previous driver to deactivate.
         if self._driver is not None:
@@ -440,8 +438,15 @@ class DriverManager(object):
     # def next_recorder(self):
     #     return self._driver.next_recorder()
 
-    def get_next_action(self, command):
+    def on_control(self, msg):
+        logger.info(msg.data)
+
+    def on_drive(self, msg):
+        self._drive_queue.appendleft(msg)
+
+    def get_next_action(self):
         blob = self._create_blob()
+        command = json.loads(self._drive_queue[0].data) if bool(self._drive_queue) else None
         # Say 250 ms is the connectivity minimum.
         if command is not None and time.time() - command.get('time') < .250:
             blob.driver = self._driver_ctl
@@ -449,7 +454,7 @@ class DriverManager(object):
             blob.throttle = command.get('throttle')
             self._driver.get_next_action(blob)
         # Otherwise steering and throttle are set to zero - per the noop.
-        return blob
+        return json.dumps(blob)
 
     def quit(self):
         for driver in self._driver_cache.values():
@@ -477,12 +482,11 @@ def main():
     driver = DriverManager(config_file=args.config)
 
     _ros_init()
-    drive_queue = collections.deque(maxlen=1)
-    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: drive_queue.appendleft(json.loads(x.data)), queue_size=1)
-    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_command(json.loads(x.data)), queue_size=1)
+    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: driver.on_drive(x), queue_size=1)
+    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_control(x), queue_size=1)
     output_topic = rospy.Publisher('aav/pilot/command/blob', RosString, queue_size=1)
 
-    # Determine the process frequency.
+    # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = args.clock
     logger.info("Processing at {} Hz.".format(_process_frequency))
     max_duration = 1. / _process_frequency
@@ -492,7 +496,7 @@ def main():
         try:
             proc_start = time.time()
             # Run the main step.
-            output_topic.publish(json.dumps(driver.get_next_action(drive_queue[0] if bool(drive_queue) else None)))
+            output_topic.publish(driver.get_next_action())
             # Synchronize per clock rate.
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))

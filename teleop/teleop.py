@@ -10,11 +10,8 @@ import sys
 import time
 import traceback
 
-import cv2
-import numpy as np
 import rospy
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image as RosImage
+from sensor_msgs.msg import CompressedImage as RosCompressedImage
 from std_msgs.msg import String as RosString
 from tornado import web, websocket, ioloop
 
@@ -32,11 +29,6 @@ def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
     io_loop.stop()
-
-
-def jpeg_encode(image, quality=80):
-    """Higher quality leads to slightly more cpu load. """
-    return cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])[1]
 
 
 class ControlServerSocket(websocket.WebSocketHandler):
@@ -93,8 +85,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, *args):
         try:
-            pilot = self.pilot_state[0] if bool(self.pilot_state) else None
-            vehicle = self.vehicle_state[0] if bool(self.vehicle_state) else None
+            pilot = json.loads(self.pilot_state[0].data) if bool(self.pilot_state) else None
+            vehicle = json.loads(self.vehicle_state[0].data) if bool(self.vehicle_state) else None
             response = {
                 'ctl': 0,
                 'debug1': 0.,
@@ -128,18 +120,10 @@ class MessageServerSocket(websocket.WebSocketHandler):
 
 
 class CameraServerSocket(websocket.WebSocketHandler):
-    _display_resolutions = collections.OrderedDict()
-    _display_resolutions['CGA'] = (320, 200)
-    _display_resolutions['QVGA'] = (320, 240)
-    _display_resolutions['HVGA'] = (480, 320)
-    _display_resolutions['VGA'] = (640, 480)
-    _display_resolutions['SVGA'] = (800, 600)
-    _display_resolutions['XGA'] = (1024, 768)
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self.camera = kwargs.get('camera')
-        self.bridge = kwargs.get('bridge')
 
     def check_origin(self, origin):
         return True
@@ -155,18 +139,9 @@ class CameraServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, message):
         try:
-            request = json.loads(message)
-            quality = request.get('quality', 90)
-            display = request.get('display', 'HVGA').strip().upper()
             data = self.camera[0] if bool(self.camera) else None
             if data is not None:
-                img = self.bridge.imgmsg_to_cv2(data, "bgr8")
-                resolutions = CameraServerSocket._display_resolutions
-                if display in resolutions.keys():
-                    _width, _height = resolutions[display]
-                    if np.prod(img.shape[:2]) > (_width * _height):
-                        img = cv2.resize(img, (_width, _height))
-                self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
+                self.write_message(data.data, binary=True)
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
             logger.error("JSON message:---\n{}\n---".format(message))
@@ -193,16 +168,15 @@ def main():
         vehicle_state = collections.deque(maxlen=1)
         pilot_state = collections.deque(maxlen=1)
         camera0 = collections.deque(maxlen=1)
-        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(json.loads(x.data)), queue_size=1)
-        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)), queue_size=1)
-        rospy.Subscriber('aav/vehicle/camera/0', RosImage, lambda x: camera0.appendleft(x), queue_size=1)
+        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(x), queue_size=1)
+        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(x), queue_size=1)
+        rospy.Subscriber('aav/camera/0/jpeg', RosCompressedImage, lambda x: camera0.appendleft(x), queue_size=1)
         control_topic = rospy.Publisher('aav/teleop/input/control', RosString, queue_size=1)
         drive_topic = rospy.Publisher('aav/teleop/input/drive', RosString, queue_size=1)
-        bridge = CvBridge()
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(control_topic=control_topic, drive_topic=drive_topic)),
             (r"/ws/log", MessageServerSocket, dict(vehicle_state=vehicle_state, pilot_state=pilot_state)),
-            (r"/ws/cam", CameraServerSocket, dict(camera=camera0, bridge=bridge)),
+            (r"/ws/cam", CameraServerSocket, dict(camera=camera0)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),
                 'default_filename': 'index.htm'

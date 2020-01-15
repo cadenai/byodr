@@ -6,10 +6,10 @@ import multiprocessing
 import sys
 
 import carla
+import cv2
 import numpy as np
 import rospy
-from cv_bridge import CvBridge
-from sensor_msgs.msg import Image as RosImage
+from sensor_msgs.msg import CompressedImage as RosCompressedImage
 from std_msgs.msg import String as RosString
 
 logger = logging.getLogger(__name__)
@@ -18,11 +18,16 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 quit_event = multiprocessing.Event()
 
 
+def jpeg_encode(image, quality=95):
+    """Higher quality leads to slightly more cpu load - 95 is library default. """
+    return cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])[1]
+
+
 class CarlaHandler(object):
 
-    def __init__(self, world, fn_camera=(lambda x: x)):
+    def __init__(self, world, **kwargs):
         self._world = world
-        self._fn_camera = fn_camera
+        self._vehicle_topic, self._camera_topic = kwargs.get('topics')
         self._actor = None
         self._image_shape = (320, 480, 3)
         self._sensors = []
@@ -79,7 +84,12 @@ class CarlaHandler(object):
             img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
             _height, _width = self._image_shape[:2]
             img = np.reshape(img, (_height, _width, 4))  # To bgr_a format.
-            self._fn_camera(img[:, :, :3])  # The image standard is hwc bgr.
+            img = img[:, :, :3]  # The image standard is hwc bgr.
+            rmsg = RosCompressedImage()
+            rmsg.header.stamp = rospy.Time.now()
+            rmsg.format = "jpeg"
+            rmsg.data = np.array(jpeg_encode(img)).tostring()
+            self._camera_topic.publish(rmsg)
         except IndexError:
             # No images received as of yet.
             pass
@@ -99,6 +109,10 @@ class CarlaHandler(object):
 
     def _velocity(self):
         return 0 if self._actor is None else self._carla_vel()
+
+    def _state(self):
+        x, y = self._position()
+        return dict(x_coordinate=x, y_coordinate=y, heading=self._heading(), velocity=self._velocity())
 
     def start(self):
         self._reset()
@@ -130,13 +144,10 @@ class CarlaHandler(object):
     #                     blob.desired_speed = self._carla_vel()
     #                     blob.road_speed = blob.desired_speed
 
-    def get_state(self):
-        x, y = self._position()
-        return dict(x_coordinate=x, y_coordinate=y, heading=self._heading(), velocity=self._velocity())
-
-    def on_drive(self, cmd):
+    def on_drive(self, msg):
         if self._actor is not None:
             try:
+                cmd = json.loads(msg.data)
                 steering, throttle = cmd.get('steering'), cmd.get('throttle')
                 control = carla.VehicleControl()
                 control.steer = steering
@@ -145,6 +156,7 @@ class CarlaHandler(object):
                 else:
                     control.brake = abs(throttle)
                 self._actor.apply_control(control)
+                self._vehicle_topic.publish(json.dumps(self._state()))
             except Exception as e:
                 logger.error("{}".format(e))
 
@@ -167,7 +179,7 @@ def main():
 
     _ros_init()
     vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
-    camera_topic = rospy.Publisher('aav/vehicle/camera/0', RosImage, queue_size=1)
+    camera_topic = rospy.Publisher('aav/camera/0/jpeg', RosCompressedImage, queue_size=1)
 
     carla_host, carla_port = args.remote, 2000
     if ':' in carla_host:
@@ -177,16 +189,11 @@ def main():
     carla_client = carla.Client(carla_host, carla_port)
     carla_client.set_timeout(2.)  # seconds
     world = carla_client.get_world()
-    bridge = CvBridge()
-    vehicle = CarlaHandler(world=world, fn_camera=(lambda x: camera_topic.publish(bridge.cv2_to_imgmsg(x, "bgr8"))))
+    vehicle = CarlaHandler(world=world, topics=(vehicle_topic, camera_topic))
     vehicle.start()
     callback_id = world.on_tick(lambda ts: vehicle.on_tick(ts))
 
-    def on_drive(data):
-        vehicle.on_drive(json.loads(data.data))
-        vehicle_topic.publish(json.dumps(vehicle.get_state()))
-
-    rospy.Subscriber('aav/pilot/command/blob', RosString, on_drive, queue_size=1)
+    rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: vehicle.on_drive(x), queue_size=1)
     rospy.spin()
 
     # Done.
