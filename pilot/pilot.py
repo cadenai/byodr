@@ -471,15 +471,15 @@ def _ros_init():
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
+    parser.add_argument('--clock', type=int, default=25, help='Clock frequency in hz.')
     args = parser.parse_args()
 
     driver = DriverManager(config_file=args.config)
 
     _ros_init()
     drive_queue = collections.deque(maxlen=1)
-    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: drive_queue.appendleft(json.loads(x.data)))
-    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_command(json.loads(x.data)))
+    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: drive_queue.appendleft(json.loads(x.data)), queue_size=1)
+    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_command(json.loads(x.data)), queue_size=1)
     output_topic = rospy.Publisher('aav/pilot/command/blob', RosString, queue_size=1)
 
     # Determine the process frequency.

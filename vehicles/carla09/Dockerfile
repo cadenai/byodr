@@ -1,7 +1,10 @@
 FROM ros:melodic
 
 RUN apt-get update && apt-get install -y \
+    python-opencv \
     python-pip \
+    ros-melodic-cv-bridge \
+    ros-melodic-vision-opencv \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

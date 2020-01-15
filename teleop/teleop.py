@@ -10,7 +10,11 @@ import sys
 import time
 import traceback
 
+import cv2
+import numpy as np
 import rospy
+from cv_bridge import CvBridge
+from sensor_msgs.msg import Image as RosImage
 from std_msgs.msg import String as RosString
 from tornado import web, websocket, ioloop
 
@@ -28,6 +32,11 @@ def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
     io_loop.stop()
+
+
+def jpeg_encode(image, quality=80):
+    """Higher quality leads to slightly more cpu load. """
+    return cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])[1]
 
 
 class ControlServerSocket(websocket.WebSocketHandler):
@@ -118,6 +127,51 @@ class MessageServerSocket(websocket.WebSocketHandler):
             raise
 
 
+class CameraServerSocket(websocket.WebSocketHandler):
+    _display_resolutions = collections.OrderedDict()
+    _display_resolutions['CGA'] = (320, 200)
+    _display_resolutions['QVGA'] = (320, 240)
+    _display_resolutions['HVGA'] = (480, 320)
+    _display_resolutions['VGA'] = (640, 480)
+    _display_resolutions['SVGA'] = (800, 600)
+    _display_resolutions['XGA'] = (1024, 768)
+
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self.camera = kwargs.get('camera')
+        self.bridge = kwargs.get('bridge')
+
+    def check_origin(self, origin):
+        return True
+
+    def data_received(self, chunk):
+        pass
+
+    def open(self, *args, **kwargs):
+        logger.info("Camera client connected.")
+
+    def on_close(self):
+        logger.info("Camera client disconnected.")
+
+    def on_message(self, message):
+        try:
+            request = json.loads(message)
+            quality = request.get('quality', 90)
+            display = request.get('display', 'HVGA').strip().upper()
+            data = self.camera[0] if bool(self.camera) else None
+            if data is not None:
+                img = self.bridge.imgmsg_to_cv2(data, "bgr8")
+                resolutions = CameraServerSocket._display_resolutions
+                if display in resolutions.keys():
+                    _width, _height = resolutions[display]
+                    if np.prod(img.shape[:2]) > (_width * _height):
+                        img = cv2.resize(img, (_width, _height))
+                self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
+        except Exception as e:
+            logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
+            logger.error("JSON message:---\n{}\n---".format(message))
+
+
 def _ros_init():
     # Ros replaces the root logger - add a new handler after ros initialisation.
     rospy.init_node('teleop', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
@@ -138,13 +192,17 @@ def main():
         # Setup topics and subscriptions once - the web application creates a handler instance per request.
         vehicle_state = collections.deque(maxlen=1)
         pilot_state = collections.deque(maxlen=1)
-        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(json.loads(x.data)))
-        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)))
+        camera0 = collections.deque(maxlen=1)
+        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(json.loads(x.data)), queue_size=1)
+        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)), queue_size=1)
+        rospy.Subscriber('aav/vehicle/camera/0', RosImage, lambda x: camera0.appendleft(x), queue_size=1)
         control_topic = rospy.Publisher('aav/teleop/input/control', RosString, queue_size=1)
         drive_topic = rospy.Publisher('aav/teleop/input/drive', RosString, queue_size=1)
+        bridge = CvBridge()
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(control_topic=control_topic, drive_topic=drive_topic)),
             (r"/ws/log", MessageServerSocket, dict(vehicle_state=vehicle_state, pilot_state=pilot_state)),
+            (r"/ws/cam", CameraServerSocket, dict(camera=camera0, bridge=bridge)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),
                 'default_filename': 'index.htm'
