@@ -179,15 +179,15 @@ def main():
     vehicle.start()
     callback_id = world.on_tick(lambda ts: vehicle.on_tick(ts))
 
-    # self._camera_topic = rospy.Publisher('aav/vehicle/camera/center', RosString, queue_size=1)
     _ros_init()
     vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
+    # camera_topic = rospy.Publisher('aav/vehicle/camera/0', RosString, queue_size=1)
 
     def on_drive(data):
         vehicle.on_drive(json.loads(data.data))
         vehicle_topic.publish(json.dumps(vehicle.get_state()))
 
-    rospy.Subscriber('aav/pilot/command/drive', RosString, on_drive)
+    rospy.Subscriber('aav/pilot/command/blob', RosString, on_drive)
     rospy.spin()
 
     # Done.

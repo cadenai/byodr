@@ -139,7 +139,7 @@ def main():
         vehicle_state = collections.deque(maxlen=1)
         pilot_state = collections.deque(maxlen=1)
         rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(json.loads(x.data)))
-        rospy.Subscriber('aav/pilot/state/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)))
+        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)))
         control_topic = rospy.Publisher('aav/teleop/input/control', RosString, queue_size=1)
         drive_topic = rospy.Publisher('aav/teleop/input/drive', RosString, queue_size=1)
         web_app = web.Application([

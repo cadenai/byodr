@@ -60,6 +60,7 @@ class Blob(AttrDict):
         self.steering = kwargs.get('steering')
         self.steering_driver = kwargs.get('steering_driver')
         self.throttle = kwargs.get('throttle')
+        self.time = kwargs.get('time', time.time())
 
 
 class DynamicMomentum(object):
@@ -448,8 +449,7 @@ class DriverManager(object):
             blob.throttle = command.get('throttle')
             self._driver.get_next_action(blob)
         # Otherwise steering and throttle are set to zero - per the noop.
-        drive = dict(steering=blob.steering, throttle=blob.throttle)
-        return drive, blob
+        return blob
 
     def quit(self):
         for driver in self._driver_cache.values():
@@ -480,8 +480,7 @@ def main():
     drive_queue = collections.deque(maxlen=1)
     rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: drive_queue.appendleft(json.loads(x.data)))
     rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_command(json.loads(x.data)))
-    state_topic = rospy.Publisher('aav/pilot/state/blob', RosString, queue_size=1)
-    output_topic = rospy.Publisher('aav/pilot/command/drive', RosString, queue_size=1)
+    output_topic = rospy.Publisher('aav/pilot/command/blob', RosString, queue_size=1)
 
     # Determine the process frequency.
     _process_frequency = args.clock
@@ -493,9 +492,7 @@ def main():
         try:
             proc_start = time.time()
             # Run the main step.
-            output, state = driver.get_next_action(drive_queue[0] if bool(drive_queue) else None)
-            output_topic.publish(json.dumps(output))
-            state_topic.publish(json.dumps(state))
+            output_topic.publish(json.dumps(driver.get_next_action(drive_queue[0] if bool(drive_queue) else None)))
             # Synchronize per clock rate.
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))
