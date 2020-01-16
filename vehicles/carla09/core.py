@@ -4,12 +4,12 @@ import logging
 import math
 import multiprocessing
 import sys
+import time
 
 import carla
-import cv2
 import numpy as np
 import rospy
-from sensor_msgs.msg import CompressedImage as RosCompressedImage
+import zmq
 from std_msgs.msg import String as RosString
 
 logger = logging.getLogger(__name__)
@@ -18,16 +18,11 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 quit_event = multiprocessing.Event()
 
 
-def jpeg_encode(image, quality=95):
-    """Higher quality leads to slightly more cpu load - 95 is library default. """
-    return cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])[1]
-
-
 class CarlaHandler(object):
 
-    def __init__(self, world, **kwargs):
-        self._world = world
-        self._vehicle_topic, self._camera_topic = kwargs.get('topics')
+    def __init__(self, **kwargs):
+        self._world = kwargs.get('world')
+        self._camera_callback = kwargs.get('camera_callback')
         self._actor = None
         self._image_shape = (320, 480, 3)
         self._sensors = []
@@ -79,22 +74,11 @@ class CarlaHandler(object):
         self._reset_agent_travel()
 
     def _on_camera(self, data):
-        # noinspection PyBroadException
-        try:
-            img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
-            _height, _width = self._image_shape[:2]
-            img = np.reshape(img, (_height, _width, 4))  # To bgr_a format.
-            img = img[:, :, :3]  # The image standard is hwc bgr.
-            rmsg = RosCompressedImage()
-            rmsg.header.stamp = rospy.Time.now()
-            rmsg.format = "jpeg"
-            rmsg.data = np.array(jpeg_encode(img)).tostring()
-            self._camera_topic.publish(rmsg)
-        except IndexError:
-            # No images received as of yet.
-            pass
-        except Exception as e:
-            logger.warn(e)
+        img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
+        _height, _width = self._image_shape[:2]
+        img = np.reshape(img, (_height, _width, 4))  # To bgr_a format.
+        img = img[:, :, :3]  # The image standard is hwc bgr.
+        self._camera_callback(img)
 
     def _carla_vel(self):
         velocity = self._actor.get_velocity()
@@ -110,7 +94,7 @@ class CarlaHandler(object):
     def _velocity(self):
         return 0 if self._actor is None else self._carla_vel()
 
-    def _state(self):
+    def state(self):
         x, y = self._position()
         return dict(x_coordinate=x, y_coordinate=y, heading=self._heading(), velocity=self._velocity())
 
@@ -120,7 +104,7 @@ class CarlaHandler(object):
     def quit(self):
         self._destroy()
 
-    def on_tick(self, _):
+    def tick(self, _):
         if self._actor is not None and self._actor.is_alive:
             with self._actor_lock:
                 location = self._actor.get_location()
@@ -129,25 +113,9 @@ class CarlaHandler(object):
                     self._actor_distance_traveled += math.sqrt((location.x - _x) ** 2 + (location.y - _y) ** 2)
                 self._actor_last_location = (location.x, location.y)
 
-    # def on_ctl_switch(self, control, **kwargs):
-    #     if control == Control.CTL_JOYSTICK:
-    #         self._spawn_location = (0, None)
-    #     if self._actor is not None:
-    #         self._actor.set_autopilot(control == Control.CTL_AUTOPILOT)
-    #     with self._actor_lock:
-    #         self._reset_agent_travel()
-
-    #                 if blob.control == Control.CTL_AUTOPILOT:
-    #                     vehicle_control = self._actor.get_control()
-    #                     blob.throttle = vehicle_control.throttle
-    #                     blob.steering = vehicle_control.steer
-    #                     blob.desired_speed = self._carla_vel()
-    #                     blob.road_speed = blob.desired_speed
-
-    def on_drive(self, msg):
+    def drive(self, cmd):
         if self._actor is not None:
             try:
-                cmd = json.loads(msg.data)
                 steering, throttle = cmd.get('steering'), cmd.get('throttle')
                 control = carla.VehicleControl()
                 control.steer = steering
@@ -156,7 +124,6 @@ class CarlaHandler(object):
                 else:
                     control.brake = abs(throttle)
                 self._actor.apply_control(control)
-                self._vehicle_topic.publish(json.dumps(self._state()))
             except Exception as e:
                 logger.error("{}".format(e))
 
@@ -166,9 +133,8 @@ def _ros_init():
     rospy.init_node('carla', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
-    console_handler.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     rospy.on_shutdown(lambda: quit_event.set())
 
 
@@ -177,28 +143,53 @@ def main():
     parser.add_argument('--remote', type=str, required=True, help='Carla server remote host:port')
     args = parser.parse_args()
 
-    _ros_init()
-    vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
-    camera_topic = rospy.Publisher('aav/camera/0/jpeg', RosCompressedImage, queue_size=1)
-
     carla_host, carla_port = args.remote, 2000
     if ':' in carla_host:
         host, port = carla_host.split(':')
         carla_host, carla_port = host, int(port)
-
     carla_client = carla.Client(carla_host, carla_port)
     carla_client.set_timeout(2.)  # seconds
-    world = carla_client.get_world()
-    vehicle = CarlaHandler(world=world, topics=(vehicle_topic, camera_topic))
-    vehicle.start()
-    callback_id = world.on_tick(lambda ts: vehicle.on_tick(ts))
 
-    rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: vehicle.on_drive(x), queue_size=1)
+    _ros_init()
+    vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
+    camera_topic = rospy.Publisher('aav/vehicle/camera/0', RosString, queue_size=1)
+
+    # Publish the images.
+    context = zmq.Context()
+    socket = context.socket(zmq.PUB)
+    # http://api.zeromq.org/4-2:zmq-setsockopt
+    socket.setsockopt(zmq.SNDHWM, 1)  # limit buffer size
+    socket.setsockopt(zmq.SNDTIMEO, 20)  # ms
+    socket.setsockopt(zmq.LINGER, 0)  # discard unsent messages on close
+    socket.bind('ipc:///tmp/byodr/zmq.sock')
+
+    def _camera(_img):
+        if not quit_event.is_set() and not socket.closed:
+            _ts = time.time()
+            camera_topic.publish(json.dumps(dict(time=_ts)))
+            socket.send_multipart(['topic/image',
+                                   json.dumps(dict(time=_ts, shape=_img.shape)),
+                                   np.ascontiguousarray(_img, dtype=np.uint8)], flags=0, copy=True, track=False)
+
+    world = carla_client.get_world()
+    vehicle = CarlaHandler(world=world, camera_callback=_camera)
+    vehicle.start()
+    vehicle_tick = world.on_tick(lambda x: vehicle.tick(x))
+
+    def _drive(data):
+        vehicle.drive(json.loads(data.data))
+        vehicle_topic.publish(json.dumps(vehicle.state()))
+
+    rospy.Subscriber('aav/pilot/command/blob', RosString, _drive, queue_size=1)
     rospy.spin()
 
     # Done.
+    logger.info("Waiting on zmq to terminate.")
+    socket.close()
+    context.term()
+
     logger.info("Waiting on carla to quit.")
-    world.remove_on_tick(callback_id)
+    world.remove_on_tick(vehicle_tick)
     vehicle.quit()
 
 

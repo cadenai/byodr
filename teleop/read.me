@@ -1,7 +1,0 @@
-# build
-docker build -t mwlc/byodr-teleop .
-
-# run
-docker run -it -v $(pwd):/app -p 9100:9100 \
---env ROS_MASTER_URI=http://ros_master:11311 \
---network byodr_net --name byodr_teleop ros:melodic bin/bash

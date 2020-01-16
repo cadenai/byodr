@@ -10,8 +10,10 @@ import sys
 import time
 import traceback
 
+import cv2
+import numpy as np
 import rospy
-from sensor_msgs.msg import CompressedImage as RosCompressedImage
+import zmq
 from std_msgs.msg import String as RosString
 from tornado import web, websocket, ioloop
 
@@ -85,8 +87,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, *args):
         try:
-            pilot = json.loads(self.pilot_state[0].data) if bool(self.pilot_state) else None
-            vehicle = json.loads(self.vehicle_state[0].data) if bool(self.vehicle_state) else None
+            pilot = self.pilot_state[0] if bool(self.pilot_state) else None
+            vehicle = self.vehicle_state[0] if bool(self.vehicle_state) else None
             response = {
                 'ctl': 0,
                 'debug1': 0.,
@@ -119,7 +121,19 @@ class MessageServerSocket(websocket.WebSocketHandler):
             raise
 
 
+def jpeg_encode(image, quality=95):
+    """Higher quality leads to slightly more cpu load. Default cv jpeg quality is 95. """
+    return cv2.imencode('.jpg', image, [int(cv2.IMWRITE_JPEG_QUALITY), quality])[1]
+
+
 class CameraServerSocket(websocket.WebSocketHandler):
+    _display_resolutions = collections.OrderedDict()
+    _display_resolutions['CGA'] = (320, 200)
+    _display_resolutions['QVGA'] = (320, 240)
+    _display_resolutions['HVGA'] = (480, 320)
+    _display_resolutions['VGA'] = (640, 480)
+    _display_resolutions['SVGA'] = (800, 600)
+    _display_resolutions['XGA'] = (1024, 768)
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
@@ -139,9 +153,17 @@ class CameraServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, message):
         try:
-            data = self.camera[0] if bool(self.camera) else None
-            if data is not None:
-                self.write_message(data.data, binary=True)
+            request = json.loads(message)
+            quality = request.get('quality', 90)
+            display = request.get('display', 'HVGA').strip().upper()
+            img = self.camera[0] if bool(self.camera) else None
+            if img is not None:
+                resolutions = CameraServerSocket._display_resolutions
+                if display in resolutions.keys():
+                    _width, _height = resolutions[display]
+                    if np.prod(img.shape[:2]) > (_width * _height):
+                        img = cv2.resize(img, (_width, _height))
+                self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
             logger.error("JSON message:---\n{}\n---".format(message))
@@ -152,9 +174,8 @@ def _ros_init():
     rospy.init_node('teleop', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
-    console_handler.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     rospy.on_shutdown(lambda: quit_event.set())
 
 
@@ -162,21 +183,41 @@ def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--port', type=int, default=9100, help='Port number')
     args = parser.parse_args()
+
+    context = zmq.Context()
+    socket = context.socket(zmq.SUB)
+    socket.setsockopt(zmq.RCVHWM, 1)
+    socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
     try:
+        socket.connect('ipc:///tmp/byodr/zmq.sock')
+        socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
+
         _ros_init()
         # Setup topics and subscriptions once - the web application creates a handler instance per request.
         vehicle_state = collections.deque(maxlen=1)
         pilot_state = collections.deque(maxlen=1)
-        camera0 = collections.deque(maxlen=1)
-        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(x), queue_size=1)
-        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(x), queue_size=1)
-        rospy.Subscriber('aav/camera/0/jpeg', RosCompressedImage, lambda x: camera0.appendleft(x), queue_size=1)
+        camera_queue = collections.deque(maxlen=1)
+
+        def _camera(_msg):
+            try:
+                [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
+                md = json.loads(md)
+                height, width, channels = md['shape']
+                img = np.frombuffer(buffer(data), dtype=np.uint8)
+                img = img.reshape((height, width, channels))
+                camera_queue.appendleft(img)
+            except Exception as e:
+                logger.warning(e)
+
+        rospy.Subscriber('aav/vehicle/camera/0', RosString, _camera, queue_size=1)
+        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(json.loads(x.data)), queue_size=1)
+        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)), queue_size=1)
         control_topic = rospy.Publisher('aav/teleop/input/control', RosString, queue_size=1)
         drive_topic = rospy.Publisher('aav/teleop/input/drive', RosString, queue_size=1)
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(control_topic=control_topic, drive_topic=drive_topic)),
             (r"/ws/log", MessageServerSocket, dict(vehicle_state=vehicle_state, pilot_state=pilot_state)),
-            (r"/ws/cam", CameraServerSocket, dict(camera=camera0)),
+            (r"/ws/cam", CameraServerSocket, dict(camera=camera_queue)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),
                 'default_filename': 'index.htm'
@@ -187,7 +228,11 @@ def main():
         logger.info("Web service starting on port {}.".format(port))
         io_loop.start()
     except KeyboardInterrupt:
-        pass
+        quit_event.set()
+
+    logger.info("Waiting on zmq to terminate.")
+    socket.close()
+    context.term()
 
 
 if __name__ == "__main__":

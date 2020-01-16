@@ -427,26 +427,15 @@ class DriverManager(object):
         self._driver.get_noop(blob)
         return blob
 
-    # def close_sessions(self):
-    #     for _c in ('driver.mode.dnn', 'driver.mode.dagger'):
-    #         if _c in self._driver_cache:
-    #             self._driver_cache[_c].deactivate()
+    def on_control(self, cmd):
+        logger.info(cmd)
 
-    # def get_navigation_settings(self):
-    #     return self._driver.get_navigation_settings()
-
-    # def next_recorder(self):
-    #     return self._driver.next_recorder()
-
-    def on_control(self, msg):
-        logger.info(msg.data)
-
-    def on_drive(self, msg):
-        self._drive_queue.appendleft(msg)
+    def on_drive(self, cmd):
+        self._drive_queue.appendleft(cmd)
 
     def get_next_action(self):
         blob = self._create_blob()
-        command = json.loads(self._drive_queue[0].data) if bool(self._drive_queue) else None
+        command = self._drive_queue[0] if bool(self._drive_queue) else None
         # Say 250 ms is the connectivity minimum.
         if command is not None and time.time() - command.get('time') < .250:
             blob.driver = self._driver_ctl
@@ -454,7 +443,7 @@ class DriverManager(object):
             blob.throttle = command.get('throttle')
             self._driver.get_next_action(blob)
         # Otherwise steering and throttle are set to zero - per the noop.
-        return json.dumps(blob)
+        return blob
 
     def quit(self):
         for driver in self._driver_cache.values():
@@ -467,23 +456,22 @@ def _ros_init():
     rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
-    console_handler.setLevel(logging.DEBUG)
     logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     rospy.on_shutdown(lambda: quit_event.set())
 
 
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, default=25, help='Clock frequency in hz.')
+    parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
     args = parser.parse_args()
 
     driver = DriverManager(config_file=args.config)
 
     _ros_init()
-    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: driver.on_drive(x), queue_size=1)
-    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_control(x), queue_size=1)
+    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: driver.on_drive(json.loads(x.data)), queue_size=1)
+    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_control(json.loads(x.data)), queue_size=1)
     output_topic = rospy.Publisher('aav/pilot/command/blob', RosString, queue_size=1)
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
@@ -496,7 +484,7 @@ def main():
         try:
             proc_start = time.time()
             # Run the main step.
-            output_topic.publish(driver.get_next_action())
+            output_topic.publish(json.dumps(driver.get_next_action()))
             # Synchronize per clock rate.
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))

@@ -1,8 +1,0 @@
-# setup the network - persists across daemon restarts
-docker network create --driver bridge byodr_net
-
-# run the ros master
-docker run --rm -d -p 11311:11311 --network byodr_net --name ros_master ros:melodic roscore
-
-# test with
-docker run --rm --network byodr_net --env ROS_MASTER_URI=http://ros_master:11311 ros:melodic rostopic list
