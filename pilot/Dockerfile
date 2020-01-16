@@ -11,8 +11,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 ENV PILOT_HOME /app
 
-EXPOSE 9100
-
 ENTRYPOINT ["python", "pilot.py", "--config=$PILOT_HOME/profile-carla09.json"]
 
 
