@@ -57,8 +57,9 @@ class CarlaHandler(object):
         # Attach the camera's - defaults at https://carla.readthedocs.io/en/latest/cameras_and_sensors/.
         camera_bp = self._world.get_blueprint_library().find('sensor.camera.rgb')
         # Modify the attributes of the blueprint to set image resolution and field of view.
-        camera_bp.set_attribute('image_size_x', '480')
-        camera_bp.set_attribute('image_size_y', '320')
+        im_height, im_width = self._image_shape[:2]
+        camera_bp.set_attribute('image_size_x', '{}'.format(im_width))
+        camera_bp.set_attribute('image_size_y', '{}'.format(im_height))
         # camera_bp.set_attribute('fov', '150')
         # Set the time in seconds between sensor captures
         camera_bp.set_attribute('sensor_tick', "{:2.2f}".format(1. / 50))
