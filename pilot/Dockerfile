@@ -1,17 +1,14 @@
 FROM ros:melodic
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python-pip \
  && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /app
+#RUN pip install --upgrade setuptools wheel
+
 COPY . app/
+WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-ENV PILOT_HOME /app
-
-ENTRYPOINT ["python", "pilot.py", "--config=$PILOT_HOME/profile-carla09.json"]
-
-
-
+ENTRYPOINT ["/ros_entrypoint.sh"]
