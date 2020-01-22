@@ -13,7 +13,6 @@ import traceback
 import cv2
 import numpy as np
 import rospy
-import zmq
 from std_msgs.msg import String as RosString
 from tornado import web, websocket, ioloop
 
@@ -171,7 +170,7 @@ class CameraServerSocket(websocket.WebSocketHandler):
 
 def _ros_init():
     # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('teleop', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
+    rospy.init_node('teleop', disable_signals=False, anonymous=True, log_level=rospy.INFO)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(console_handler)
@@ -184,13 +183,15 @@ def main():
     parser.add_argument('--port', type=int, default=9100, help='Port number')
     args = parser.parse_args()
 
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    socket.setsockopt(zmq.RCVHWM, 1)
-    socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
+    # context = zmq.Context()
+    # socket = context.socket(zmq.SUB)
+    # socket.setsockopt(zmq.RCVHWM, 1)
+    # socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
+    capture = cv2.VideoCapture('/dev/video5')
+
     try:
-        socket.connect('ipc:///tmp/byodr/zmq.sock')
-        socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
+        # socket.connect('ipc:///tmp/byodr/zmq.sock')
+        # socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
 
         _ros_init()
         # Setup topics and subscriptions once - the web application creates a handler instance per request.
@@ -200,12 +201,16 @@ def main():
 
         def _camera(_msg):
             try:
-                [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
-                md = json.loads(md)
-                height, width, channels = md['shape']
-                img = np.frombuffer(buffer(data), dtype=np.uint8)
-                img = img.reshape((height, width, channels))
-                camera_queue.appendleft(img)
+                # [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
+                # md = json.loads(md)
+                # height, width, channels = md['shape']
+                # img = np.frombuffer(buffer(data), dtype=np.uint8)
+                # img = img.reshape((height, width, channels))
+                suc, img = capture.read()
+                if suc:
+                    camera_queue.appendleft(img)
+                else:
+                    logger.warning("Video capture failed.")
             except Exception as e:
                 logger.warning(e)
 
@@ -230,9 +235,10 @@ def main():
     except KeyboardInterrupt:
         quit_event.set()
 
-    logger.info("Waiting on zmq to terminate.")
-    socket.close()
-    context.term()
+    # logger.info("Waiting on zmq to terminate.")
+    # socket.close()
+    # context.term()
+    capture.release()
 
 
 if __name__ == "__main__":

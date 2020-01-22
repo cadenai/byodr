@@ -453,7 +453,7 @@ class DriverManager(object):
 
 def _ros_init():
     # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
+    rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.INFO)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(console_handler)

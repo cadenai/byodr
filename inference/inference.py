@@ -12,7 +12,6 @@ import cv2
 import numpy as np
 import rospy
 import tensorflow as tf
-import zmq
 from std_msgs.msg import String as RosString
 from tensorflow.python.framework.errors_impl import CancelledError, FailedPreconditionError
 
@@ -55,7 +54,7 @@ class Barrier(object):
 
 
 def _create_input_nodes():
-    input_dave_image = tf.placeholder(dtype=tf.uint8, shape=[None, 3, 200, 66], name='input/dave_image')
+    input_dave_image = tf.placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
     input_speed_image = tf.placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
     input_command = tf.placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
     input_use_dropout = tf.placeholder(tf.bool, shape=(), name='input/use_dropout')
@@ -227,7 +226,7 @@ class TFDriver(object):
 
 def _ros_init():
     # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
+    rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.INFO)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(console_handler)
@@ -267,13 +266,15 @@ def main():
     parser.add_argument('--gpu', type=int, default=0, help='GPU number')
     args = parser.parse_args()
 
-    context = zmq.Context()
-    socket = context.socket(zmq.SUB)
-    socket.setsockopt(zmq.RCVHWM, 1)
-    socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
+    # context = zmq.Context()
+    # socket = context.socket(zmq.SUB)
+    # socket.setsockopt(zmq.RCVHWM, 1)
+    # socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
+    capture = cv2.VideoCapture('/dev/video5')
+
     try:
-        socket.connect('ipc:///tmp/byodr/zmq.sock')
-        socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
+        # socket.connect('ipc:///tmp/byodr/zmq.sock')
+        # socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
 
         _driver = TFDriver(gpu_id=args.gpu, p_conv_dropout=0)
         _driver.activate()
@@ -283,11 +284,12 @@ def main():
 
         def _camera(_msg):
             try:
-                [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
-                md = json.loads(md)
-                height, width, channels = md['shape']
-                img = np.frombuffer(buffer(data), dtype=np.uint8)
-                img = img.reshape((height, width, channels))
+                # [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
+                # md = json.loads(md)
+                # height, width, channels = md['shape']
+                # img = np.frombuffer(buffer(data), dtype=np.uint8)
+                # img = img.reshape((height, width, channels))
+                suc, img = capture.read()
                 _dave_img = caffe_dave_200_66(img)
                 _alex_img = hwc_alexnet(img)
                 action_out, brake_out, surprise_out, critic_out, entropy_out, conv5_out = \
@@ -296,7 +298,7 @@ def main():
                                     posor_image=_alex_img,
                                     turn='intersection.ahead',
                                     dagger=False)
-                dnn_topic.publish(json.dumps(dict(action=action_out)))
+                dnn_topic.publish(json.dumps(dict(action=float(action_out))))
             except Exception as e:
                 logger.warning(e)
 
@@ -305,9 +307,10 @@ def main():
     except KeyboardInterrupt:
         quit_event.set()
 
-    logger.info("Waiting on zmq to terminate.")
-    socket.close()
-    context.term()
+    # logger.info("Waiting on zmq to terminate.")
+    # socket.close()
+    # context.term()
+    capture.release()
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ services:
     command:
       - roscore
   pilot:
+    user: '1000'
     build:
       context: ./pilot
       dockerfile: Dockerfile
@@ -19,6 +20,7 @@ services:
       ROS_MASTER_URI: 'http://ros-master:11311'
     command: python pilot.py --config=/app/${DC_PILOT_CONFIG} --clock=${DC_PILOT_HZ}
   teleop:
+    user: '1000'
     build:
       context: ./teleop
       dockerfile: Dockerfile
@@ -28,12 +30,15 @@ services:
       - "9100:9100"
     volumes:
       - './teleop:/app'
-      - '/tmp/byodr:/tmp/byodr'
+#      - '/tmp/byodr:/tmp/byodr'
+    devices:
+      - '/dev/video5:/dev/video5'
     environment:
       ROS_MASTER_URI: 'http://ros-master:11311'
       TELEOP_HOME: '/app'
     command: python teleop.py --port=9100
   inference:
+    user: '1000'
     build:
       context: ./inference
       dockerfile: Dockerfile
@@ -41,22 +46,28 @@ services:
     container_name: byodr_inference
     volumes:
       - './inference:/app'
-      - '/tmp/byodr:/tmp/byodr'
+#      - '/tmp/byodr:/tmp/byodr'
+      - '/data1/Models:/data1/Models'
+    devices:
+      - '/dev/video5:/dev/video5'
     environment:
       ROS_MASTER_URI: 'http://ros-master:11311'
       CADEN_DNN: ${DC_CADEN_DNN}
     command: python inference.py --gpu=${DC_CADEN_GPU}
   vehicle:
+    user: '1000'
     build:
       context: ./vehicles/carla09
       dockerfile: Dockerfile
-      args:
-        app_uid: ${DC_APP_UID}
+#      args:
+#        app_uid: ${DC_APP_UID}
     image: byodr/vehicle_carla
     container_name: byodr_carla
     volumes:
       - './vehicles/carla09:/app'
-      - '/tmp/byodr:/tmp/byodr'
+#      - '/tmp/byodr:/tmp/byodr'
+    devices:
+      - '/dev/video5:/dev/video5'
     environment:
       ROS_MASTER_URI: 'http://ros-master:11311'
     command: python core.py --remote=${DC_CARLA_REMOTE}

@@ -1,4 +1,5 @@
 import argparse
+import fcntl
 import json
 import logging
 import math
@@ -7,15 +8,18 @@ import sys
 import time
 
 import carla
+import cv2
 import numpy as np
 import rospy
-import zmq
+import v4l2
 from std_msgs.msg import String as RosString
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 quit_event = multiprocessing.Event()
+
+CAMERA_SHAPE = (320, 480, 3)
 
 
 class CarlaHandler(object):
@@ -24,7 +28,7 @@ class CarlaHandler(object):
         self._world = kwargs.get('world')
         self._camera_callback = kwargs.get('camera_callback')
         self._actor = None
-        self._image_shape = (320, 480, 3)
+        self._image_shape = CAMERA_SHAPE
         self._sensors = []
         self._actor_lock = multiprocessing.Lock()
         self._actor_last_location = None
@@ -62,7 +66,7 @@ class CarlaHandler(object):
         camera_bp.set_attribute('image_size_y', '{}'.format(im_height))
         # camera_bp.set_attribute('fov', '150')
         # Set the time in seconds between sensor captures
-        camera_bp.set_attribute('sensor_tick', "{:2.2f}".format(1. / 50))
+        camera_bp.set_attribute('sensor_tick', "{:2.2f}".format(1. / 100))
         # Provide the position of the sensor relative to the vehicle.
         # camera_transform = carla.Transform(carla.Location(x=0.8, z=1.7))
         camera_transform = carla.Transform(carla.Location(x=1.25, z=1.4))
@@ -131,12 +135,33 @@ class CarlaHandler(object):
 
 def _ros_init():
     # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('carla', disable_signals=False, anonymous=True, log_level=rospy.DEBUG)
+    rospy.init_node('carla', disable_signals=False, anonymous=True, log_level=rospy.INFO)
     console_handler = logging.StreamHandler(stream=sys.stdout)
     console_handler.setFormatter(logging.Formatter(log_format))
     logging.getLogger().addHandler(console_handler)
     logging.getLogger().setLevel(logging.INFO)
     rospy.on_shutdown(lambda: quit_event.set())
+
+
+def ConvertToYUYV(image):
+    imsize = image.shape[0] * image.shape[1] * 2
+    buff = np.zeros((imsize), dtype=np.uint8)
+
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2YUV).ravel()
+
+    Ys = np.arange(0, img.shape[0], 3)
+    Vs = np.arange(1, img.shape[0], 6)
+    Us = np.arange(2, img.shape[0], 6)
+
+    BYs = np.arange(0, buff.shape[0], 2)
+    BUs = np.arange(1, buff.shape[0], 4)
+    BVs = np.arange(3, buff.shape[0], 4)
+
+    buff[BYs] = img[Ys]
+    buff[BUs] = img[Us]
+    buff[BVs] = img[Vs]
+
+    return buff
 
 
 def main():
@@ -151,26 +176,42 @@ def main():
     carla_client = carla.Client(carla_host, carla_port)
     carla_client.set_timeout(2.)  # seconds
 
+    # https://github.com/umlaeute/v4l2loopback/issues/32
+    video_dev = open('/dev/video5', 'wrb', 0)  # 0 for unbuffered
+    video_format = v4l2.v4l2_format()
+    video_format.type = v4l2.V4L2_BUF_TYPE_VIDEO_OUTPUT
+    video_format.fmt.pix.field = v4l2.V4L2_FIELD_NONE
+    video_format.fmt.pix.pixelformat = v4l2.V4L2_PIX_FMT_YUYV
+    height, width, channels = CAMERA_SHAPE
+    video_format.fmt.pix.width = width
+    video_format.fmt.pix.height = height
+    video_format.fmt.pix.bytesperline = width * 2
+    video_format.fmt.pix.sizeimage = width * height * 2
+    video_format.fmt.pix.colorspace = v4l2.V4L2_COLORSPACE_JPEG
+    logger.info("Set format result (0 is good): {}.".format(fcntl.ioctl(video_dev, v4l2.VIDIOC_S_FMT, video_format)))
+
     _ros_init()
     vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
     camera_topic = rospy.Publisher('aav/vehicle/camera/0', RosString, queue_size=1)
 
     # Publish the images.
-    context = zmq.Context()
-    socket = context.socket(zmq.PUB)
     # http://api.zeromq.org/4-2:zmq-setsockopt
-    socket.setsockopt(zmq.SNDHWM, 1)  # limit buffer size
-    socket.setsockopt(zmq.SNDTIMEO, 20)  # ms
-    socket.setsockopt(zmq.LINGER, 0)  # discard unsent messages on close
-    socket.bind('ipc:///tmp/byodr/zmq.sock')
+    # context = zmq.Context()
+    # socket = context.socket(zmq.PUB)
+    # socket.setsockopt(zmq.SNDHWM, 1)  # limit buffer size
+    # socket.setsockopt(zmq.SNDTIMEO, 20)  # ms
+    # socket.setsockopt(zmq.LINGER, 0)  # discard unsent messages on close
+    # socket.bind('ipc:///tmp/byodr/zmq.sock')
 
     def _camera(_img):
-        if not quit_event.is_set() and not socket.closed:
+        if not quit_event.is_set():  # and not socket.closed:
             _ts = time.time()
             camera_topic.publish(json.dumps(dict(time=_ts)))
-            socket.send_multipart(['topic/image',
-                                   json.dumps(dict(time=_ts, shape=_img.shape)),
-                                   np.ascontiguousarray(_img, dtype=np.uint8)], flags=0, copy=True, track=False)
+            # socket.send_multipart(['topic/image',
+            #                        json.dumps(dict(time=_ts, shape=_img.shape)),
+            #                        np.ascontiguousarray(_img, dtype=np.uint8)], flags=0, copy=True, track=False)
+            # noinspection PyTypeChecker
+            # video_dev.write(np.ascontiguousarray(ConvertToYUYV(_img), dtype=np.uint8))
 
     world = carla_client.get_world()
     vehicle = CarlaHandler(world=world, camera_callback=_camera)
@@ -185,9 +226,11 @@ def main():
     rospy.spin()
 
     # Done.
-    logger.info("Waiting on zmq to terminate.")
-    socket.close()
-    context.term()
+    # logger.info("Waiting on zmq to terminate.")
+    # socket.close()
+    # context.term()
+
+    video_dev.close()
 
     logger.info("Waiting on carla to quit.")
     world.remove_on_tick(vehicle_tick)
