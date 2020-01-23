@@ -1,25 +1,5 @@
 version: '2'
 services:
-  ros-master:
-    image: ros:melodic
-    container_name: ros-master
-    ports:
-      - "11311:11311"
-    command:
-      - roscore
-  pilot:
-    user: '1000'
-    build:
-      context: ./pilot
-      dockerfile: Dockerfile
-    image: byodr/pilot
-    container_name: byodr_pilot
-    volumes:
-      - './pilot:/app'
-      - '/tmp/byodr:/tmp/byodr'
-#  environment:
-#      ROS_MASTER_URI: 'http://ros-master:11311'
-    command: python pilot.py --config=/app/${DC_PILOT_CONFIG} --clock=${DC_PILOT_HZ}
   teleop:
     user: '1000'
     build:
@@ -32,12 +12,20 @@ services:
     volumes:
       - './teleop:/app'
       - '/tmp/byodr:/tmp/byodr'
-    devices:
-      - '/dev/video5:/dev/video5'
     environment:
-#      ROS_MASTER_URI: 'http://ros-master:11311'
       TELEOP_HOME: '/app'
-    command: python teleop.py --port=9100
+    command: python app.py --port=9100
+  pilot:
+    user: '1000'
+    build:
+      context: ./pilot
+      dockerfile: Dockerfile
+    image: byodr/pilot
+    container_name: byodr_pilot
+    volumes:
+      - './pilot:/app'
+      - '/tmp/byodr:/tmp/byodr'
+    command: python app.py --config=/app/${DC_PILOT_CONFIG} --clock=${DC_PILOT_HZ}
   inference:
     user: '1000'
     build:
@@ -47,12 +35,9 @@ services:
     container_name: byodr_inference
     volumes:
       - './inference:/app'
-#      - '/tmp/byodr:/tmp/byodr'
+      - '/tmp/byodr:/tmp/byodr'
       - '/data1/Models:/data1/Models'
-    devices:
-      - '/dev/video5:/dev/video5'
     environment:
-      ROS_MASTER_URI: 'http://ros-master:11311'
       CADEN_DNN: ${DC_CADEN_DNN}
     command: python inference.py --gpu=${DC_CADEN_GPU}
   vehicle:
@@ -60,17 +45,11 @@ services:
     build:
       context: ./vehicles/carla09
       dockerfile: Dockerfile
-#      args:
-#        app_uid: ${DC_APP_UID}
     image: byodr/vehicle_carla
     container_name: byodr_carla
     volumes:
       - './vehicles/carla09:/app'
-#      - '/tmp/byodr:/tmp/byodr'
-    devices:
-      - '/dev/video5:/dev/video5'
-    environment:
-      ROS_MASTER_URI: 'http://ros-master:11311'
-    command: python core.py --remote=${DC_CARLA_REMOTE}
+      - '/tmp/byodr:/tmp/byodr'
+    command: python app.py --remote=${DC_CARLA_REMOTE}
 
 

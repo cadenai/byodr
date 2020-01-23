@@ -269,7 +269,7 @@ def main():
     # context = zmq.Context()
     # socket = context.socket(zmq.SUB)
     # socket.setsockopt(zmq.RCVHWM, 1)
-    # socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
+    # socket.setsockopt(zmq.RCVTIMEO, 10)  # ms
     capture = cv2.VideoCapture('/dev/video5')
 
     try:
