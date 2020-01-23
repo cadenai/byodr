@@ -16,8 +16,9 @@ services:
     container_name: byodr_pilot
     volumes:
       - './pilot:/app'
-    environment:
-      ROS_MASTER_URI: 'http://ros-master:11311'
+      - '/tmp/byodr:/tmp/byodr'
+#  environment:
+#      ROS_MASTER_URI: 'http://ros-master:11311'
     command: python pilot.py --config=/app/${DC_PILOT_CONFIG} --clock=${DC_PILOT_HZ}
   teleop:
     user: '1000'
@@ -30,11 +31,11 @@ services:
       - "9100:9100"
     volumes:
       - './teleop:/app'
-#      - '/tmp/byodr:/tmp/byodr'
+      - '/tmp/byodr:/tmp/byodr'
     devices:
       - '/dev/video5:/dev/video5'
     environment:
-      ROS_MASTER_URI: 'http://ros-master:11311'
+#      ROS_MASTER_URI: 'http://ros-master:11311'
       TELEOP_HOME: '/app'
     command: python teleop.py --port=9100
   inference:

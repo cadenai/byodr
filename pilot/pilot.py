@@ -3,16 +3,17 @@ import collections
 import json
 import logging
 import multiprocessing
-import sys
 import threading
 import time
 import traceback
 from abc import ABCMeta, abstractmethod
 
 import pid_controller.pid as pic
-import rospy
+import zmq
+# import rospy
 from jsoncomment import JsonComment
-from std_msgs.msg import String as RosString
+
+# from std_msgs.msg import String as RosString
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -427,8 +428,8 @@ class DriverManager(object):
         self._driver.get_noop(blob)
         return blob
 
-    def on_control(self, cmd):
-        logger.info(cmd)
+    # def on_control(self, cmd):
+    #     logger.info(cmd)
 
     def on_drive(self, cmd):
         self._drive_queue.appendleft(cmd)
@@ -451,14 +452,14 @@ class DriverManager(object):
             driver.quit()
 
 
-def _ros_init():
-    # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.INFO)
-    console_handler = logging.StreamHandler(stream=sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.INFO)
-    rospy.on_shutdown(lambda: quit_event.set())
+# def _ros_init():
+# Ros replaces the root logger - add a new handler after ros initialisation.
+# rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.INFO)
+# console_handler = logging.StreamHandler(stream=sys.stdout)
+# console_handler.setFormatter(logging.Formatter(log_format))
+# logging.getLogger().addHandler(console_handler)
+# logging.getLogger().setLevel(logging.INFO)
+# rospy.on_shutdown(lambda: quit_event.set())
 
 
 def main():
@@ -469,10 +470,31 @@ def main():
 
     driver = DriverManager(config_file=args.config)
 
-    _ros_init()
-    rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: driver.on_drive(json.loads(x.data)), queue_size=1)
-    rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_control(json.loads(x.data)), queue_size=1)
-    output_topic = rospy.Publisher('aav/pilot/command/blob', RosString, queue_size=1)
+    # _ros_init()
+    # rospy.Subscriber('aav/teleop/input/drive', RosString, lambda x: driver.on_drive(json.loads(x.data)), queue_size=1)
+    # rospy.Subscriber('aav/teleop/input/control', RosString, lambda x: driver.on_control(json.loads(x.data)), queue_size=1)
+    # output_topic = rospy.Publisher('aav/pilot/command/blob', RosString, queue_size=1)
+
+    # context = zmq.Context()
+    publisher = zmq.Context().socket(zmq.PUB)
+    publisher.bind('ipc:///tmp/byodr/pilot.sock')
+
+    subscriber = zmq.Context().socket(zmq.SUB)
+    subscriber.setsockopt(zmq.RCVHWM, 1)
+    subscriber.setsockopt(zmq.RCVTIMEO, 20)
+    subscriber.setsockopt(zmq.LINGER, 0)
+    subscriber.connect('ipc:///tmp/byodr/teleop.sock')
+    subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/teleop/input')
+
+    def _teleop():
+        while not quit_event.is_set():
+            try:
+                driver.on_drive(json.loads(subscriber.recv().split(':', 1)[1]))
+            except zmq.Again:
+                pass
+
+    teleop_thread = threading.Thread(target=_teleop)
+    teleop_thread.start()
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = args.clock
@@ -482,23 +504,28 @@ def main():
 
     while not quit_event.is_set():
         try:
-            proc_start = time.time()
-            # Run the main step.
-            output_topic.publish(json.dumps(driver.get_next_action()))
             # Synchronize per clock rate.
+            proc_start = time.time()
+            publisher.send('aav/pilot/output:{}'.format(json.dumps(driver.get_next_action())), zmq.NOBLOCK)
+            # Once is a fluke from three it's a pattern.
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))
-            # Once is a fluke from three it's a pattern.
             if _num_violations > 2:
                 logger.warning("Cannot maintain {} Hz frequency.".format(_process_frequency))
             time.sleep(max(0, _proc_sleep))
-        except IOError as e:
+        except Exception as e:
             logger.warning(e)
-            time.sleep(2 * max_duration)
+            time.sleep(max_duration)
         except KeyboardInterrupt:
             quit_event.set()
 
-    logger.info("Waiting on handler to quit.")
+    # logger.info("Waiting on zmq to terminate.")
+    # context.term()
+
+    logger.info("Waiting on thread to quit.")
+    teleop_thread.join()
+
+    logger.info("Waiting on driver to quit.")
     driver.quit()
 
 

@@ -6,14 +6,15 @@ import logging
 import multiprocessing
 import os
 import signal
-import sys
+import threading
 import time
 import traceback
 
 import cv2
 import numpy as np
-import rospy
-from std_msgs.msg import String as RosString
+import zmq
+# import rospy
+# from std_msgs.msg import String as RosString
 from tornado import web, websocket, ioloop
 
 logger = logging.getLogger(__name__)
@@ -37,8 +38,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._control_topic = kwargs.get('control_topic')
-        self._drive_topic = kwargs.get('drive_topic')
+        self._fn_control = kwargs.get('fn_control')
 
     def check_origin(self, origin):
         return True
@@ -55,22 +55,15 @@ class ControlServerSocket(websocket.WebSocketHandler):
     def on_message(self, json_message):
         if not quit_event.is_set():
             msg = json.loads(json_message)
-            cmd = {
-                'time': time.time(),
-                'steering': msg.get('steering', 0),
-                'throttle': msg.get('throttle', 0)
-            }
-            self._drive_topic.publish(json.dumps(cmd))
-            if bool(set(msg.keys()).difference({'steering', 'throttle'})):
-                self._control_topic.publish(json_message)
+            msg['time'] = time.time()
+            self._fn_control(msg)
 
 
 class MessageServerSocket(websocket.WebSocketHandler):
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self.vehicle_state = kwargs.get('vehicle_state')
-        self.pilot_state = kwargs.get('pilot_state')
+        self._fn_state = kwargs.get('fn_state')
 
     def check_origin(self, origin):
         return True
@@ -86,8 +79,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, *args):
         try:
-            pilot = self.pilot_state[0] if bool(self.pilot_state) else None
-            vehicle = self.vehicle_state[0] if bool(self.vehicle_state) else None
+            pilot = self._fn_state()
+            vehicle = None
             response = {
                 'ctl': 0,
                 'debug1': 0.,
@@ -136,7 +129,7 @@ class CameraServerSocket(websocket.WebSocketHandler):
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self.camera = kwargs.get('camera')
+        self._capture = kwargs.get('fn_capture')
 
     def check_origin(self, origin):
         return True
@@ -155,7 +148,7 @@ class CameraServerSocket(websocket.WebSocketHandler):
             request = json.loads(message)
             quality = request.get('quality', 90)
             display = request.get('display', 'HVGA').strip().upper()
-            img = self.camera[0] if bool(self.camera) else None
+            img = self._capture()
             if img is not None:
                 resolutions = CameraServerSocket._display_resolutions
                 if display in resolutions.keys():
@@ -168,14 +161,14 @@ class CameraServerSocket(websocket.WebSocketHandler):
             logger.error("JSON message:---\n{}\n---".format(message))
 
 
-def _ros_init():
-    # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('teleop', disable_signals=False, anonymous=True, log_level=rospy.INFO)
-    console_handler = logging.StreamHandler(stream=sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.INFO)
-    rospy.on_shutdown(lambda: quit_event.set())
+# def _ros_init():
+# Ros replaces the root logger - add a new handler after ros initialisation.
+# rospy.init_node('teleop', disable_signals=False, anonymous=True, log_level=rospy.INFO)
+# console_handler = logging.StreamHandler(stream=sys.stdout)
+# console_handler.setFormatter(logging.Formatter(log_format))
+# logging.getLogger().addHandler(console_handler)
+# logging.getLogger().setLevel(logging.INFO)
+# rospy.on_shutdown(lambda: quit_event.set())
 
 
 def main():
@@ -184,45 +177,52 @@ def main():
     args = parser.parse_args()
 
     # context = zmq.Context()
-    # socket = context.socket(zmq.SUB)
-    # socket.setsockopt(zmq.RCVHWM, 1)
-    # socket.setsockopt(zmq.RCVTIMEO, 20)  # ms
-    capture = cv2.VideoCapture('/dev/video5')
+    publisher = zmq.Context().socket(zmq.PUB)
+    publisher.bind('ipc:///tmp/byodr/teleop.sock')
+
+    subscriber = zmq.Context().socket(zmq.SUB)
+    subscriber.setsockopt(zmq.RCVHWM, 1)
+    subscriber.setsockopt(zmq.RCVTIMEO, 20)
+    subscriber.setsockopt(zmq.LINGER, 0)
+    subscriber.connect('ipc:///tmp/byodr/pilot.sock')
+    subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/pilot/output')
+
+    output_state = collections.deque(maxlen=1)
+
+    def _receive():
+        while not quit_event.is_set():
+            try:
+                output_state.appendleft(json.loads(subscriber.recv().split(':', 1)[1]))
+            except zmq.Again:
+                pass
+
+    ipc_thread = threading.Thread(target=_receive)
+    ipc_thread.start()
+
+    def _send(data):
+        publisher.send('aav/teleop/input:{}'.format(json.dumps(data)), zmq.NOBLOCK)
+
+    # def _capture():
+    #     img = None
+    #     try:
+    #         [_, md, data] = socket.recv_multipart(flags=zmq.NOBLOCK)
+    #         md = json.loads(md)
+    #         height, width, channels = md['shape']
+    #         img = np.frombuffer(buffer(data), dtype=np.uint8)
+    #         img = img.reshape((height, width, channels))
+    #     except zmq.Again:
+    #         pass
+    #     return img
+    #
+    # publisher.send_multipart(['aav/teleop/input ', json.dumps(x)])))
+    #
+    #
 
     try:
-        # socket.connect('ipc:///tmp/byodr/zmq.sock')
-        # socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
-
-        _ros_init()
-        # Setup topics and subscriptions once - the web application creates a handler instance per request.
-        vehicle_state = collections.deque(maxlen=1)
-        pilot_state = collections.deque(maxlen=1)
-        camera_queue = collections.deque(maxlen=1)
-
-        def _camera(_msg):
-            try:
-                # [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
-                # md = json.loads(md)
-                # height, width, channels = md['shape']
-                # img = np.frombuffer(buffer(data), dtype=np.uint8)
-                # img = img.reshape((height, width, channels))
-                suc, img = capture.read()
-                if suc:
-                    camera_queue.appendleft(img)
-                else:
-                    logger.warning("Video capture failed.")
-            except Exception as e:
-                logger.warning(e)
-
-        rospy.Subscriber('aav/vehicle/camera/0', RosString, _camera, queue_size=1)
-        rospy.Subscriber('aav/vehicle/state/blob', RosString, lambda x: vehicle_state.appendleft(json.loads(x.data)), queue_size=1)
-        rospy.Subscriber('aav/pilot/command/blob', RosString, lambda x: pilot_state.appendleft(json.loads(x.data)), queue_size=1)
-        control_topic = rospy.Publisher('aav/teleop/input/control', RosString, queue_size=1)
-        drive_topic = rospy.Publisher('aav/teleop/input/drive', RosString, queue_size=1)
         web_app = web.Application([
-            (r"/ws/ctl", ControlServerSocket, dict(control_topic=control_topic, drive_topic=drive_topic)),
-            (r"/ws/log", MessageServerSocket, dict(vehicle_state=vehicle_state, pilot_state=pilot_state)),
-            (r"/ws/cam", CameraServerSocket, dict(camera=camera_queue)),
+            (r"/ws/ctl", ControlServerSocket, dict(fn_control=_send)),
+            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: output_state[0] if bool(output_state) else None))),
+            (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: None))),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),
                 'default_filename': 'index.htm'
@@ -236,9 +236,8 @@ def main():
         quit_event.set()
 
     # logger.info("Waiting on zmq to terminate.")
-    # socket.close()
     # context.term()
-    capture.release()
+    ipc_thread.join()
 
 
 if __name__ == "__main__":

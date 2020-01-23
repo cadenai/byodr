@@ -143,24 +143,22 @@ def _ros_init():
     rospy.on_shutdown(lambda: quit_event.set())
 
 
-def ConvertToYUYV(image):
+def hwc_bgr_to_yuyv(image):
+    """
+        1000 loops, best of 3: 1.42 ms per loop
+    """
     imsize = image.shape[0] * image.shape[1] * 2
-    buff = np.zeros((imsize), dtype=np.uint8)
-
+    buff = np.zeros(imsize, dtype=np.uint8)
     img = cv2.cvtColor(image, cv2.COLOR_BGR2YUV).ravel()
-
-    Ys = np.arange(0, img.shape[0], 3)
-    Vs = np.arange(1, img.shape[0], 6)
-    Us = np.arange(2, img.shape[0], 6)
-
-    BYs = np.arange(0, buff.shape[0], 2)
-    BUs = np.arange(1, buff.shape[0], 4)
-    BVs = np.arange(3, buff.shape[0], 4)
-
-    buff[BYs] = img[Ys]
-    buff[BUs] = img[Us]
-    buff[BVs] = img[Vs]
-
+    ys = np.arange(0, img.shape[0], 3)
+    vs = np.arange(1, img.shape[0], 6)
+    us = np.arange(2, img.shape[0], 6)
+    b_ys = np.arange(0, buff.shape[0], 2)
+    b_us = np.arange(1, buff.shape[0], 4)
+    b_vs = np.arange(3, buff.shape[0], 4)
+    buff[b_ys] = img[ys]
+    buff[b_us] = img[us]
+    buff[b_vs] = img[vs]
     return buff
 
 
@@ -188,7 +186,8 @@ def main():
     video_format.fmt.pix.bytesperline = width * 2
     video_format.fmt.pix.sizeimage = width * height * 2
     video_format.fmt.pix.colorspace = v4l2.V4L2_COLORSPACE_JPEG
-    logger.info("Set format result (0 is good): {}.".format(fcntl.ioctl(video_dev, v4l2.VIDIOC_S_FMT, video_format)))
+    _ioctl_result = fcntl.ioctl(video_dev, v4l2.VIDIOC_S_FMT, video_format)
+    assert _ioctl_result == 0, "Failed to set v4l2 video format - ioctl result was '{}'.".format(_ioctl_result)
 
     _ros_init()
     vehicle_topic = rospy.Publisher('aav/vehicle/state/blob', RosString, queue_size=1)
@@ -211,7 +210,7 @@ def main():
             #                        json.dumps(dict(time=_ts, shape=_img.shape)),
             #                        np.ascontiguousarray(_img, dtype=np.uint8)], flags=0, copy=True, track=False)
             # noinspection PyTypeChecker
-            # video_dev.write(np.ascontiguousarray(ConvertToYUYV(_img), dtype=np.uint8))
+            video_dev.write(np.ascontiguousarray(hwc_bgr_to_yuyv(_img), dtype=np.uint8))
 
     world = carla_client.get_world()
     vehicle = CarlaHandler(world=world, camera_callback=_camera)
