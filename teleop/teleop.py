@@ -57,17 +57,19 @@ class MessageServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, *args):
         try:
-            pilot = self._fn_state()
+            state = self._fn_state()
+            pilot = None if state is None else state[0]
+            inference = None if state is None else state[1]
             vehicle = None
             response = {
                 'ctl': 0,
-                'debug1': 0.,
-                'debug2': 0.,
-                'debug3': 0.,
-                'debug4': 0.,
-                'debug5': 0.,
-                'debug6': 0.,
-                'debug7': 0.,
+                'debug1': 0 if inference is None else inference.get('corridor'),
+                'debug2': 0 if inference is None else inference.get('obstacle'),
+                'debug3': 0 if inference is None else inference.get('penalty'),
+                'debug4': 0 if inference is None else inference.get('surprise'),
+                'debug5': 0 if inference is None else inference.get('critic'),
+                'debug6': 0 if inference is None else inference.get('brake'),
+                'debug7': 0 if inference is None else inference.get('entropy'),
                 'rec_act': False,
                 'rec_mod': None,
                 'ste': 0 if pilot is None else pilot.get('steering'),

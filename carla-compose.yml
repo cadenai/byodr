@@ -39,7 +39,7 @@ services:
       - '/data1/Models:/data1/Models'
     environment:
       CADEN_DNN: ${DC_CADEN_DNN}
-    command: python inference.py --gpu=${DC_CADEN_GPU}
+    command: python app.py --gpu=${DC_CADEN_GPU} --clock=${DC_INFERENCE_HZ}
   vehicle:
     user: '1000'
     build:

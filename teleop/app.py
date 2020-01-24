@@ -32,25 +32,25 @@ def _interrupt():
 
 
 # noinspection PyUnresolvedReferences
-class PilotThread(threading.Thread):
-    def __init__(self):
-        super(PilotThread, self).__init__()
+class ReceiverThread(threading.Thread):
+    def __init__(self, url, topic=''):
+        super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.setsockopt(zmq.RCVHWM, 1)
         subscriber.setsockopt(zmq.RCVTIMEO, 10)
         subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect('ipc:///tmp/byodr/pilot.sock')
-        subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/pilot/output')
+        subscriber.connect(url)
+        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
         self._subscriber = subscriber
-        self._pilot_outputs = collections.deque(maxlen=1)
+        self._queue = collections.deque(maxlen=1)
 
-    def get_output(self):
-        return self._pilot_outputs[0] if bool(self._pilot_outputs) else None
+    def get_latest(self):
+        return self._queue[0] if bool(self._queue) else None
 
     def run(self):
         while not quit_event.is_set():
             try:
-                self._pilot_outputs.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
+                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
             except zmq.Again:
                 pass
 
@@ -102,16 +102,18 @@ def main():
 
     threads = []
     publisher = TeleopPublisher()
-    pilot = PilotThread()
+    pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
+    inference = ReceiverThread(url='ipc:///tmp/byodr/inference.sock', topic=b'aav/inference/state')
     camera = CameraThread()
     threads.append(pilot)
+    threads.append(inference)
     threads.append(camera)
     [t.start() for t in threads]
 
     try:
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=(lambda x: publisher.publish(x)))),
-            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: pilot.get_output()))),
+            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: (pilot.get_latest(), inference.get_latest())))),
             (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()))),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),

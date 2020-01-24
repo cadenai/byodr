@@ -5,6 +5,7 @@ import multiprocessing
 import signal
 import threading
 import time
+import traceback
 
 import zmq
 
@@ -80,11 +81,11 @@ def main():
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))
             if _num_violations > 2:
-                logger.warning("Cannot maintain {} Hz frequency.".format(_process_frequency))
+                logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
             time.sleep(max(0, _proc_sleep))
         except Exception as e:
-            logger.warning(e)
-            time.sleep(max_duration)
+            logger.error("{}".format(traceback.format_exc(e)))
+            quit_event.set()
         except KeyboardInterrupt:
             quit_event.set()
 

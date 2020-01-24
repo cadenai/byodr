@@ -1,8 +1,9 @@
-FROM ros:melodic
+FROM ubuntu:bionic
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python-opencv \
     python-pip \
+    python-setuptools \
  && rm -rf /var/lib/apt/lists/*
 
 COPY . app/
@@ -14,5 +15,3 @@ RUN groupadd --gid 1000 --system app \
   && useradd --uid 1000 --gid 1000 --system --create-home --shell /bin/bash app
 
 EXPOSE 9100
-
-ENTRYPOINT ["/ros_entrypoint.sh"]

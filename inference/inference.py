@@ -1,24 +1,15 @@
-import argparse
 import glob
-import json
 import logging
 import multiprocessing
 import os
-import sys
 import time
 from threading import Thread, Semaphore
 
-import cv2
 import numpy as np
-import rospy
 import tensorflow as tf
-from std_msgs.msg import String as RosString
 from tensorflow.python.framework.errors_impl import CancelledError, FailedPreconditionError
 
 logger = logging.getLogger(__name__)
-log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
-
-quit_event = multiprocessing.Event()
 
 _optimization_transforms = [
     # 'add_default_attributes',
@@ -34,6 +25,22 @@ _optimization_transforms = [
     # 'quantize_weights'  Worse inference performance on jetson.
     # 'sort_by_execution_order'
 ]
+
+
+class DynamicMomentum(object):
+    """Low-pass filter with separate acceleration and deceleration momentum."""
+
+    def __init__(self, up=.1, down=.9, ceiling=1.):
+        self._previous_value = 0
+        self._acceleration = up
+        self._deceleration = down
+        self._ceiling = ceiling
+
+    def calculate(self, value):
+        _momentum = self._acceleration if value > self._previous_value else self._deceleration
+        _new_value = min(self._ceiling, _momentum * value + (1. - _momentum) * self._previous_value)
+        self._previous_value = _new_value
+        return _new_value
 
 
 class Barrier(object):
@@ -222,98 +229,3 @@ class TFDriver(object):
             except (StandardError, CancelledError) as e:
                 logger.warning(e)
                 return _ret
-
-
-def _ros_init():
-    # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('pilot', disable_signals=False, anonymous=True, log_level=rospy.INFO)
-    console_handler = logging.StreamHandler(stream=sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.INFO)
-    rospy.on_shutdown(lambda: quit_event.set())
-
-
-def hwc_bgr_to_yuv(img):
-    return cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
-
-
-def hwc_to_chw(img):
-    # Switch to C,H,W.
-    return None if img is None else img.transpose((2, 0, 1))
-
-
-def hwc_alexnet(image):
-    image = cv2.resize(image, (227, 227))
-    image = image.astype(np.uint8)
-    return image
-
-
-def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, chw=True):
-    # If resize is not the first operation, then resize the incoming image to the start of the data pipeline persistent images.
-    image = image if resize_wh is None else cv2.resize(image, resize_wh)
-    top, right, bottom, left = crop
-    image = image[top:image.shape[0] - bottom, left:image.shape[1] - right]
-    image = cv2.resize(image, (200, 66)) if dave else image
-    image = hwc_bgr_to_yuv(image) if yuv else image
-    image = hwc_to_chw(image) if chw else image
-    image = image.astype(np.uint8)
-    return image
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Inference server.')
-    parser.add_argument('--gpu', type=int, default=0, help='GPU number')
-    args = parser.parse_args()
-
-    # context = zmq.Context()
-    # socket = context.socket(zmq.SUB)
-    # socket.setsockopt(zmq.RCVHWM, 1)
-    # socket.setsockopt(zmq.RCVTIMEO, 10)  # ms
-    capture = cv2.VideoCapture('/dev/video5')
-
-    try:
-        # socket.connect('ipc:///tmp/byodr/zmq.sock')
-        # socket.setsockopt(zmq.SUBSCRIBE, b'topic/image')
-
-        _driver = TFDriver(gpu_id=args.gpu, p_conv_dropout=0)
-        _driver.activate()
-
-        _ros_init()
-        dnn_topic = rospy.Publisher('aav/inference/state/blob', RosString, queue_size=1)
-
-        def _camera(_msg):
-            try:
-                # [_, md, data] = socket.recv_multipart(flags=0, copy=True, track=False)
-                # md = json.loads(md)
-                # height, width, channels = md['shape']
-                # img = np.frombuffer(buffer(data), dtype=np.uint8)
-                # img = img.reshape((height, width, channels))
-                suc, img = capture.read()
-                _dave_img = caffe_dave_200_66(img)
-                _alex_img = hwc_alexnet(img)
-                action_out, brake_out, surprise_out, critic_out, entropy_out, conv5_out = \
-                    _driver.forward(dave_image=_dave_img,
-                                    alex_image=_alex_img,
-                                    posor_image=_alex_img,
-                                    turn='intersection.ahead',
-                                    dagger=False)
-                dnn_topic.publish(json.dumps(dict(action=float(action_out))))
-            except Exception as e:
-                logger.warning(e)
-
-        rospy.Subscriber('aav/vehicle/camera/0', RosString, _camera, queue_size=1)
-        rospy.spin()
-    except KeyboardInterrupt:
-        quit_event.set()
-
-    # logger.info("Waiting on zmq to terminate.")
-    # socket.close()
-    # context.term()
-    capture.release()
-
-
-if __name__ == "__main__":
-    logging.basicConfig(format=log_format)
-    logging.getLogger().setLevel(logging.DEBUG)
-    main()
