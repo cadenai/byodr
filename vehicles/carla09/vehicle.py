@@ -8,6 +8,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 CAMERA_SHAPE = (320, 480, 3)
+# CAMERA_SHAPE = (240, 320, 3)
 
 
 def create_handler(remote, connect_timeout_sec=2, on_image=(lambda x: x)):

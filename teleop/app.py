@@ -103,9 +103,11 @@ def main():
     threads = []
     publisher = TeleopPublisher()
     pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
+    vehicle = ReceiverThread(url='ipc:///tmp/byodr/vehicle.sock', topic=b'aav/vehicle/state')
     inference = ReceiverThread(url='ipc:///tmp/byodr/inference.sock', topic=b'aav/inference/state')
     camera = CameraThread()
     threads.append(pilot)
+    threads.append(vehicle)
     threads.append(inference)
     threads.append(camera)
     [t.start() for t in threads]
@@ -113,7 +115,7 @@ def main():
     try:
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=(lambda x: publisher.publish(x)))),
-            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: (pilot.get_latest(), inference.get_latest())))),
+            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: (pilot.get_latest(), vehicle.get_latest(), inference.get_latest())))),
             (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()))),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),

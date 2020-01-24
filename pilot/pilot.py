@@ -1,4 +1,3 @@
-import collections
 import json
 import logging
 import multiprocessing
@@ -7,6 +6,7 @@ import time
 import traceback
 from abc import ABCMeta, abstractmethod
 
+import cachetools
 import pid_controller.pid as pic
 from jsoncomment import JsonComment
 
@@ -38,22 +38,31 @@ class OriginType(ClassificationType):
 class AttrDict(dict):
     """ Access dictionary items through instance attributes."""
 
-    def __init__(self, *args, **kwargs):
-        super(AttrDict, self).__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super(AttrDict, self).__init__(**kwargs)
         self.__dict__ = self
 
 
 class Blob(AttrDict):
-    def __init__(self, *args, **kwargs):
-        super(Blob, self).__init__(*args, **kwargs)
+    def __init__(self, **kwargs):
+        super(Blob, self).__init__(**kwargs)
+        self.cruise_speed = kwargs.get('cruise_speed')
         self.desired_speed = kwargs.get('desired_speed')
         self.driver = kwargs.get('driver')
+        self.forced_steering = kwargs.get('forced_steering')
+        self.forced_throttle = kwargs.get('forced_throttle')
+        self.instruction = kwargs.get('instruction')
         self.save_event = kwargs.get('save_event')
         self.speed_driver = kwargs.get('speed_driver')
         self.steering = kwargs.get('steering')
         self.steering_driver = kwargs.get('steering_driver')
         self.throttle = kwargs.get('throttle')
         self.time = kwargs.get('time', time.time())
+        self.velocity_y = kwargs.get('velocity_y')
+        if self.forced_steering is None and self.steering is not None:
+            self.forced_steering = abs(self.steering) > 0
+        if self.forced_throttle is None and self.throttle is not None:
+            self.forced_throttle = abs(self.throttle) > 0
 
 
 class DynamicMomentum(object):
@@ -282,7 +291,7 @@ class AbstractCruiseControl(AbstractDriverBase):
         return self._throttle_control.calculate_desired_speed(desired_speed, throttle, forced_acceleration, forced_deceleration, maximum)
 
     def calculate_throttle(self, desired_speed, current_speed):
-        return self._throttle_control.calculate_throttle(desired_speed, current_speed)
+        return 0 if None in (desired_speed, current_speed) else self._throttle_control.calculate_throttle(desired_speed, current_speed)
 
 
 class RawConsoleDriver(AbstractCruiseControl):
@@ -319,6 +328,7 @@ class RawConsoleDriver(AbstractCruiseControl):
         blob.steering = self._apply_dead_zone(blob.steering, dead_zone=self._console_steering_dead_zone)
         blob.throttle = self._raw_throttle(value=blob.throttle)
         blob.desired_speed = blob.throttle * self._max_desired_speed
+        # No recording in this mode.
         blob.steering_driver = OriginType.UNDETERMINED
         blob.speed_driver = OriginType.UNDETERMINED
         blob.save_event = False
@@ -354,10 +364,10 @@ class StaticCruiseDriver(AbstractCruiseControl):
         return False, False
 
     def get_action(self, blob):
-        blob.desired_speed = self.calculate_desired_speed(desired_speed=blob.road_speed,
+        blob.desired_speed = self.calculate_desired_speed(desired_speed=blob.cruise_speed,
                                                           throttle=blob.throttle,
-                                                          forced_acceleration=blob.forced_acceleration,
-                                                          forced_deceleration=blob.forced_deceleration)
+                                                          forced_acceleration=(blob.forced_throttle and blob.throttle > 0),
+                                                          forced_deceleration=(blob.forced_throttle and blob.throttle < 0))
         blob.steering = self._apply_dead_zone(blob.steering, dead_zone=self._console_steering_dead_zone)
         blob.throttle = self.calculate_throttle(blob.desired_speed, blob.velocity_y)
         blob.steering_driver = OriginType.HUMAN
@@ -366,15 +376,21 @@ class StaticCruiseDriver(AbstractCruiseControl):
         # blob.publish = blob.client_command is not None
 
 
+class PilotState(object):
+    def __init__(self):
+        self.instruction = 'intersection.ahead'
+        self.cruise_speed = 0
+
+
 class DriverManager(object):
     def __init__(self, config_file):
         self._config_file = config_file
-        self._drive_queue = collections.deque(maxlen=1)
+        self._pilot_state = PilotState()
         self._driver_cache = {}
         self._driver_lock = multiprocessing.RLock()
         self._driver = None
         self._driver_ctl = 'driver.mode.console'
-        self._switch_ctl(self._driver_ctl)
+        self.switch_ctl(self._driver_ctl)
 
     def _get_driver(self, control=None):
         if control in self._driver_cache:
@@ -407,7 +423,7 @@ class DriverManager(object):
         finally:
             self._driver_lock.release()
 
-    def _switch_ctl(self, control):
+    def switch_ctl(self, control=None):
         # The switch must be immediate. Do not force wait on the previous driver to deactivate.
         if self._driver is not None:
             threading.Thread(target=self._driver.deactivate).start()
@@ -415,27 +431,54 @@ class DriverManager(object):
         self._driver = self._get_driver(control=control)
         threading.Thread(target=self._activate).start()
 
-    def _create_blob(self):
-        blob = Blob()
-        self._driver.get_noop(blob)
-        return blob
-
-    def on_drive(self, cmd):
-        self._drive_queue.appendleft(cmd)
-
-    def get_next_action(self):
-        blob = self._create_blob()
-        command = self._drive_queue[0] if bool(self._drive_queue) else None
-        # Say 250 ms is the connectivity minimum.
-        if command is not None and time.time() - command.get('time') < .250:
-            blob.driver = self._driver_ctl
-            blob.steering = command.get('steering')
-            blob.throttle = command.get('throttle')
+    def get_next_action(self, command, velocity_y):
+        # Say 50 ms is the ipc connectivity minimum.
+        if command is None or time.time() - command.get('time') > .049999:
+            blob = Blob()
+            self._driver.get_noop(blob)
+        else:
+            blob = Blob(driver=self._driver_ctl,
+                        cruise_speed=self._pilot_state.cruise_speed,
+                        velocity_y=velocity_y,
+                        **command)
             self._driver.get_next_action(blob)
-        # Otherwise steering and throttle are set to zero - per the noop.
         return blob
 
     def quit(self):
         for driver in self._driver_cache.values():
             driver.deactivate()
             driver.quit()
+
+
+class CommandProcessor(object):
+    def __init__(self, driver):
+        self._driver = driver
+        # Avoid processing the same command more than once.
+        # TTL is specified in seconds.
+        self._cache = cachetools.TTLCache(maxsize=100, ttl=.35)
+
+    def _cache_safe(self, key, func, *arguments):
+        if self._cache.get(key) is None:
+            try:
+                func(*arguments)
+            finally:
+                self._cache[key] = 1
+
+    def process(self, command):
+        keys = {} if command is None else command.keys()
+        if 'quit' in keys:
+            self._driver.switch_ctl()
+        #
+        # Buttons clockwise: N, E, S, W
+        # N
+        elif 'button_y' in keys and command['button_y'] == 1:
+            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl('driver.mode.dnn'))
+        # E
+        elif 'button_b' in keys and command['button_b'] == 1:
+            self._cache_safe('console driver', lambda: self._driver.switch_ctl('driver.mode.console'))
+        # S
+        elif 'button_a' in keys and command['button_a'] == 1:
+            self._cache_safe('cruise driver', lambda: self._driver.switch_ctl('driver.mode.cruise'))
+        # W
+        elif 'button_x' in keys and command['button_x'] == 1:
+            self._cache_safe('dagger driver', lambda: self._driver.switch_ctl('driver.mode.dagger'))

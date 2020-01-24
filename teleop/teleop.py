@@ -39,6 +39,16 @@ class ControlServerSocket(websocket.WebSocketHandler):
 
 class MessageServerSocket(websocket.WebSocketHandler):
 
+    def __init__(self, application, request, **kwargs):
+        super(MessageServerSocket, self).__init__(application, request, **kwargs)
+        self._driver_translations = {
+            None: 0,
+            'driver.mode.console': 2,
+            'driver.mode.cruise': 3,
+            'driver.mode.dagger': 7,
+            'driver.mode.dnn': 5
+        }
+
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_state = kwargs.get('fn_state')
@@ -59,10 +69,10 @@ class MessageServerSocket(websocket.WebSocketHandler):
         try:
             state = self._fn_state()
             pilot = None if state is None else state[0]
-            inference = None if state is None else state[1]
-            vehicle = None
+            vehicle = None if state is None else state[1]
+            inference = None if state is None else state[2]
             response = {
-                'ctl': 0,
+                'ctl': self._driver_translations.get(None if pilot is None else pilot.get('driver')),
                 'debug1': 0 if inference is None else inference.get('corridor'),
                 'debug2': 0 if inference is None else inference.get('obstacle'),
                 'debug3': 0 if inference is None else inference.get('penalty'),
