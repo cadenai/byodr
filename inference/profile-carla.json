@@ -1,0 +1,17 @@
+{
+# Images for inference.
+"dnn.image.transform.dave": "dave__320_240__200_66__70_0_10_0",
+"dnn.image.transform.alex": "alex__227_227",
+# Dagger.
+"driver.dnn.dagger.conv.dropout": 0.2,
+# Autopilot.
+"driver.dnn.obstacle.scale.min": 0.0,
+"driver.dnn.obstacle.scale.max": 99999.05,
+"driver.dnn.steer.corridor.scale.min": 0.0,
+"driver.dnn.steer.corridor.scale.max": 0.02,
+"driver.autopilot.filter.momentum.up": 0.2,
+"driver.autopilot.filter.momentum.down": 0.4,
+"driver.autopilot.filter.ceiling": 1.5,
+# Navigation.
+"navigation.point.similarity.threshold": 0.68
+}

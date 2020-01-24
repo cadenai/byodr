@@ -1,3 +1,5 @@
+from functools import partial
+
 import cv2
 import numpy as np
 
@@ -27,3 +29,14 @@ def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=T
     image = hwc_to_chw(image) if chw else image
     image = image.astype(np.uint8)
     return image
+
+
+_registered_functions = {
+    'alex__227_227': partial(hwc_alexnet),
+    'dave__320_240__200_66__0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(0, 0, 0, 0)),
+    'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0))
+}
+
+
+def get_registered_function(name):
+    return _registered_functions.get(name)

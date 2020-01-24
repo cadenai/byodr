@@ -1,5 +1,5 @@
 {
-  # Type of throttle control - direct or pid.
+# Type of throttle control - direct or pid.
 "driver.cc.control.type": "pid",
 "driver.cc.static.gear.step": 2,
 "driver.cc.static.speed.max": 20,
@@ -20,25 +20,5 @@
 # A dead-zone collapses smaller values to zero and renormalizes the scale.
 # The threshold is used to bin values.
 "driver.console.steering.dead-zone": 0.0,
-"driver.handler.steering.diff.threshold": 0.0,
-# Dagger.
-"driver.dnn.dagger.conv.dropout": 0.2,
-# Autopilot.
-"driver.dnn.obstacle.scale.min": 0.0,
-"driver.dnn.obstacle.scale.max": 99999.05,
-"driver.dnn.obstacle.scale.speed.multiplier": 0.0,
-"driver.dnn.steer.corridor.scale.min": 0.0,
-"driver.dnn.steer.corridor.scale.max": 0.02,
-"driver.autopilot.filter.momentum.up": 0.2,
-"driver.autopilot.filter.momentum.down": 0.4,
-"driver.autopilot.filter.ceiling": 1.5,
-# Navigation.
-"navigation.point.similarity.threshold": 0.68,
-# Online trainer.
-"trainer.train.base_lr": 5e-6,
-"trainer.train.min_lr": 1e-6,
-"trainer.train.num_threads": 2,
-"trainer.train.batch_size": 100,
-"trainer.train.display_interval": 50,
-"trainer.train.train_iterations": 1000
+"driver.handler.steering.diff.threshold": 0.0
 }

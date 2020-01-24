@@ -11,8 +11,9 @@ from functools import partial
 
 import numpy as np
 import zmq
+from jsoncomment import JsonComment
 
-from image import caffe_dave_200_66, hwc_alexnet
+from image import get_registered_function
 from inference import TFDriver, DynamicMomentum
 
 logger = logging.getLogger(__name__)
@@ -68,20 +69,23 @@ class Publisher(object):
 
 
 class TFRunner(object):
-    def __init__(self, driver):
-        self._driver = driver
-        _penalty_up_momentum = 0.2  # float(kwargs['driver.autopilot.filter.momentum.up'])
-        _penalty_down_momentum = 0.4  # float(kwargs['driver.autopilot.filter.momentum.down'])
-        _penalty_ceiling = 1.5  # float(kwargs['driver.autopilot.filter.ceiling'])
+    def __init__(self, **kwargs):
+        _penalty_up_momentum = float(kwargs['driver.autopilot.filter.momentum.up'])
+        _penalty_down_momentum = float(kwargs['driver.autopilot.filter.momentum.down'])
+        _penalty_ceiling = float(kwargs['driver.autopilot.filter.ceiling'])
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum,
                                                down=_penalty_down_momentum,
                                                ceiling=_penalty_ceiling)
-        _brake_scale_min = 0  # float(kwargs['driver.dnn.obstacle.scale.min'])
-        _brake_scale_max = 9999  # float(kwargs['driver.dnn.obstacle.scale.max'])
-        _corridor_scale_min = 0  # float(kwargs['driver.dnn.steer.corridor.scale.min'])
-        _corridor_scale_max = 9999  # float(kwargs['driver.dnn.steer.corridor.scale.max'])
+        _brake_scale_min = float(kwargs['driver.dnn.obstacle.scale.min'])
+        _brake_scale_max = float(kwargs['driver.dnn.obstacle.scale.max'])
+        _corridor_scale_min = float(kwargs['driver.dnn.steer.corridor.scale.min'])
+        _corridor_scale_max = float(kwargs['driver.dnn.steer.corridor.scale.max'])
         self._fn_obstacle_norm = partial(self._norm_scale, min_=_brake_scale_min, max_=_brake_scale_max)
         self._fn_corridor_norm = partial(self._norm_scale, min_=_corridor_scale_min, max_=_corridor_scale_max)
+        p_conv_dropout = float(kwargs['driver.dnn.dagger.conv.dropout'])
+        self._fn_dave_image = get_registered_function(kwargs['dnn.image.transform.dave'])
+        self._fn_alex_image = get_registered_function(kwargs['dnn.image.transform.alex'])
+        self._driver = TFDriver(gpu_id=kwargs['gpu_id'], p_conv_dropout=p_conv_dropout)
         self._driver.activate()
 
     def quit(self):
@@ -93,8 +97,8 @@ class TFRunner(object):
         return abs(max(0., v - min_) / (max_ - min_))
 
     def forward(self, image, turn='intersection.ahead', dagger=False):
-        _dave_img = caffe_dave_200_66(image, resize_wh=(320, 240), crop=(70, 0, 10, 0))
-        _alex_img = hwc_alexnet(image)
+        _dave_img = self._fn_dave_image(image)
+        _alex_img = self._fn_alex_image(image)
         action_out, brake_out, surprise_out, critic_out, entropy_out, conv5_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
@@ -126,9 +130,15 @@ class TFRunner(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Inference server.')
+    parser.add_argument('--config', type=str, required=True, help='Config file location.')
     parser.add_argument('--gpu', type=int, default=0, help='GPU number')
     parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
     args = parser.parse_args()
+
+    with open(args.config, 'r') as cfg_file:
+        cfg = JsonComment(json).loads(cfg_file.read())
+    for key in sorted(cfg):
+        logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = args.clock
     logger.info("Processing at {} Hz.".format(_process_frequency))
@@ -137,7 +147,7 @@ def main():
     camera = CameraThread()
     camera.start()
     publisher = Publisher()
-    runner = TFRunner(driver=TFDriver(gpu_id=args.gpu, p_conv_dropout=0))
+    runner = TFRunner(gpu_id=args.gpu, **cfg)
     try:
         while not quit_event.is_set():
             proc_start = time.time()
