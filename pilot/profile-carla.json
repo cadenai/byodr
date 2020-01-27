@@ -17,8 +17,6 @@
 "driver.cc.throttle.pid_controller.i": 0.8,
 "driver.cc.throttle.pid_controller.d": 0.0,
 # Steering.
-# A dead-zone collapses smaller values to zero and renormalizes the scale.
 # The threshold is used to bin values.
-"driver.console.steering.dead-zone": 0.0,
 "driver.handler.steering.diff.threshold": 0.0
 }

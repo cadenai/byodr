@@ -29,6 +29,30 @@ def _interrupt():
 
 
 # noinspection PyUnresolvedReferences
+class ReceiverThread(threading.Thread):
+    def __init__(self, url, topic=''):
+        super(ReceiverThread, self).__init__()
+        subscriber = zmq.Context().socket(zmq.SUB)
+        subscriber.setsockopt(zmq.RCVHWM, 1)
+        subscriber.setsockopt(zmq.RCVTIMEO, 10)
+        subscriber.setsockopt(zmq.LINGER, 0)
+        subscriber.connect(url)
+        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
+        self._subscriber = subscriber
+        self._queue = collections.deque(maxlen=1)
+
+    def get_latest(self):
+        return self._queue[0] if bool(self._queue) else None
+
+    def run(self):
+        while not quit_event.is_set():
+            try:
+                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
+            except zmq.Again:
+                pass
+
+
+# noinspection PyUnresolvedReferences
 class CameraThread(threading.Thread):
     def __init__(self):
         super(CameraThread, self).__init__()
@@ -70,6 +94,10 @@ class Publisher(object):
 
 class TFRunner(object):
     def __init__(self, **kwargs):
+        self._lock = multiprocessing.Lock()
+        self._dagger = False
+        self._steering_scale_left = abs(float(kwargs['driver.dnn.steering.scale.left']))
+        self._steering_scale_right = float(kwargs['driver.dnn.steering.scale.right'])
         _penalty_up_momentum = float(kwargs['driver.autopilot.filter.momentum.up'])
         _penalty_down_momentum = float(kwargs['driver.autopilot.filter.momentum.down'])
         _penalty_ceiling = float(kwargs['driver.autopilot.filter.ceiling'])
@@ -91,12 +119,21 @@ class TFRunner(object):
     def quit(self):
         self._driver.deactivate()
 
+    def set_dagger(self, value):
+        with self._lock:
+            self._dagger = value
+
+    def _dnn_steering(self, raw):
+        return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
+
     @staticmethod
     def _norm_scale(v, min_=0., max_=1.):
         """Zero values below the minimum but let values larger than the maximum be scaled up. """
         return abs(max(0., v - min_) / (max_ - min_))
 
-    def forward(self, image, turn='intersection.ahead', dagger=False):
+    def forward(self, image, turn='intersection.ahead'):
+        with self._lock:
+            dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
         action_out, brake_out, surprise_out, critic_out, entropy_out, conv5_out = \
@@ -117,14 +154,16 @@ class TFRunner(object):
         # _obstacle_penalty += _obstacle_penalty * _norm_speed * self._brake_speed_multiplier
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
-        return dict(action=float(action_out),
+        return dict(action=float(self._dnn_steering(action_out)),
                     brake=float(brake_out),
                     corridor=float(_corridor_penalty),
                     critic=float(critic_out),
+                    dagger=int(dagger),
                     entropy=float(entropy_out),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
-                    surprise=float(surprise_out)
+                    surprise=float(surprise_out),
+                    time=time.time()
                     )
 
 
@@ -144,13 +183,21 @@ def main():
     logger.info("Processing at {} Hz.".format(_process_frequency))
     max_duration = 1. / _process_frequency
 
+    threads = []
+    teleop = ReceiverThread(url='ipc:///tmp/byodr/teleop.sock', topic=b'aav/teleop/input')
     camera = CameraThread()
-    camera.start()
+    threads.append(teleop)
+    threads.append(camera)
+    [t.start() for t in threads]
     publisher = Publisher()
     runner = TFRunner(gpu_id=args.gpu, **cfg)
     try:
         while not quit_event.is_set():
             proc_start = time.time()
+            command = teleop.get_latest()
+            # Leave the value intact unless the control is activated.
+            if command is not None and any([k in command.keys() for k in ('button_y', 'button_b', 'button_a', 'button_x')]):
+                runner.set_dagger(command.get('button_x', 0) == 1)
             image = camera.capture()
             if image is not None:
                 publisher.publish(runner.forward(image=image))
@@ -164,8 +211,8 @@ def main():
         logger.error("{}".format(traceback.format_exc(e)))
         quit_event.set()
 
-    logger.info("Waiting on thread to stop.")
-    camera.join()
+    logger.info("Waiting on threads to stop.")
+    [t.join() for t in threads]
 
     logger.info("Waiting on runner to quit.")
     runner.quit()

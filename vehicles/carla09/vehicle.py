@@ -1,6 +1,7 @@
 import logging
 import math
 import multiprocessing
+import time
 
 import carla
 import numpy as np
@@ -8,7 +9,6 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 CAMERA_SHAPE = (320, 480, 3)
-# CAMERA_SHAPE = (240, 320, 3)
 
 
 def create_handler(remote, connect_timeout_sec=2, on_image=(lambda x: x)):
@@ -102,7 +102,11 @@ class CarlaHandler(object):
 
     def state(self):
         x, y = self._position()
-        return dict(x_coordinate=x, y_coordinate=y, heading=self._heading(), velocity=self._velocity())
+        return dict(x_coordinate=x,
+                    y_coordinate=y,
+                    heading=self._heading(),
+                    velocity=self._velocity(),
+                    time=time.time())
 
     def start(self):
         self._reset()

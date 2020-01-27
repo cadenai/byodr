@@ -5,6 +5,8 @@
 # Dagger.
 "driver.dnn.dagger.conv.dropout": 0.2,
 # Autopilot.
+"driver.dnn.steering.scale.left": -0.269452,
+"driver.dnn.steering.scale.right": 0.16496365,
 "driver.dnn.obstacle.scale.min": 0.0,
 "driver.dnn.obstacle.scale.max": 99999.05,
 "driver.dnn.steer.corridor.scale.min": 0.0,

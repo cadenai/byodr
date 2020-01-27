@@ -40,16 +40,5 @@ services:
     environment:
       CADEN_DNN: ${DC_CADEN_DNN}
     command: python app.py --config=/app/${DC_JSON_CONFIG} --gpu=${DC_INFERENCE_GPU} --clock=${DC_INFERENCE_HZ}
-  vehicle:
-    user: '1000'
-    build:
-      context: ./vehicles/carla09
-      dockerfile: Dockerfile
-    image: byodr/vehicle_carla
-    container_name: byodr_carla
-    volumes:
-      - './vehicles/carla09:/app'
-      - '/tmp/byodr:/tmp/byodr'
-    command: python app.py --remote=${DC_CARLA_REMOTE}
 
 

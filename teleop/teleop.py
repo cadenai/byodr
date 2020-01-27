@@ -38,17 +38,6 @@ class ControlServerSocket(websocket.WebSocketHandler):
 
 
 class MessageServerSocket(websocket.WebSocketHandler):
-
-    def __init__(self, application, request, **kwargs):
-        super(MessageServerSocket, self).__init__(application, request, **kwargs)
-        self._driver_translations = {
-            None: 0,
-            'driver.mode.console': 2,
-            'driver.mode.cruise': 3,
-            'driver.mode.dagger': 7,
-            'driver.mode.dnn': 5
-        }
-
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_state = kwargs.get('fn_state')
@@ -65,6 +54,20 @@ class MessageServerSocket(websocket.WebSocketHandler):
     def on_close(self):
         logger.info("Log client disconnected.")
 
+    @staticmethod
+    def _translate_driver(pilot, inference):
+        if None in (pilot, inference):
+            return 0
+        ctl = pilot.get('driver')
+        if ctl is None:
+            return 0
+        elif ctl == 'driver.mode.console':
+            return 2
+        elif ctl == 'driver.mode.cruise':
+            return 3
+        elif ctl == 'driver.mode.inference':
+            return 7 if inference.get('dagger', 0) == 1 else 5
+
     def on_message(self, *args):
         try:
             state = self._fn_state()
@@ -72,7 +75,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
             response = {
-                'ctl': self._driver_translations.get(None if pilot is None else pilot.get('driver')),
+                'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
                 'debug2': 0 if inference is None else inference.get('obstacle'),
                 'debug3': 0 if inference is None else inference.get('penalty'),
@@ -88,8 +91,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'vel_y': 0 if vehicle is None else vehicle.get('velocity'),
                 'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
                 'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
-                'speed': 0.,
-                'max_speed': 0.,
+                'speed': 0 if pilot is None else pilot.get('desired_speed'),
+                'max_speed': 0 if pilot is None else pilot.get('cruise_speed'),
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'route': None,
                 'route_np': None,

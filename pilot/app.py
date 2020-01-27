@@ -66,8 +66,8 @@ def main():
     args = parser.parse_args()
 
     threads = []
-    driver_manager = DriverManager(config_file=args.config)
-    controller = CommandProcessor(driver=driver_manager)
+    driver = DriverManager(config_file=args.config)
+    controller = CommandProcessor(driver=driver)
     publisher = PilotPublisher()
     teleop = ReceiverThread(url='ipc:///tmp/byodr/teleop.sock', topic=b'aav/teleop/input')
     vehicle = ReceiverThread(url='ipc:///tmp/byodr/vehicle.sock', topic=b'aav/vehicle/state')
@@ -83,17 +83,21 @@ def main():
     max_duration = 1. / _process_frequency
     _num_violations = 0
 
+    _max_command_age = 2.5 * max_duration
     while not quit_event.is_set():
         try:
             # Synchronize per clock rate.
             proc_start = time.time()
             # Process controls if any.
             command = teleop.get_latest()
-            state = vehicle.get_latest()
-            controller.process(command)
-            current_speed = 0 if state is None else state.get('velocity')
-            publisher.publish(driver_manager.get_next_action(command, current_speed))
+            on_time = False if command is None else time.time() - command.get('time') < _max_command_age
+            if command is not None:
+                controller.process(command)
+                if not on_time:
+                    logger.warning("Maximum command age exceeded - performing noop.")
             # Once is a fluke from three it's a pattern.
+            action = driver.next_action(command, vehicle.get_latest(), inference.get_latest()) if on_time else driver.noop()
+            publisher.publish(action)
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))
             if _num_violations > 2:
@@ -109,7 +113,7 @@ def main():
     [t.join() for t in threads]
 
     logger.info("Waiting on driver to quit.")
-    driver_manager.quit()
+    driver.quit()
 
 
 if __name__ == "__main__":
