@@ -61,7 +61,7 @@ class Barrier(object):
 
 
 def _create_input_nodes():
-    placeholder = tf.compat.v1.placeholder
+    placeholder = tf.placeholder
     input_dave_image = placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
     input_speed_image = placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
     input_command = placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
@@ -80,8 +80,8 @@ def _newest_file(path, pattern):
 def _load_definition(f_name):
     if f_name is None:
         return None
-    graph_def = tf.compat.v1.GraphDef()
-    with tf.io.gfile.GFile(f_name, 'rb') as f:
+    graph_def = tf.GraphDef()
+    with tf.gfile.GFile(f_name, 'rb') as f:
         graph_def.ParseFromString(f.read())
     return graph_def
 
@@ -123,9 +123,9 @@ class TFDriver(object):
 
     def _create_session(self, graph, barrier):
         with graph.as_default():
-            config = tf.compat.v1.ConfigProto()
+            config = tf.ConfigProto()
             config.gpu_options.allow_growth = True
-            self.sess = tf.compat.v1.Session(config=config, graph=graph)
+            self.sess = tf.Session(config=config, graph=graph)
         barrier.wait()
 
     def _load_maneuver_graph_def(self, barrier):
@@ -162,7 +162,7 @@ class TFDriver(object):
                 nodes_tuple = _create_input_nodes()
                 self.input_dave_image, _, self.input_use_dropout, self.input_p_dropout = nodes_tuple[0]
                 self.input_alex_image, self.input_command = nodes_tuple[-1]
-                self.input_posor_image = tf.compat.v1.placeholder(dtype=tf.uint8, shape=[1, 227, 227, 3])
+                self.input_posor_image = tf.placeholder(dtype=tf.uint8, shape=[1, 227, 227, 3])
                 _input_maneuver = {
                     'input/dave_image': self.input_dave_image,
                     'input/command': self.input_command,

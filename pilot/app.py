@@ -63,6 +63,7 @@ def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
     parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
+    parser.add_argument('--max_command_age', type=float, default=.100, help='Max age of a teleop command.')
     args = parser.parse_args()
 
     threads = []
@@ -79,25 +80,31 @@ def main():
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = args.clock
-    logger.info("Processing at {} Hz.".format(_process_frequency))
+    _max_command_age = args.max_command_age
+    logger.info("Processing at {} Hz - max command age is {:2.2f}.".format(_process_frequency, _max_command_age))
     max_duration = 1. / _process_frequency
     _num_violations = 0
 
-    _max_command_age = 2.5 * max_duration
+    # Do not process the same control command more than once.
+    _processed_commands = collections.deque(maxlen=1)
     while not quit_event.is_set():
         try:
             # Synchronize per clock rate.
             proc_start = time.time()
             # Process controls if any.
             command = teleop.get_latest()
-            on_time = False if command is None else time.time() - command.get('time') < _max_command_age
-            if command is not None:
+            _command_time = 0 if command is None else command.get('time')
+            _command_age = time.time() - _command_time
+            _on_time = _command_age < _max_command_age
+            action = driver.next_action(command, vehicle.get_latest(), inference.get_latest()) if _on_time else driver.noop()
+            if command is not None and _command_time not in _processed_commands:
                 controller.process(command)
-                if not on_time:
-                    logger.warning("Maximum command age exceeded - performing noop.")
-            # Once is a fluke from three it's a pattern.
-            action = driver.next_action(command, vehicle.get_latest(), inference.get_latest()) if on_time else driver.noop()
+                _processed_commands.append(_command_time)
+                if not _on_time:
+                    logger.warning("Command age {:2.3f} exceeded maximum of {:2.3f}.".format(_command_age, _max_command_age))
+            # Perform the action.
             publisher.publish(action)
+            # Keep the desired frequency - one violation is a fluke from three it's a pattern.
             _proc_sleep = max_duration - (time.time() - proc_start)
             _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))
             if _num_violations > 2:
