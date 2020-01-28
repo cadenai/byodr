@@ -153,7 +153,7 @@ class TFDriver(object):
             for thr in _threads:
                 thr.start()
             for thr in _threads:
-                thr.join(timeout=5)
+                thr.join(timeout=30)
             logger.info("Loaded session and graph definitions in {:2.2f} seconds.".format(time.time() - _start))
             if None in (self.maneuver_graph_def, self.speed_graph_def, self.posor_graph_def):
                 logger.warning("Cannot create the graph when one of the parts is missing.")
@@ -194,39 +194,41 @@ class TFDriver(object):
                 self.sess = None
 
     def forward(self, dave_image, alex_image, posor_image, turn, dagger=False):
-        assert self.sess is not None, "There is no session - run activation prior to calling this method."
-        _ops = [self.tf_steering, self.tf_brake, self.tf_surprise, self.tf_critic, self.tf_entropy, self.tf_features]
-        _ret = (0, 1, 1, 1, 0, [0])
-        if None in _ops:
-            return _ret
-        with self.sess.graph.as_default():
-            feeder = {
-                self.input_dave_image: [dave_image],
-                self.input_alex_image: [alex_image],
-                self.input_posor_image: [posor_image],
-                self.input_use_dropout: dagger,
-                self.input_p_dropout: self.p_conv_dropout if dagger else 0,
-                self.input_command: [drive_cmd_vector(turn=turn)]
-            }
-            try:
-                _steer, _brake, _surprise, _critic, _entropy, _features = self.sess.run(_ops, feed_dict=feeder)
-                return _steer, max(0, _brake), _surprise, max(0, _critic), _entropy, _features.ravel()
-            except (StandardError, CancelledError, FailedPreconditionError) as e:
-                if isinstance(e, FailedPreconditionError):
-                    logger.warning('FailedPreconditionError')
-                else:
-                    logger.warning(e)
+        with self._lock:
+            assert self.sess is not None, "There is no session - run activation prior to calling this method."
+            _ops = [self.tf_steering, self.tf_brake, self.tf_surprise, self.tf_critic, self.tf_entropy, self.tf_features]
+            _ret = (0, 1, 1, 1, 0, [0])
+            if None in _ops:
                 return _ret
+            with self.sess.graph.as_default():
+                feeder = {
+                    self.input_dave_image: [dave_image],
+                    self.input_alex_image: [alex_image],
+                    self.input_posor_image: [posor_image],
+                    self.input_use_dropout: dagger,
+                    self.input_p_dropout: self.p_conv_dropout if dagger else 0,
+                    self.input_command: [drive_cmd_vector(turn=turn)]
+                }
+                try:
+                    _steer, _brake, _surprise, _critic, _entropy, _features = self.sess.run(_ops, feed_dict=feeder)
+                    return _steer, max(0, _brake), _surprise, max(0, _critic), _entropy, _features.ravel()
+                except (StandardError, CancelledError, FailedPreconditionError) as e:
+                    if isinstance(e, FailedPreconditionError):
+                        logger.warning('FailedPreconditionError')
+                    else:
+                        logger.warning(e)
+                    return _ret
 
     def features(self, image):
-        assert self.sess is not None, "There is no session - run activation prior to calling this method."
-        _ret = [0]
-        if self.tf_features is None:
-            return _ret
-        with self.sess.graph.as_default():
-            feeder = {self.input_posor_image: [image]}
-            try:
-                return self.sess.run(self.tf_features, feed_dict=feeder).ravel()
-            except (StandardError, CancelledError) as e:
-                logger.warning(e)
+        with self._lock:
+            assert self.sess is not None, "There is no session - run activation prior to calling this method."
+            _ret = [0]
+            if self.tf_features is None:
                 return _ret
+            with self.sess.graph.as_default():
+                feeder = {self.input_posor_image: [image]}
+                try:
+                    return self.sess.run(self.tf_features, feed_dict=feeder).ravel()
+                except (StandardError, CancelledError) as e:
+                    logger.warning(e)
+                    return _ret

@@ -1,4 +1,4 @@
-# docker build -f Dockerfile.ros_jp33 -t byodr/melodic .
+# docker build -f Dockerfile.ros_jp33 -t byodr/ros_melodic .
 FROM ros:melodic
 
 ENV TZ=Europe/Amsterdam

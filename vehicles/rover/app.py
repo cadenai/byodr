@@ -7,13 +7,14 @@ import signal
 import threading
 import time
 
+import cv2
 import numpy as np
 import zmq
 
-from vehicle import create_handler
-
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
+
+CAMERA_SHAPE = (240, 320, 3)
 
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
 signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
@@ -73,34 +74,60 @@ class ReceiverThread(threading.Thread):
                 pass
 
 
+class CaptureThread(threading.Thread):
+    def __init__(self, url, hz=50):
+        super(CaptureThread, self).__init__()
+        self._url = url
+        self._capture = cv2.VideoCapture(url)
+        self._sleep = 1. / hz
+        self._publisher = ImagePublisher()
+
+    def run(self):
+        while not quit_event.is_set():
+            _start = time.time()
+            suc, img = self._capture.read()
+            if suc:
+                _height, _width, _ = CAMERA_SHAPE
+                self._publisher.publish(cv2.resize(img, (_width, _height)))
+            else:
+                logger.info("Could not capture from '{}' - retrying in 100 ms.".format(self._url))
+                time.sleep(.100)
+                self._capture = cv2.VideoCapture(self._url)
+            _duration = time.time() - _start
+            time.sleep(max(0., self._sleep - _duration))
+
+
 def main():
-    parser = argparse.ArgumentParser(description='Carla vehicle client.')
-    parser.add_argument('--remote', type=str, required=True, help='Carla server remote host:port')
-    parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
+    parser = argparse.ArgumentParser(description='Rover main.')
+    parser.add_argument('--clock', type=int, default=40, help='Main loop frequency in hz.')
+    parser.add_argument('--fps', type=int, default=20, help='Camera capture frequency in hz.')
+
     args = parser.parse_args()
 
     state_publisher = StatePublisher()
-    image_publisher = ImagePublisher()
 
-    vehicle = create_handler(remote=args.remote, on_image=(lambda x: image_publisher.publish(x)))
-    vehicle.start()
+    # vehicle = create_handler()
+    # vehicle.start()
 
     threads = []
     pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
+    _fps = args.fps
+    capture = CaptureThread(url='rtsp://user1:HelloUser1@192.168.50.64:554/Streaming/Channels/102', hz=_fps)
     threads.append(pilot)
+    threads.append(capture)
     [t.start() for t in threads]
 
     _hz = args.clock
+    logger.info("Running at {} hz and a capture rate of {}.".format(_hz, _fps))
     while not quit_event.is_set():
-        vehicle.drive(pilot.get_latest())
-        state_publisher.publish(vehicle.state())
+        # state_publisher.publish(vehicle.state())
         time.sleep(1. / _hz)
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]
 
-    logger.info("Waiting on carla to quit.")
-    vehicle.quit()
+    # logger.info("Waiting on vehicle to quit.")
+    # vehicle.quit()
 
 
 if __name__ == "__main__":

@@ -55,10 +55,17 @@ class CarlaHandler(object):
         blueprint_library = self._world.get_blueprint_library()
         vehicle_bp = blueprint_library.find('vehicle.tesla.model3')
         spawn_points = self._world.get_map().get_spawn_points()
-        spawn_idx = self._spawn_index + 1 if (self._spawn_index + 1) < len(spawn_points) else 0
-        spawn_point = spawn_points[spawn_idx]
-        logger.info("Spawn point is '{}'.".format(spawn_point))
-        self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
+        # Retry at spawn point collisions.
+        spawn_tries = 1
+        while spawn_tries < 4:
+            spawn_idx = self._spawn_index + spawn_tries if (self._spawn_index + spawn_tries) < len(spawn_points) else 0
+            spawn_point = spawn_points[spawn_idx]
+            try:
+                self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
+                logger.info("Spawn point is '{}'.".format(spawn_point))
+                break
+            except RuntimeError:
+                spawn_tries += 1
         # Attach the camera's - defaults at https://carla.readthedocs.io/en/latest/cameras_and_sensors/.
         camera_bp = self._world.get_blueprint_library().find('sensor.camera.rgb')
         # Modify the attributes of the blueprint to set image resolution and field of view.
@@ -125,7 +132,7 @@ class CarlaHandler(object):
                 self._actor_last_location = (location.x, location.y)
 
     def drive(self, cmd):
-        if self._actor is not None:
+        if cmd is not None and self._actor is not None:
             try:
                 steering, throttle = cmd.get('steering'), cmd.get('throttle')
                 control = carla.VehicleControl()

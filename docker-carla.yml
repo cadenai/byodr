@@ -10,6 +10,6 @@ services:
     volumes:
       - './vehicles/carla09:/app'
       - '/tmp/byodr:/tmp/byodr'
-    command: python app.py --remote=${DC_CARLA_REMOTE}
+    command: python app.py --remote=${DC_CARLA_REMOTE} --clock=${DC_VEHICLE_HZ}
 
 
