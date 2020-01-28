@@ -1,18 +1,9 @@
-FROM tensorflow/tensorflow:1.15.0-gpu
-
-ENV TZ=Europe/Amsterdam
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python-opencv \
-    python-pip \
-    python-setuptools \
- && rm -rf /var/lib/apt/lists/*
+FROM byodr/tf
 
 COPY . app/
 WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN groupadd --gid 1000 --system app \
-  && useradd --uid 1000 --gid 1000 --system --create-home --shell /bin/bash app
+# Create the user as part of the video group.
+RUN useradd --uid 1000 --gid 44 --system --create-home --shell /bin/bash app

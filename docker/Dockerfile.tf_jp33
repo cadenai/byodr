@@ -1,3 +1,4 @@
+# docker build -f Dockerfile.tf_jp33 -t byodr/tf .
 FROM ubuntu:bionic
 
 ENV TZ=Europe/Amsterdam
@@ -18,19 +19,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
  && rm -rf /var/lib/apt/lists/*
 
+RUN pip install --upgrade numpy \
+  && pip install "pyzmq >=18.1, <19.0"
+
 # First copied /usr/lib/aarch64-linux-gnu/libcudnn* to tegra/ on the host - see volumes.
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu/tegra
 
-COPY . app/
-WORKDIR /app
-
-RUN pip install --upgrade numpy
-
-RUN pip install --no-cache-dir -r requirements.txt
-
 RUN pip install \
   https://github.com/peterlee0127/tensorflow-nvJetson/releases/download/binary/tensorflow-1.9.0-cp27-cp27mu-linux_aarch64.whl
-
-RUN groupadd --gid 1000 --system app \
-  && groupadd --gid 44 --system video \
-  && useradd --uid 1000 --gid 1000 --gid 44 --system --create-home --shell /bin/bash app

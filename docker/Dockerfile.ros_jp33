@@ -1,0 +1,17 @@
+# docker build -f Dockerfile.ros_jp33 -t byodr/melodic .
+FROM ros:melodic
+
+ENV TZ=Europe/Amsterdam
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    python-dev \
+    python-opencv \
+    python-pip \
+    python-setuptools \
+    python-wheel \
+    wget \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install "pyzmq >=18.1, <19.0"

@@ -1,9 +1,6 @@
 version: '2'
 services:
   inference:
-    user: '0'
-    build:
-      dockerfile: Dockerfile.jp33
     volumes:
       - './inference:/app'
       - '/tmp/byodr:/tmp/byodr'

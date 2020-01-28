@@ -1,15 +1,4 @@
-FROM ubuntu:bionic
-
-ENV TZ=Europe/Amsterdam
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    python-dev \
-    python-opencv \
-    python-pip \
-    python-setuptools \
- && rm -rf /var/lib/apt/lists/*
+FROM byodr/bionic:1.0
 
 COPY . app/
 WORKDIR /app

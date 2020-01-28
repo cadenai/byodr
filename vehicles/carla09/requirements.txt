@@ -1,3 +1,2 @@
 -r https://raw.githubusercontent.com/carla-simulator/carla/0.9.6/PythonAPI/carla/requirements.txt
 # carla >=0.9.5, <1.0
-pyzmq >=18.1, <19.0

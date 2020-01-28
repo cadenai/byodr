@@ -91,7 +91,7 @@ def main():
         try:
             # Synchronize per clock rate.
             proc_start = time.time()
-            # Process controls if any.
+            # Teleop commands can be none or stale when not connected or slow - default to noop.
             command = teleop.get_latest()
             _command_time = 0 if command is None else command.get('time')
             _command_age = time.time() - _command_time
@@ -100,8 +100,6 @@ def main():
             if command is not None and _command_time not in _processed_commands:
                 controller.process(command)
                 _processed_commands.append(_command_time)
-                if not _on_time:
-                    logger.warning("Command age {:2.3f} exceeded maximum of {:2.3f}.".format(_command_age, _max_command_age))
             # Perform the action.
             publisher.publish(action)
             # Keep the desired frequency - one violation is a fluke from three it's a pattern.
