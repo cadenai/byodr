@@ -196,7 +196,7 @@ class TFDriver(object):
     def forward(self, dave_image, alex_image, posor_image, turn, dagger=False):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
-            _ops = [self.tf_steering, self.tf_brake, self.tf_surprise, self.tf_critic, self.tf_entropy, self.tf_features]
+            _ops = [self.tf_steering, self.tf_brake, self.tf_surprise, self.tf_critic, self.tf_entropy]
             _ret = (0, 1, 1, 1, 0, [0])
             if None in _ops:
                 return _ret
@@ -210,8 +210,8 @@ class TFDriver(object):
                     self.input_command: [drive_cmd_vector(turn=turn)]
                 }
                 try:
-                    _steer, _brake, _surprise, _critic, _entropy, _features = self.sess.run(_ops, feed_dict=feeder)
-                    return _steer, max(0, _brake), _surprise, max(0, _critic), _entropy, _features.ravel()
+                    _steer, _brake, _surprise, _critic, _entropy = self.sess.run(_ops, feed_dict=feeder)
+                    return _steer, max(0, _brake), _surprise, max(0, _critic), _entropy
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
