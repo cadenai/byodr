@@ -157,6 +157,13 @@ class TwistHandler(object):
         _throttle = int(max(-1, min(1, _throttle)) * 180 / 2 + 90)
         return _throttle, _steering
 
+    def _drive(self, steering, throttle):
+        try:
+            throttle, steering = self._scale(throttle, steering)
+            self._gate.publish(steering=steering, throttle=throttle)
+        except Exception as e:
+            logger.error("{}".format(e))
+
     def state(self):
         x, y = 0, 0
         return dict(x_coordinate=x,
@@ -165,13 +172,12 @@ class TwistHandler(object):
                     velocity=self._gate.get_odometer_value(),
                     time=time.time())
 
+    def noop(self):
+        self._drive(steering=0, throttle=0)
+
     def drive(self, cmd):
         if cmd is not None:
-            try:
-                _throttle, _steering = self._scale(cmd.get('throttle'), cmd.get('steering'))
-                self._gate.publish(throttle=_throttle, steering=_steering)
-            except Exception as e:
-                logger.error("{}".format(e))
+            self._drive(steering=cmd.get('steering'), throttle=cmd.get('throttle'))
 
 
 def _ros_init():
@@ -219,11 +225,19 @@ def main():
     [t.start() for t in threads]
 
     _hz = args.clock
+    _period = 1. / _hz
     logger.info("Running at {} hz.".format(_hz))
     while not quit_event.is_set():
-        vehicle.drive(pilot.get_latest())
+        command = pilot.get_latest()
+        _command_time = 0 if command is None else command.get('time')
+        _command_age = time.time() - _command_time
+        _on_time = _command_age < (2 * _period)
+        if _on_time:
+            vehicle.drive(command)
+        else:
+            vehicle.noop()
         state_publisher.publish(vehicle.state())
-        time.sleep(1. / _hz)
+        time.sleep(_period)
 
     logger.info("Waiting on threads to stop.")
     gst_source.close()

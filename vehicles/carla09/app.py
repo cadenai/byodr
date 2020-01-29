@@ -91,10 +91,18 @@ def main():
     [t.start() for t in threads]
 
     _hz = args.clock
+    _period = 1. / _hz
     while not quit_event.is_set():
-        vehicle.drive(pilot.get_latest())
+        command = pilot.get_latest()
+        _command_time = 0 if command is None else command.get('time')
+        _command_age = time.time() - _command_time
+        _on_time = _command_age < (2 * _period)
+        if _on_time:
+            vehicle.drive(command)
+        else:
+            vehicle.noop()
         state_publisher.publish(vehicle.state())
-        time.sleep(1. / _hz)
+        time.sleep(_period)
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

@@ -107,6 +107,18 @@ class CarlaHandler(object):
     def _velocity(self):
         return 0 if self._actor is None else self._carla_vel()
 
+    def _drive(self, steering, throttle):
+        try:
+            control = carla.VehicleControl()
+            control.steer = steering
+            if throttle > 0:
+                control.throttle = throttle
+            else:
+                control.brake = abs(throttle)
+            self._actor.apply_control(control)
+        except Exception as e:
+            logger.error("{}".format(e))
+
     def state(self):
         x, y = self._position()
         return dict(x_coordinate=x,
@@ -131,16 +143,9 @@ class CarlaHandler(object):
                     self._actor_distance_traveled += math.sqrt((location.x - _x) ** 2 + (location.y - _y) ** 2)
                 self._actor_last_location = (location.x, location.y)
 
+    def noop(self):
+        self._drive(steering=0, throttle=0)
+
     def drive(self, cmd):
         if cmd is not None and self._actor is not None:
-            try:
-                steering, throttle = cmd.get('steering'), cmd.get('throttle')
-                control = carla.VehicleControl()
-                control.steer = steering
-                if throttle > 0:
-                    control.throttle = throttle
-                else:
-                    control.brake = abs(throttle)
-                self._actor.apply_control(control)
-            except Exception as e:
-                logger.error("{}".format(e))
+            self._drive(steering=cmd.get('steering'), throttle=cmd.get('throttle'))
