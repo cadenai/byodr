@@ -4,17 +4,26 @@ import json
 import logging
 import multiprocessing
 import signal
+import sys
 import threading
 import time
 
-import cv2
 import numpy as np
+import rospy
 import zmq
+from geometry_msgs.msg import Twist, TwistStamped
+from jsoncomment import JsonComment
+
+from video import GstRawSource
 
 logger = logging.getLogger(__name__)
+log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
+
 quit_event = multiprocessing.Event()
 
 CAMERA_SHAPE = (240, 320, 3)
+CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
+CTL_LAST = 0
 
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
 signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
@@ -74,63 +83,155 @@ class ReceiverThread(threading.Thread):
                 pass
 
 
-class CaptureThread(threading.Thread):
-    def __init__(self, url, hz=50):
-        super(CaptureThread, self).__init__()
-        self._url = url
-        self._capture = cv2.VideoCapture(url)
-        self._sleep = 1. / hz
-        self._publisher = ImagePublisher()
+class RosGate(object):
+    """
+    """
 
-    def run(self):
-        while not quit_event.is_set():
-            _start = time.time()
-            suc, img = self._capture.read()
-            if suc:
-                _height, _width, _ = CAMERA_SHAPE
-                self._publisher.publish(cv2.resize(img, (_width, _height)))
-            else:
-                logger.info("Could not capture from '{}' - retrying in 100 ms.".format(self._url))
-                time.sleep(.100)
-                self._capture = cv2.VideoCapture(self._url)
-            _duration = time.time() - _start
-            time.sleep(max(0., self._sleep - _duration))
+    def __init__(self, connect=True):
+        """
+        """
+        # Keep half a second worth of readings.
+        self._odometer_deque = collections.deque(maxlen=5)
+
+        if connect:
+            rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
+            self._pub = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
+
+    def _update_odometer(self, message):
+        # Comes in at 10Hz.
+        counter = int(message.twist.linear.y)
+        self._odometer_deque.append(counter)
+
+    def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
+        if not quit_event.is_set():
+            # The button state does not need to go to ros but currently there is no separate state holder (server side)
+            # for the button state per timestamp.
+            # Scale the throttle as a replacement for a 'mechanical' throttle maximizer.
+            twist = Twist()
+            twist.angular.x, twist.angular.z, twist.linear.x, twist.linear.z = (channel, steering, control, throttle)
+            twist.linear.y = button
+            self._pub.publish(twist)
+
+    def get_odometer_value(self):
+        # Convert to meters / second. Scale is determined by the vehicle.
+        # Reverse measurements not currently possible.
+        return max(0, sum(list(self._odometer_deque)) / 20.)
+
+
+class FakeGate(RosGate):
+    def __init__(self):
+        super(FakeGate, self).__init__(connect=False)
+
+    def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
+        pass
+
+
+class TwistHandler(object):
+    def __init__(self, config_file, ros_gate):
+        super(TwistHandler, self).__init__()
+        self._gate = ros_gate
+        self._steer_calibration_shift = None
+        self._throttle_calibration_shift = None
+        try:
+            with open(config_file, 'r') as cfg_file:
+                cfg = JsonComment(json).loads(cfg_file.read())
+            _steer_shift = float(cfg.get('platform.calibrate.steer.shift', None))
+            _throttle_shift = float(cfg.get('platform.calibrate.throttle.shift', None))
+            self._steer_calibration_shift = _steer_shift
+            self._throttle_calibration_shift = _throttle_shift
+            logger.info("Calibration steer, throttle is {:2.2f}, {:2.2f}.".format(_steer_shift, _throttle_shift))
+        except TypeError:
+            _sub_dict = {k: v for k, v in cfg.items() if k.startswith('platform')}
+            raise AssertionError("Please specify valid calibration values - not '{}'.".format(_sub_dict))
+
+    def _scale(self, _throttle, _steering):
+        # Hard set zero values before the calibration constants are known.
+        if None in (self._steer_calibration_shift, self._throttle_calibration_shift):
+            _steering, _throttle = 0, 0
+        else:
+            _steering += self._steer_calibration_shift
+            _throttle += self._throttle_calibration_shift
+        # Protect boundaries.
+        _steering = int(max(-1, min(1, _steering)) * 180 / 2 + 90)
+        _throttle = int(max(-1, min(1, _throttle)) * 180 / 2 + 90)
+        return _throttle, _steering
+
+    def state(self):
+        x, y = 0, 0
+        return dict(x_coordinate=x,
+                    y_coordinate=y,
+                    heading=0,
+                    velocity=self._gate.get_odometer_value(),
+                    time=time.time())
+
+    def drive(self, cmd):
+        if cmd is not None:
+            try:
+                _throttle, _steering = self._scale(.5 * cmd.get('steering'), cmd.get('throttle'))
+                self._gate.publish(throttle=_throttle, steering=_steering)
+            except Exception as e:
+                logger.error("{}".format(e))
+
+
+def _ros_init():
+    # Ros replaces the root logger - add a new handler after ros initialisation.
+    rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
+    console_handler = logging.StreamHandler(stream=sys.stdout)
+    console_handler.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(console_handler)
+    logging.getLogger().setLevel(logging.INFO)
+    rospy.on_shutdown(lambda: quit_event.set())
 
 
 def main():
     parser = argparse.ArgumentParser(description='Rover main.')
+    parser.add_argument('--config', type=str, required=True, help='Config file location.')
     parser.add_argument('--clock', type=int, default=40, help='Main loop frequency in hz.')
-    parser.add_argument('--fps', type=int, default=20, help='Camera capture frequency in hz.')
+    parser.add_argument('--dry', default=False, type=lambda x: (str(x).lower() == 'true'), help='Dry run')
 
     args = parser.parse_args()
+    if args.dry:
+        gate = FakeGate()
+    else:
+        _ros_init()
+        gate = RosGate()
+        logger.info("ROS gate started.")
 
     state_publisher = StatePublisher()
+    image_publisher = ImagePublisher()
 
-    # vehicle = create_handler()
-    # vehicle.start()
+    def _image(_b):
+        image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(CAMERA_SHAPE))
 
+    _url = "rtspsrc " \
+           "location=rtsp://user1:HelloUser1@192.168.50.64:554/Streaming/Channels/102 " \
+           "latency=0 drop-on-latency=true ! queue ! " \
+           "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
+           "videoscale ! video/x-raw,width={},height={},format=BGR ! queue".format(CAMERA_SHAPE[1], CAMERA_SHAPE[0])
+    gst_source = GstRawSource(fn_callback=_image, command=_url)
+    gst_source.open()
+
+    vehicle = TwistHandler(config_file=args.config, ros_gate=gate)
     threads = []
     pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
-    _fps = args.fps
-    capture = CaptureThread(url='rtsp://user1:HelloUser1@192.168.50.64:554/Streaming/Channels/102', hz=_fps)
     threads.append(pilot)
-    threads.append(capture)
     [t.start() for t in threads]
 
     _hz = args.clock
-    logger.info("Running at {} hz and a capture rate of {}.".format(_hz, _fps))
+    logger.info("Running at {} hz.".format(_hz))
     while not quit_event.is_set():
-        # state_publisher.publish(vehicle.state())
+        vehicle.drive(pilot.get_latest())
+        state_publisher.publish(vehicle.state())
         time.sleep(1. / _hz)
+
+    logger.info("Waiting on threads to stop.")
+    gst_source.close()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]
 
-    # logger.info("Waiting on vehicle to quit.")
-    # vehicle.quit()
-
 
 if __name__ == "__main__":
-    logging.basicConfig(format='%(levelname)s: %(filename)s %(funcName)s %(message)s')
+    logging.basicConfig(format=log_format)
     logging.getLogger().setLevel(logging.DEBUG)
     main()

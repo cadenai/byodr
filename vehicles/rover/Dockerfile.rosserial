@@ -1,0 +1,13 @@
+FROM ros:melodic
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ros-melodic-rosserial \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY . app/
+WORKDIR /app
+
+# The dialout group is 20.
+RUN useradd --uid 1000 --gid 20 --system --create-home --shell /bin/bash app
+
+ENTRYPOINT ["/ros_entrypoint.sh"]

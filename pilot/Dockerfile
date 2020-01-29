@@ -1,4 +1,4 @@
-FROM byodr/bionic
+FROM byodr/ubuntu_bionic
 
 COPY . app/
 WORKDIR /app
