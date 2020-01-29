@@ -1,17 +1,13 @@
 {
 # Type of throttle control - direct or pid.
 "driver.cc.control.type": "pid",
-"driver.cc.static.gear.step": 2,
-"driver.cc.static.speed.max": 20,
+"driver.cc.static.gear.step": 10,
+"driver.cc.static.speed.max": 50,
 "driver.cc.static.speed.min": 0.1,
-"driver.cc.throttle.dead-zone": 0.25,
-"driver.cc.throttle.scale.forwards": 0.9,
-"driver.cc.throttle.scale.backwards": 0.6,
 # Direct settings - not used on pid control.
 "driver.throttle.direct.up.momentum": 0.025,
 "driver.throttle.direct.down.momentum": 0.5,
 # Pid settings - not used on direct control.
-"driver.cc.throttle.pid.cap.feedback": 1.0,
 "driver.cc.stop.pid_controller.p": 0.055,
 "driver.cc.throttle.pid_controller.p": 0.005,
 "driver.cc.throttle.pid_controller.i": 0.8,

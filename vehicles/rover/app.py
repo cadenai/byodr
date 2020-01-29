@@ -135,22 +135,23 @@ class TwistHandler(object):
         try:
             with open(config_file, 'r') as cfg_file:
                 cfg = JsonComment(json).loads(cfg_file.read())
-            _steer_shift = float(cfg.get('platform.calibrate.steer.shift', None))
-            _throttle_shift = float(cfg.get('platform.calibrate.throttle.shift', None))
+            _steer_shift = float(cfg.get('platform.calibrate.steer.shift'))
+            _throttle_shift = float(cfg.get('platform.calibrate.throttle.shift'))
             self._steer_calibration_shift = _steer_shift
             self._throttle_calibration_shift = _throttle_shift
+            self._throttle_forward_scale = float(cfg.get('platform.throttle.forward.scale'))
+            self._throttle_backward_scale = float(cfg.get('platform.throttle.backward.scale'))
             logger.info("Calibration steer, throttle is {:2.2f}, {:2.2f}.".format(_steer_shift, _throttle_shift))
         except TypeError:
             _sub_dict = {k: v for k, v in cfg.items() if k.startswith('platform')}
             raise AssertionError("Please specify valid calibration values - not '{}'.".format(_sub_dict))
 
     def _scale(self, _throttle, _steering):
-        # Hard set zero values before the calibration constants are known.
-        if None in (self._steer_calibration_shift, self._throttle_calibration_shift):
-            _steering, _throttle = 0, 0
-        else:
-            _steering += self._steer_calibration_shift
-            _throttle += self._throttle_calibration_shift
+        # First shift.
+        _steering += self._steer_calibration_shift
+        _throttle += self._throttle_calibration_shift
+        # Then scale.
+        _throttle = (_throttle * self._throttle_backward_scale) if _throttle < 0 else (_throttle * self._throttle_forward_scale)
         # Protect boundaries.
         _steering = int(max(-1, min(1, _steering)) * 180 / 2 + 90)
         _throttle = int(max(-1, min(1, _throttle)) * 180 / 2 + 90)
@@ -167,7 +168,7 @@ class TwistHandler(object):
     def drive(self, cmd):
         if cmd is not None:
             try:
-                _throttle, _steering = self._scale(.5 * cmd.get('steering'), cmd.get('throttle'))
+                _throttle, _steering = self._scale(cmd.get('throttle'), cmd.get('steering'))
                 self._gate.publish(throttle=_throttle, steering=_steering)
             except Exception as e:
                 logger.error("{}".format(e))

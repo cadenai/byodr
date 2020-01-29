@@ -200,13 +200,10 @@ class NoThrottleControl(AbstractThrottleControl):
 
 
 class PidThrottleControl(AbstractThrottleControl):
-    def __init__(self, (p, i, d), stop_p, pid_feedback_cap, throttle_dead_zone, throttle_scale, min_desired_speed, max_desired_speed):
+    def __init__(self, (p, i, d), stop_p, min_desired_speed, max_desired_speed):
         super(PidThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
         self._pid_throttle = None
         self._pid_stop = None
-        self._pid_feedback_cap = pid_feedback_cap
-        self._throttle_dead_zone = throttle_dead_zone
-        self._throttle_scale = throttle_scale
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
         self._pid_throttle = self._create_pid_ctl(p=p, i=i, d=d)
@@ -221,35 +218,21 @@ class PidThrottleControl(AbstractThrottleControl):
     def calculate_throttle(self, desired_speed, current_speed):
         # Keep both controllers up to date.
         feedback = desired_speed - current_speed
-        stop_throttle_ = self._pid_stop(feedback=feedback) * self._throttle_scale
-        # Cap the feedback when desired and the current speed is higher.
-        feedback = feedback if feedback > 0 else min(0, feedback + self._pid_feedback_cap)
-        throttle_ = self._pid_throttle(feedback=feedback) * self._throttle_scale
+        stop_throttle_ = self._pid_stop(feedback=feedback)
+        throttle_ = self._pid_throttle(feedback=feedback)
         # A separate pid controller is engaged when the desired speed drops below a threshold.
         # This could be used for emergency braking e.g. when desired speed is zero.
-        if desired_speed <= self._min_desired_speed:
-            return min(0, stop_throttle_)
-        throttle_ += self._throttle_dead_zone
-        return max(-1., min(1., throttle_))
+        return min(0, stop_throttle_) if desired_speed < self._min_desired_speed else max(-1, min(1, throttle_))
 
 
 class DirectThrottleControl(AbstractThrottleControl):
-    def __init__(self, min_desired_speed, max_desired_speed,
-                 throttle_dead_zone, throttle_scale_forwards, throttle_scale_backwards,
-                 throttle_up_momentum, throttle_down_momentum):
+    def __init__(self, min_desired_speed, max_desired_speed, throttle_up_momentum, throttle_down_momentum):
         super(DirectThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
-        self._throttle_scale_forwards = throttle_scale_forwards
-        self._throttle_scale_backwards = throttle_scale_backwards
-        self._throttle_dead_zone = throttle_dead_zone
         self._moment = DynamicMomentum(up=throttle_up_momentum, down=throttle_down_momentum)
 
     def calculate_throttle(self, desired_speed, current_speed):
-        _scale = self._throttle_scale_backwards if desired_speed < 0 else self._throttle_scale_forwards
-        _throttle = desired_speed * _scale
+        _throttle = desired_speed
         _throttle = self._moment.calculate(_throttle)
-        if _throttle > 1e-3:
-            _throttle /= (1 + self._throttle_dead_zone)
-            _throttle += self._throttle_dead_zone
         return _throttle
 
 
@@ -268,22 +251,15 @@ class AbstractCruiseControl(AbstractDriverBase):
         self._max_desired_speed = float(kwargs['driver.cc.static.speed.max'])
         #
         _control_type = kwargs['driver.cc.control.type']
-        _throttle_dead_zone = float(kwargs['driver.cc.throttle.dead-zone'])
-        _throttle_scale_forwards = float(kwargs['driver.cc.throttle.scale.forwards'])
-        _throttle_scale_backwards = float(kwargs['driver.cc.throttle.scale.backwards'])
         #
         if _control_type == 'pid':
             p = (float(kwargs['driver.cc.throttle.pid_controller.p']))
             i = (float(kwargs['driver.cc.throttle.pid_controller.i']))
             d = (float(kwargs['driver.cc.throttle.pid_controller.d']))
             stop_p = (float(kwargs['driver.cc.stop.pid_controller.p']))
-            _pid_feedback_cap = float(kwargs['driver.cc.throttle.pid.cap.feedback'])
             self._throttle_control = PidThrottleControl(
                 (p, i, d),
                 stop_p=stop_p,
-                pid_feedback_cap=_pid_feedback_cap,
-                throttle_dead_zone=_throttle_dead_zone,
-                throttle_scale=_throttle_scale_forwards,
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed
             )
@@ -293,9 +269,6 @@ class AbstractCruiseControl(AbstractDriverBase):
             self._throttle_control = DirectThrottleControl(
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed,
-                throttle_dead_zone=_throttle_dead_zone,
-                throttle_scale_forwards=_throttle_scale_forwards,
-                throttle_scale_backwards=_throttle_scale_backwards,
                 throttle_up_momentum=_throttle_up_momentum,
                 throttle_down_momentum=_throttle_down_momentum
             )
@@ -310,34 +283,16 @@ class AbstractCruiseControl(AbstractDriverBase):
 class RawConsoleDriver(AbstractCruiseControl):
     def __init__(self):
         super(RawConsoleDriver, self).__init__('driver.mode.console')
-        self._throttle_dead_zone = 0.
-        self._throttle_scale_forwards = 0.
-        self._throttle_scale_backwards = 0.
 
     def set_config(self, **kwargs):
         super(RawConsoleDriver, self).set_config(**kwargs)
-        self._throttle_dead_zone = float(kwargs['driver.cc.throttle.dead-zone'])
-        self._throttle_scale_forwards = float(kwargs['driver.cc.throttle.scale.forwards'])
-        self._throttle_scale_backwards = float(kwargs['driver.cc.throttle.scale.backwards'])
 
     def next_recorder(self, mode=None):
         return None
 
-    def _raw_throttle(self, value):
-        # Leave throttle zero when not set.
-        _min_throttle = 1e-4
-        # Shift the scaled throttle by dead zone.
-        _scale = self._throttle_scale_backwards if value < 0 else self._throttle_scale_forwards
-        _throttle = value * _scale
-        if _throttle > _min_throttle:
-            _throttle /= (1 + self._throttle_dead_zone)
-            _throttle += self._throttle_dead_zone
-        return _throttle
-
     def get_action(self, *args):
         blob = args[0]
         blob.steering = self._apply_dead_zone(blob.steering, dead_zone=0)
-        blob.throttle = self._raw_throttle(value=blob.throttle)
         blob.desired_speed = blob.throttle * self._max_desired_speed
         # No recording in this mode.
         blob.steering_driver = OriginType.UNDETERMINED
@@ -443,13 +398,15 @@ class DriverManager(object):
         self._pilot_state = PilotState()
         self._driver_cache = {}
         self._lock = multiprocessing.RLock()
-        with open(self._config_file, 'r') as cfg_file:
-            cfg = JsonComment(json).loads(cfg_file.read())
-        self._cruise_speed_step = float(cfg['driver.cc.static.gear.step'])
-        self._steering_stabilizer = IgnoreDifferences(threshold=float(cfg['driver.handler.steering.diff.threshold']))
+        self._cruise_speed_step = 0
+        self._steering_stabilizer = IgnoreDifferences()
         self._driver = None
         self._driver_ctl = 'driver.mode.console'
         self.switch_ctl(self._driver_ctl)
+
+    def _config(self, **kwargs):
+        self._cruise_speed_step = float(kwargs['driver.cc.static.gear.step'])
+        self._steering_stabilizer = IgnoreDifferences(threshold=float(kwargs['driver.handler.steering.diff.threshold']))
 
     def _get_driver(self, control=None):
         if control in self._driver_cache:
@@ -473,6 +430,7 @@ class DriverManager(object):
             if self._driver is not None:
                 with open(self._config_file, 'r') as cfg_file:
                     cfg = JsonComment(json).loads(cfg_file.read())
+                self._config(**cfg)
                 self._driver.set_config(**cfg)
                 self._driver.activate()
         except Exception as e:
