@@ -61,12 +61,21 @@ class MessageServerSocket(websocket.WebSocketHandler):
         ctl = pilot.get('driver')
         if ctl is None:
             return 0
-        elif ctl == 'driver.mode.console':
+        elif ctl == 'driver_mode.teleop.direct':
             return 2
-        elif ctl == 'driver.mode.cruise':
+        elif ctl == 'driver_mode.teleop.cruise':
             return 3
-        elif ctl == 'driver.mode.inference':
+        elif ctl == 'driver_mode.inference.dnn':
             return 7 if inference.get('dagger', 0) == 1 else 5
+
+    @staticmethod
+    def _translate_recorder(recorder):
+        if recorder is not None:
+            if recorder.get('mode') == 'record.mode.driving':
+                return 551
+            elif recorder.get('mode') == 'record.mode.interventions':
+                return 594
+        return -999
 
     def on_message(self, *args):
         try:
@@ -74,6 +83,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             pilot = None if state is None else state[0]
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
+            recorder = None if state is None else state[3]
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -83,8 +93,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'debug5': 0 if inference is None else inference.get('critic'),
                 'debug6': 0 if inference is None else inference.get('brake'),
                 'debug7': 0 if inference is None else inference.get('entropy'),
-                'rec_act': False,
-                'rec_mod': None,
+                'rec_act': False if recorder is None else recorder.get('active'),
+                'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),
                 'thr': 0 if pilot is None else pilot.get('throttle'),
                 'rev': 0,

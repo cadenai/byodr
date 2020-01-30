@@ -140,10 +140,6 @@ class AbstractDriverBase(object):
         self.get_action(*args) if self._active else self.noop(blob)
 
     @abstractmethod
-    def next_recorder(self, mode):
-        raise NotImplementedError()
-
-    @abstractmethod
     def get_action(self, *args):
         raise NotImplementedError()
 
@@ -282,31 +278,24 @@ class AbstractCruiseControl(AbstractDriverBase):
 
 class RawConsoleDriver(AbstractCruiseControl):
     def __init__(self):
-        super(RawConsoleDriver, self).__init__('driver.mode.console')
+        super(RawConsoleDriver, self).__init__('driver_mode.teleop.direct')
 
     def set_config(self, **kwargs):
         super(RawConsoleDriver, self).set_config(**kwargs)
-
-    def next_recorder(self, mode=None):
-        return None
 
     def get_action(self, *args):
         blob = args[0]
         blob.steering = self._apply_dead_zone(blob.steering, dead_zone=0)
         blob.desired_speed = blob.throttle * self._max_desired_speed
-        # No recording in this mode.
         blob.steering_driver = OriginType.UNDETERMINED
         blob.speed_driver = OriginType.UNDETERMINED
+        # No recording in this mode.
         blob.save_event = False
-        # blob.publish = blob.client_command is not None
 
 
 class BackendAutopilotDriver(AbstractCruiseControl):
     def __init__(self):
-        super(BackendAutopilotDriver, self).__init__('driver.mode.automatic')
-
-    def next_recorder(self, mode=None):
-        return 'record.mode.driving'
+        super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend')
 
     def get_action(self, *args):
         blob = args[0]
@@ -314,15 +303,11 @@ class BackendAutopilotDriver(AbstractCruiseControl):
         blob.steering_driver = OriginType.BACKEND_AUTOPILOT
         blob.speed_driver = OriginType.BACKEND_AUTOPILOT
         blob.save_event = True
-        # blob.publish = True
 
 
 class StaticCruiseDriver(AbstractCruiseControl):
     def __init__(self):
-        super(StaticCruiseDriver, self).__init__('driver.mode.cruise')
-
-    def next_recorder(self, mode=None):
-        return 'record.mode.driving'
+        super(StaticCruiseDriver, self).__init__('driver_mode.teleop.cruise')
 
     def get_action(self, *args):
         blob, vehicle = args[:2]
@@ -335,13 +320,12 @@ class StaticCruiseDriver(AbstractCruiseControl):
         blob.steering_driver = OriginType.HUMAN
         blob.speed_driver = OriginType.HUMAN
         blob.save_event = True
-        # blob.publish = blob.client_command is not None
 
 
 class DeepNetworkDriver(AbstractCruiseControl):
 
     def __init__(self):
-        super(DeepNetworkDriver, self).__init__('driver.mode.inference')
+        super(DeepNetworkDriver, self).__init__('driver_mode.inference.dnn')
 
     def set_config(self, **kwargs):
         super(DeepNetworkDriver, self).set_config(**kwargs)
@@ -351,9 +335,6 @@ class DeepNetworkDriver(AbstractCruiseControl):
 
     def _deactivate(self):
         pass
-
-    def next_recorder(self, mode=None):
-        return 'record.mode.interventions'
 
     def get_action(self, *args):
         blob, vehicle, inference = args
@@ -383,7 +364,6 @@ class DeepNetworkDriver(AbstractCruiseControl):
         blob.steering = self._apply_dead_zone(steering, dead_zone=0)
         blob.steering_driver = steering_driver
         blob.save_event = _use_expert_steering or _speed_intervention
-        blob.publish = True
 
 
 class PilotState(object):
@@ -401,7 +381,7 @@ class DriverManager(object):
         self._cruise_speed_step = 0
         self._steering_stabilizer = IgnoreDifferences()
         self._driver = None
-        self._driver_ctl = 'driver.mode.console'
+        self._driver_ctl = 'driver_mode.teleop.direct'
         self.switch_ctl(self._driver_ctl)
 
     def _config(self, **kwargs):
@@ -412,11 +392,11 @@ class DriverManager(object):
         if control in self._driver_cache:
             return self._driver_cache[control]
         # Create a new instance of the driver.
-        if control == 'driver.mode.inference':
+        if control == 'driver_mode.inference.dnn':
             driver = DeepNetworkDriver()
-        elif control == 'driver.mode.cruise':
+        elif control == 'driver_mode.teleop.cruise':
             driver = StaticCruiseDriver()
-        elif control == 'driver.mode.automatic':
+        elif control == 'driver_mode.automatic.backend':
             driver = BackendAutopilotDriver()
         else:
             driver = RawConsoleDriver()
@@ -501,16 +481,16 @@ class CommandProcessor(object):
         # Buttons clockwise: N, E, S, W
         # N
         elif command.get('button_y', 0) == 1:
-            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl('driver.mode.inference'))
+            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl('driver_mode.inference.dnn'))
         # E
         elif command.get('button_b', 0) == 1:
-            self._cache_safe('console driver', lambda: self._driver.switch_ctl('driver.mode.console'))
+            self._cache_safe('console driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
         # S
         elif command.get('button_a', 0) == 1:
-            self._cache_safe('cruise driver', lambda: self._driver.switch_ctl('driver.mode.cruise'))
+            self._cache_safe('cruise driver', lambda: self._driver.switch_ctl('driver_mode.teleop.cruise'))
         # W
         elif command.get('button_x', 0) == 1:
-            self._cache_safe('dagger driver', lambda: self._driver.switch_ctl('driver.mode.inference'))
+            self._cache_safe('dagger driver', lambda: self._driver.switch_ctl('driver_mode.inference.dnn'))
         #
         elif command.get('arrow_up', 0) == 1:
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())

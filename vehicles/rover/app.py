@@ -193,7 +193,7 @@ def _ros_init():
 def main():
     parser = argparse.ArgumentParser(description='Rover main.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, default=40, help='Main loop frequency in hz.')
+    parser.add_argument('--clock', type=int, required=True, help='Main loop frequency in hz.')
     parser.add_argument('--dry', default=False, type=lambda x: (str(x).lower() == 'true'), help='Dry run')
 
     args = parser.parse_args()

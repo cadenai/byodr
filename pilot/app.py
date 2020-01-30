@@ -63,7 +63,7 @@ def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
     parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
-    parser.add_argument('--max_command_age', type=float, default=.100, help='Max age of a teleop command.')
+    parser.add_argument('--patience', type=float, default=.100, help='Maximum age of a teleop command before it is considered stale.')
     args = parser.parse_args()
 
     threads = []
@@ -80,10 +80,9 @@ def main():
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = args.clock
-    _max_command_age = args.max_command_age
-    logger.info("Processing at {} Hz - max command age is {:2.2f}.".format(_process_frequency, _max_command_age))
+    _patience = args.patience
+    logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience * 1000))
     max_duration = 1. / _process_frequency
-    _num_violations = 0
 
     # Do not process the same control command more than once.
     _processed_commands = collections.deque(maxlen=1)
@@ -95,17 +94,16 @@ def main():
             command = teleop.get_latest()
             _command_time = 0 if command is None else command.get('time')
             _command_age = time.time() - _command_time
-            _on_time = _command_age < _max_command_age
-            action = driver.next_action(command, vehicle.get_latest(), inference.get_latest()) if _on_time else driver.noop()
+            _on_time = _command_age < _patience
+            # Ignore old or stale teleop commands.
             if command is not None and _command_time not in _processed_commands:
                 controller.process(command)
                 _processed_commands.append(_command_time)
-            # Perform the action.
-            publisher.publish(action)
-            # Keep the desired frequency - one violation is a fluke from three it's a pattern.
+                action = driver.next_action(command, vehicle.get_latest(), inference.get_latest())
+                publisher.publish(action)
+            # Allow our threads some cpu.
             _proc_sleep = max_duration - (time.time() - proc_start)
-            _num_violations = max(0, _num_violations + (1 if _proc_sleep < 0 else -1))
-            if _num_violations > 2:
+            if _proc_sleep < 0:
                 logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
             time.sleep(max(0, _proc_sleep))
         except Exception as e:

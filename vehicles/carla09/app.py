@@ -76,7 +76,7 @@ class ReceiverThread(threading.Thread):
 def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
     parser.add_argument('--remote', type=str, required=True, help='Carla server remote host:port')
-    parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
+    parser.add_argument('--clock', type=int, required=True, help='Clock frequency in hz.')
     args = parser.parse_args()
 
     state_publisher = StatePublisher()

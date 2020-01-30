@@ -74,7 +74,7 @@ class CarlaHandler(object):
         camera_bp.set_attribute('image_size_y', '{}'.format(im_height))
         # camera_bp.set_attribute('fov', '150')
         # Set the time in seconds between sensor captures
-        camera_bp.set_attribute('sensor_tick', "{:2.2f}".format(1. / 100))
+        camera_bp.set_attribute('sensor_tick', "{:2.2f}".format(1. / 50))
         # Provide the position of the sensor relative to the vehicle.
         # camera_transform = carla.Transform(carla.Location(x=0.8, z=1.7))
         camera_transform = carla.Transform(carla.Location(x=1.25, z=1.4))

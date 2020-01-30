@@ -170,8 +170,8 @@ class TFRunner(object):
 def main():
     parser = argparse.ArgumentParser(description='Inference server.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
+    parser.add_argument('--clock', type=int, required=True, help='Clock frequency in hz.')
     parser.add_argument('--gpu', type=int, default=0, help='GPU number')
-    parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
     args = parser.parse_args()
 
     with open(args.config, 'r') as cfg_file:

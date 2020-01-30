@@ -26,6 +26,18 @@ services:
       - './pilot:/app'
       - '/tmp/byodr:/tmp/byodr'
     command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_PILOT_HZ}
+  recorder:
+    user: '1000'
+    build:
+      context: ./recorder
+      dockerfile: Dockerfile
+    image: byodr/recorder
+    container_name: byodr_recorder
+    volumes:
+      - './recorder:/app'
+      - ${DC_RECORDER_SESSIONS}:/sessions
+      - '/tmp/byodr:/tmp/byodr'
+    command: python app.py --sessions=/sessions --config=/app/${DC_JSON_CONFIG} --clock=${DC_RECORDER_HZ}
   inference:
     user: '1000'
     build:
