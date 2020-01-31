@@ -1,15 +1,14 @@
 import argparse
-import collections
 import json
 import logging
 import multiprocessing
 import signal
-import threading
 import time
 import traceback
 
 import zmq
 
+from byodr.utils.ipc import ReceiverThread
 from pilot import DriverManager, CommandProcessor
 
 logger = logging.getLogger(__name__)
@@ -22,30 +21,6 @@ signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-
-
-# noinspection PyUnresolvedReferences
-class ReceiverThread(threading.Thread):
-    def __init__(self, url, topic=''):
-        super(ReceiverThread, self).__init__()
-        subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
-        subscriber.setsockopt(zmq.RCVTIMEO, 10)
-        subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect(url)
-        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
-        self._subscriber = subscriber
-        self._queue = collections.deque(maxlen=1)
-
-    def get_latest(self):
-        return self._queue[0] if bool(self._queue) else None
-
-    def run(self):
-        while not quit_event.is_set():
-            try:
-                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
-            except zmq.Again:
-                pass
 
 
 # noinspection PyUnresolvedReferences
@@ -70,9 +45,9 @@ def main():
     _patience = args.patience
     controller = CommandProcessor(driver=DriverManager(config_file=args.config), patience=_patience)
     publisher = PilotPublisher()
-    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
+    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
     threads.append(teleop)
     threads.append(vehicle)
     threads.append(inference)

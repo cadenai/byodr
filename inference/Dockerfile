@@ -1,9 +1,12 @@
 FROM byodr/tf
 
-COPY . app/
+COPY ./common common/
+COPY ./inference app/
 WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create the user as part of the video group.
 RUN useradd --uid 1000 --gid 44 --system --create-home --shell /bin/bash app
+
+ENV PYTHONPATH "${PYTHONPATH}:/common"

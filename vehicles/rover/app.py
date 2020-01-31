@@ -5,7 +5,6 @@ import logging
 import multiprocessing
 import signal
 import sys
-import threading
 import time
 
 import numpy as np
@@ -14,6 +13,7 @@ import zmq
 from geometry_msgs.msg import Twist, TwistStamped
 from jsoncomment import JsonComment
 
+from byodr.utils.ipc import ReceiverThread
 from video import GstRawSource
 
 logger = logging.getLogger(__name__)
@@ -57,30 +57,6 @@ class ImagePublisher(object):
                                         json.dumps(dict(time=time.time(), shape=_img.shape)),
                                         np.ascontiguousarray(_img, dtype=np.uint8)],
                                        flags=zmq.NOBLOCK)
-
-
-# noinspection PyUnresolvedReferences
-class ReceiverThread(threading.Thread):
-    def __init__(self, url, topic=''):
-        super(ReceiverThread, self).__init__()
-        subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
-        subscriber.setsockopt(zmq.RCVTIMEO, 10)
-        subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect(url)
-        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
-        self._subscriber = subscriber
-        self._queue = collections.deque(maxlen=1)
-
-    def get_latest(self):
-        return self._queue[0] if bool(self._queue) else None
-
-    def run(self):
-        while not quit_event.is_set():
-            try:
-                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
-            except zmq.Again:
-                pass
 
 
 class RosGate(object):
@@ -220,7 +196,7 @@ def main():
 
     vehicle = TwistHandler(config_file=args.config, ros_gate=gate)
     threads = []
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     threads.append(pilot)
     [t.start() for t in threads]
 

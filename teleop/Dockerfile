@@ -1,6 +1,7 @@
 FROM byodr/ubuntu_bionic
 
-COPY . app/
+COPY ./common common/
+COPY ./teleop app/
 WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
@@ -11,5 +12,7 @@ RUN groupadd --gid 1000 --system app \
 RUN mkdir /byodr && chown -R app:app /byodr
 
 VOLUME /byodr
+
+ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 EXPOSE 9100

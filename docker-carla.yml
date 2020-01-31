@@ -3,13 +3,14 @@ services:
   vehicle:
     user: '1000'
     build:
-      context: ./vehicles/carla09
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: vehicles/carla09/Dockerfile
     image: byodr/vehicle_carla
     container_name: byodr_carla
     volumes_from:
       - teleop:rw
     volumes:
+      - ./common:/common
       - ./vehicles/carla09:/app
     command: python app.py --remote=${DC_CARLA_REMOTE} --clock=${DC_VEHICLE_HZ}
 

@@ -3,13 +3,14 @@ services:
   teleop:
     user: '1000'
     build:
-      context: ./teleop
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: teleop/Dockerfile
     image: byodr/teleop
     container_name: byodr_teleop
     ports:
       - "9100:9100"
     volumes:
+      - ./common:/common
       - ./teleop:/app
     environment:
       TELEOP_HOME: '/app'
@@ -17,38 +18,41 @@ services:
   pilot:
     user: '1000'
     build:
-      context: ./pilot
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: pilot/Dockerfile
     image: byodr/pilot
     container_name: byodr_pilot
     volumes_from:
       - teleop:rw
     volumes:
+      - ./common:/common
       - ./pilot:/app
     command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_PILOT_HZ}
   recorder:
     user: '1000'
     build:
-      context: ./recorder
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: recorder/Dockerfile
     image: byodr/recorder
     container_name: byodr_recorder
     volumes_from:
       - teleop:rw
     volumes:
+      - ./common:/common
       - ./recorder:/app
       - ${DC_RECORDER_SESSIONS}:/sessions
     command: python app.py --sessions=/sessions --config=/app/${DC_JSON_CONFIG} --clock=${DC_RECORDER_HZ}
   inference:
     user: '1000'
     build:
-      context: ./inference
-      dockerfile: Dockerfile
+      context: ./
+      dockerfile: inference/Dockerfile
     image: byodr/inference
     container_name: byodr_inference
     volumes_from:
       - teleop:rw
     volumes:
+      - ./common:/common
       - ./inference:/app
       - ${DC_INFERENCE_MODELS}:/models
     command: python app.py --models=/models --config=/app/${DC_JSON_CONFIG} --gpu=${DC_INFERENCE_GPU} --clock=${DC_INFERENCE_HZ}

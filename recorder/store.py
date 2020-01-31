@@ -1,5 +1,4 @@
 import StringIO
-import glob
 import io
 import logging
 import multiprocessing
@@ -8,8 +7,6 @@ import time
 import zipfile
 from abc import ABCMeta, abstractmethod
 
-import cv2
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -72,14 +69,6 @@ class AbstractDataSource(object):
 
     @abstractmethod
     def create_event(self, event):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def list_events(self):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def list_sessions(self):
         raise NotImplementedError()
 
 
@@ -172,36 +161,3 @@ class ZipDataSource(AbstractDataSource):
                                                    event.command,
                                                    event.x_coordinate,
                                                    event.y_coordinate]
-
-    @staticmethod
-    def _as_event(archive, item, read_image=False):
-        item_nulls = item.isna()
-        image = None
-        if read_image:
-            im_data = archive.read(item.image_uri)
-            image = cv2.imdecode(np.frombuffer(im_data, np.uint8), cv2.IMREAD_COLOR)
-        event = Event(timestamp=item.time,
-                      image=image,
-                      steer_src=None if item_nulls.steer_src else item.steer_src,
-                      speed_src=None if item_nulls.speed_src else item.speed_src,
-                      command_src=None if item_nulls.turn_src else item.turn_src,
-                      steering=item.steering,
-                      desired_speed=item.desired_speed,
-                      actual_speed=item.actual_speed,
-                      heading=item.heading,
-                      throttle=item.throttle,
-                      command=item.turn_val,
-                      x_coordinate=-1 if item_nulls.x_coord else item.x_coord,
-                      y_coordinate=-1 if item_nulls.y_coord else item.y_coord)
-        event.image_uri = item.image_uri
-        event.vehicle = item.vehicle
-        event.vehicle_config = item.vehicle_conf
-        return event
-
-    def list_events(self, read_image=False):
-        with zipfile.ZipFile(os.path.join(self._directory, self._session + '.zip'), mode='r') as archive:
-            return map(lambda x: self._as_event(archive, x, read_image=read_image), [row[1] for row in self._data.iterrows()])
-
-    def list_sessions(self):
-        _pattern = os.path.join(self._directory, '') + '*.zip'
-        return [os.path.basename(_f).replace('.zip', '') for _f in glob.glob(_pattern)]

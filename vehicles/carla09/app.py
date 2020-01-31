@@ -1,15 +1,14 @@
 import argparse
-import collections
 import json
 import logging
 import multiprocessing
 import signal
-import threading
 import time
 
 import numpy as np
 import zmq
 
+from byodr.utils.ipc import ReceiverThread
 from vehicle import create_handler
 
 logger = logging.getLogger(__name__)
@@ -49,30 +48,6 @@ class ImagePublisher(object):
                                        flags=zmq.NOBLOCK)
 
 
-# noinspection PyUnresolvedReferences
-class ReceiverThread(threading.Thread):
-    def __init__(self, url, topic=''):
-        super(ReceiverThread, self).__init__()
-        subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
-        subscriber.setsockopt(zmq.RCVTIMEO, 10)
-        subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect(url)
-        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
-        self._subscriber = subscriber
-        self._queue = collections.deque(maxlen=1)
-
-    def get_latest(self):
-        return self._queue[0] if bool(self._queue) else None
-
-    def run(self):
-        while not quit_event.is_set():
-            try:
-                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
-            except zmq.Again:
-                pass
-
-
 def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
     parser.add_argument('--remote', type=str, required=True, help='Carla server remote host:port')
@@ -86,7 +61,7 @@ def main():
     vehicle.start()
 
     threads = []
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     threads.append(pilot)
     [t.start() for t in threads]
 

@@ -13,6 +13,7 @@ import numpy as np
 import zmq
 from jsoncomment import JsonComment
 
+from byodr.utils.ipc import ReceiverThread
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum
 
@@ -26,30 +27,6 @@ signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-
-
-# noinspection PyUnresolvedReferences
-class ReceiverThread(threading.Thread):
-    def __init__(self, url, topic=''):
-        super(ReceiverThread, self).__init__()
-        subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
-        subscriber.setsockopt(zmq.RCVTIMEO, 10)
-        subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect(url)
-        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
-        self._subscriber = subscriber
-        self._queue = collections.deque(maxlen=1)
-
-    def get_latest(self):
-        return self._queue[0] if bool(self._queue) else None
-
-    def run(self):
-        while not quit_event.is_set():
-            try:
-                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
-            except zmq.Again:
-                pass
 
 
 # noinspection PyUnresolvedReferences
@@ -185,7 +162,7 @@ def main():
     max_duration = 1. / _process_frequency
 
     threads = []
-    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
+    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     camera = CameraThread()
     threads.append(teleop)
     threads.append(camera)
