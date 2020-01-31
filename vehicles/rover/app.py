@@ -9,11 +9,10 @@ import time
 
 import numpy as np
 import rospy
-import zmq
 from geometry_msgs.msg import Twist, TwistStamped
 from jsoncomment import JsonComment
 
-from byodr.utils.ipc import ReceiverThread
+from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
 from video import GstRawSource
 
 logger = logging.getLogger(__name__)
@@ -32,31 +31,6 @@ signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-
-
-# noinspection PyUnresolvedReferences
-class StatePublisher(object):
-    def __init__(self):
-        publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///byodr/vehicle.sock')
-        self._publisher = publisher
-
-    def publish(self, data):
-        self._publisher.send('aav/vehicle/state:{}'.format(json.dumps(data)), zmq.NOBLOCK)
-
-
-# noinspection PyUnresolvedReferences
-class ImagePublisher(object):
-    def __init__(self):
-        publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///byodr/camera.sock')
-        self._publisher = publisher
-
-    def publish(self, _img):
-        self._publisher.send_multipart(['aav/camera/0',
-                                        json.dumps(dict(time=time.time(), shape=_img.shape)),
-                                        np.ascontiguousarray(_img, dtype=np.uint8)],
-                                       flags=zmq.NOBLOCK)
 
 
 class RosGate(object):
@@ -180,8 +154,8 @@ def main():
         gate = RosGate()
         logger.info("ROS gate started.")
 
-    state_publisher = StatePublisher()
-    image_publisher = ImagePublisher()
+    state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
+    image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
     def _image(_b):
         image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(CAMERA_SHAPE))

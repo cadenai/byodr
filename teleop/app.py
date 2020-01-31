@@ -1,19 +1,14 @@
 #!/usr/bin/env python
 import argparse
-import collections
-import json
 import logging
 import multiprocessing
 import os
 import signal
-import threading
 
-import numpy as np
-import zmq
 from tornado import web, ioloop
 
-from byodr.utils.ipc import ReceiverThread
-from teleop import CameraServerSocket, ControlServerSocket, MessageServerSocket
+from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
+from server import CameraServerSocket, ControlServerSocket, MessageServerSocket
 
 logger = logging.getLogger(__name__)
 
@@ -32,58 +27,18 @@ def _interrupt():
     io_loop.stop()
 
 
-# noinspection PyUnresolvedReferences
-class CameraThread(threading.Thread):
-    def __init__(self):
-        super(CameraThread, self).__init__()
-        subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
-        subscriber.setsockopt(zmq.RCVTIMEO, 20)
-        subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect('ipc:///byodr/camera.sock')
-        subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/camera/0')
-        self._subscriber = subscriber
-        self._images = collections.deque(maxlen=1)
-
-    def capture(self):
-        return self._images[0] if bool(self._images) else None
-
-    def run(self):
-        while not quit_event.is_set():
-            try:
-                [_, md, data] = self._subscriber.recv_multipart()
-                md = json.loads(md)
-                height, width, channels = md['shape']
-                img = np.frombuffer(buffer(data), dtype=np.uint8)
-                img = img.reshape((height, width, channels))
-                self._images.appendleft(img)
-            except zmq.Again:
-                pass
-
-
-# noinspection PyUnresolvedReferences
-class TeleopPublisher(object):
-    def __init__(self):
-        publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///byodr/teleop.sock')
-        self._publisher = publisher
-
-    def publish(self, data):
-        self._publisher.send('aav/teleop/input:{}'.format(json.dumps(data)), zmq.NOBLOCK)
-
-
 def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--port', type=int, default=9100, help='Port number')
     args = parser.parse_args()
 
     threads = []
-    publisher = TeleopPublisher()
+    publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
     recorder = ReceiverThread(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state', event=quit_event)
-    camera = CameraThread()
+    camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
     threads.append(pilot)
     threads.append(vehicle)
     threads.append(inference)
@@ -98,7 +53,7 @@ def main():
                                                                       vehicle.get_latest(),
                                                                       inference.get_latest(),
                                                                       recorder.get_latest())))),
-            (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()))),
+            (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),
                 'default_filename': 'index.htm'

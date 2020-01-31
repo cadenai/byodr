@@ -1,19 +1,16 @@
 import argparse
-import collections
 import json
 import logging
 import multiprocessing
 import signal
-import threading
 import time
 import traceback
 from functools import partial
 
 import numpy as np
-import zmq
 from jsoncomment import JsonComment
 
-from byodr.utils.ipc import ReceiverThread
+from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum
 
@@ -27,46 +24,6 @@ signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-
-
-# noinspection PyUnresolvedReferences
-class CameraThread(threading.Thread):
-    def __init__(self):
-        super(CameraThread, self).__init__()
-        subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
-        subscriber.setsockopt(zmq.RCVTIMEO, 20)
-        subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect('ipc:///byodr/camera.sock')
-        subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/camera/0')
-        self._subscriber = subscriber
-        self._images = collections.deque(maxlen=1)
-
-    def capture(self):
-        return self._images[0] if bool(self._images) else None
-
-    def run(self):
-        while not quit_event.is_set():
-            try:
-                [_, md, data] = self._subscriber.recv_multipart()
-                md = json.loads(md)
-                height, width, channels = md['shape']
-                img = np.frombuffer(buffer(data), dtype=np.uint8)
-                img = img.reshape((height, width, channels))
-                self._images.appendleft(img)
-            except zmq.Again:
-                pass
-
-
-# noinspection PyUnresolvedReferences
-class Publisher(object):
-    def __init__(self):
-        publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///byodr/inference.sock')
-        self._publisher = publisher
-
-    def publish(self, data):
-        self._publisher.send('aav/inference/state:{}'.format(json.dumps(data)), zmq.NOBLOCK)
 
 
 class TFRunner(object):
@@ -163,11 +120,12 @@ def main():
 
     threads = []
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    camera = CameraThread()
+    camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
     threads.append(teleop)
     threads.append(camera)
     [t.start() for t in threads]
-    publisher = Publisher()
+
+    publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
     runner = TFRunner(model_directory=args.models, gpu_id=args.gpu, **cfg)
     try:
         while not quit_event.is_set():
@@ -176,7 +134,7 @@ def main():
             # Leave the value intact unless the control is activated.
             if command is not None and any([k in command.keys() for k in ('button_y', 'button_b', 'button_a', 'button_x')]):
                 runner.set_dagger(command.get('button_x', 0) == 1)
-            image = camera.capture()
+            image = camera.capture()[-1]
             if image is not None:
                 publisher.publish(runner.forward(image=image))
             _proc_sleep = max_duration - (time.time() - proc_start)

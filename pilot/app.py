@@ -1,14 +1,11 @@
 import argparse
-import json
 import logging
 import multiprocessing
 import signal
 import time
 import traceback
 
-import zmq
-
-from byodr.utils.ipc import ReceiverThread
+from byodr.utils.ipc import ReceiverThread, JSONPublisher
 from pilot import DriverManager, CommandProcessor
 
 logger = logging.getLogger(__name__)
@@ -23,17 +20,6 @@ def _interrupt():
     quit_event.set()
 
 
-# noinspection PyUnresolvedReferences
-class PilotPublisher(object):
-    def __init__(self):
-        publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///byodr/pilot.sock')
-        self._publisher = publisher
-
-    def publish(self, data):
-        self._publisher.send('aav/pilot/output:{}'.format(json.dumps(data)), zmq.NOBLOCK)
-
-
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
@@ -44,7 +30,7 @@ def main():
     threads = []
     _patience = args.patience
     controller = CommandProcessor(driver=DriverManager(config_file=args.config), patience=_patience)
-    publisher = PilotPublisher()
+    publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
