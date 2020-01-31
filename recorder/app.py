@@ -60,7 +60,7 @@ class CameraThread(threading.Thread):
         subscriber.setsockopt(zmq.RCVHWM, 1)
         subscriber.setsockopt(zmq.RCVTIMEO, 20)
         subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect('ipc:///tmp/byodr/camera.sock')
+        subscriber.connect('ipc:///byodr/camera.sock')
         subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/camera/0')
         self._subscriber = subscriber
         self._images = collections.deque(maxlen=1)
@@ -144,7 +144,7 @@ class EventHandler(object):
 class StatePublisher(object):
     def __init__(self):
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///tmp/byodr/recorder.sock')
+        publisher.bind('ipc:///byodr/recorder.sock')
         self._publisher = publisher
 
     def publish(self, data):
@@ -177,8 +177,8 @@ def main():
 
     threads = []
     camera = CameraThread()
-    pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
-    vehicle = ReceiverThread(url='ipc:///tmp/byodr/vehicle.sock', topic=b'aav/vehicle/state')
+    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
     threads.append(camera)
     threads.append(pilot)
     threads.append(vehicle)

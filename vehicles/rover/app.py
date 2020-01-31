@@ -38,7 +38,7 @@ def _interrupt():
 class StatePublisher(object):
     def __init__(self):
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///tmp/byodr/vehicle.sock')
+        publisher.bind('ipc:///byodr/vehicle.sock')
         self._publisher = publisher
 
     def publish(self, data):
@@ -49,7 +49,7 @@ class StatePublisher(object):
 class ImagePublisher(object):
     def __init__(self):
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///tmp/byodr/camera.sock')
+        publisher.bind('ipc:///byodr/camera.sock')
         self._publisher = publisher
 
     def publish(self, _img):
@@ -220,7 +220,7 @@ def main():
 
     vehicle = TwistHandler(config_file=args.config, ros_gate=gate)
     threads = []
-    pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
+    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
     threads.append(pilot)
     [t.start() for t in threads]
 

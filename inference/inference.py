@@ -94,12 +94,10 @@ def drive_cmd_vector(turn='intersection.ahead', dtype=np.float32):
 
 
 class TFDriver(object):
-    def __init__(self, gpu_id=0, p_conv_dropout=0):
+    def __init__(self, model_directory, gpu_id=0, p_conv_dropout=0):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
         self.p_conv_dropout = p_conv_dropout
-        self.maneuver_env = "CADEN_DNN_STEER" if os.environ.get("CADEN_DNN", None) is None else "CADEN_DNN"
-        self.speed_env = "CADEN_DNN_SPEED" if os.environ.get("CADEN_DNN", None) is None else "CADEN_DNN"
-        self.posor_env = "CADEN_DNN_NAV" if os.environ.get("CADEN_DNN", None) is None else "CADEN_DNN"
+        self.model_directory = model_directory
         self._lock = multiprocessing.Lock()
         self.input_dave_image = None
         self.input_alex_image = None
@@ -129,15 +127,15 @@ class TFDriver(object):
         barrier.wait()
 
     def _load_maneuver_graph_def(self, barrier):
-        self.maneuver_graph_def = _load_definition(_newest_file(os.environ.get(self.maneuver_env, None), 'steer*.pb'))
+        self.maneuver_graph_def = _load_definition(_newest_file(self.model_directory, 'steer*.pb'))
         barrier.wait()
 
     def _load_speed_graph_def(self, barrier):
-        self.speed_graph_def = _load_definition(_newest_file(os.environ.get(self.speed_env, None), 'speed*.pb'))
+        self.speed_graph_def = _load_definition(_newest_file(self.model_directory, 'speed*.pb'))
         barrier.wait()
 
     def _load_posor_graph_def(self, barrier):
-        self.posor_graph_def = _load_definition(_newest_file(os.environ.get(self.posor_env, None), 'posor*.pb'))
+        self.posor_graph_def = _load_definition(_newest_file(self.model_directory, 'posor*.pb'))
         barrier.wait()
 
     def activate(self):

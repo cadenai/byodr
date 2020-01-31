@@ -60,7 +60,7 @@ class CameraThread(threading.Thread):
         subscriber.setsockopt(zmq.RCVHWM, 1)
         subscriber.setsockopt(zmq.RCVTIMEO, 20)
         subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect('ipc:///tmp/byodr/camera.sock')
+        subscriber.connect('ipc:///byodr/camera.sock')
         subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/camera/0')
         self._subscriber = subscriber
         self._images = collections.deque(maxlen=1)
@@ -85,7 +85,7 @@ class CameraThread(threading.Thread):
 class Publisher(object):
     def __init__(self):
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///tmp/byodr/inference.sock')
+        publisher.bind('ipc:///byodr/inference.sock')
         self._publisher = publisher
 
     def publish(self, data):
@@ -113,7 +113,7 @@ class TFRunner(object):
         p_conv_dropout = float(kwargs['driver.dnn.dagger.conv.dropout'])
         self._fn_dave_image = get_registered_function(kwargs['dnn.image.transform.dave'])
         self._fn_alex_image = get_registered_function(kwargs['dnn.image.transform.alex'])
-        self._driver = TFDriver(gpu_id=kwargs['gpu_id'], p_conv_dropout=p_conv_dropout)
+        self._driver = TFDriver(model_directory=kwargs['model_directory'], gpu_id=kwargs['gpu_id'], p_conv_dropout=p_conv_dropout)
         self._driver.activate()
 
     def quit(self):
@@ -169,6 +169,7 @@ class TFRunner(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Inference server.')
+    parser.add_argument('--models', type=str, required=True, help='Directory with the inference models.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
     parser.add_argument('--clock', type=int, required=True, help='Clock frequency in hz.')
     parser.add_argument('--gpu', type=int, default=0, help='GPU number')
@@ -184,13 +185,13 @@ def main():
     max_duration = 1. / _process_frequency
 
     threads = []
-    teleop = ReceiverThread(url='ipc:///tmp/byodr/teleop.sock', topic=b'aav/teleop/input')
+    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
     camera = CameraThread()
     threads.append(teleop)
     threads.append(camera)
     [t.start() for t in threads]
     publisher = Publisher()
-    runner = TFRunner(gpu_id=args.gpu, **cfg)
+    runner = TFRunner(model_directory=args.models, gpu_id=args.gpu, **cfg)
     try:
         while not quit_event.is_set():
             proc_start = time.time()

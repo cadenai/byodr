@@ -10,8 +10,7 @@ services:
     ports:
       - "9100:9100"
     volumes:
-      - './teleop:/app'
-      - '/tmp/byodr:/tmp/byodr'
+      - ./teleop:/app
     environment:
       TELEOP_HOME: '/app'
     command: python app.py --port=9100
@@ -22,9 +21,10 @@ services:
       dockerfile: Dockerfile
     image: byodr/pilot
     container_name: byodr_pilot
+    volumes_from:
+      - teleop:rw
     volumes:
-      - './pilot:/app'
-      - '/tmp/byodr:/tmp/byodr'
+      - ./pilot:/app
     command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_PILOT_HZ}
   recorder:
     user: '1000'
@@ -33,10 +33,11 @@ services:
       dockerfile: Dockerfile
     image: byodr/recorder
     container_name: byodr_recorder
+    volumes_from:
+      - teleop:rw
     volumes:
-      - './recorder:/app'
+      - ./recorder:/app
       - ${DC_RECORDER_SESSIONS}:/sessions
-      - '/tmp/byodr:/tmp/byodr'
     command: python app.py --sessions=/sessions --config=/app/${DC_JSON_CONFIG} --clock=${DC_RECORDER_HZ}
   inference:
     user: '1000'
@@ -45,12 +46,11 @@ services:
       dockerfile: Dockerfile
     image: byodr/inference
     container_name: byodr_inference
+    volumes_from:
+      - teleop:rw
     volumes:
-      - './inference:/app'
-      - '/tmp/byodr:/tmp/byodr'
-      - '/data1/Models:/data1/Models'
-    environment:
-      CADEN_DNN: ${DC_CADEN_DNN}
-    command: python app.py --config=/app/${DC_JSON_CONFIG} --gpu=${DC_INFERENCE_GPU} --clock=${DC_INFERENCE_HZ}
+      - ./inference:/app
+      - ${DC_INFERENCE_MODELS}:/models
+    command: python app.py --models=/models --config=/app/${DC_JSON_CONFIG} --gpu=${DC_INFERENCE_GPU} --clock=${DC_INFERENCE_HZ}
 
 

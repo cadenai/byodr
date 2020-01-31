@@ -63,7 +63,7 @@ class CameraThread(threading.Thread):
         subscriber.setsockopt(zmq.RCVHWM, 1)
         subscriber.setsockopt(zmq.RCVTIMEO, 20)
         subscriber.setsockopt(zmq.LINGER, 0)
-        subscriber.connect('ipc:///tmp/byodr/camera.sock')
+        subscriber.connect('ipc:///byodr/camera.sock')
         subscriber.setsockopt(zmq.SUBSCRIBE, b'aav/camera/0')
         self._subscriber = subscriber
         self._images = collections.deque(maxlen=1)
@@ -88,7 +88,7 @@ class CameraThread(threading.Thread):
 class TeleopPublisher(object):
     def __init__(self):
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///tmp/byodr/teleop.sock')
+        publisher.bind('ipc:///byodr/teleop.sock')
         self._publisher = publisher
 
     def publish(self, data):
@@ -102,10 +102,10 @@ def main():
 
     threads = []
     publisher = TeleopPublisher()
-    pilot = ReceiverThread(url='ipc:///tmp/byodr/pilot.sock', topic=b'aav/pilot/output')
-    vehicle = ReceiverThread(url='ipc:///tmp/byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    inference = ReceiverThread(url='ipc:///tmp/byodr/inference.sock', topic=b'aav/inference/state')
-    recorder = ReceiverThread(url='ipc:///tmp/byodr/recorder.sock', topic=b'aav/recorder/state')
+    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
+    inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
+    recorder = ReceiverThread(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state')
     camera = CameraThread()
     threads.append(pilot)
     threads.append(vehicle)

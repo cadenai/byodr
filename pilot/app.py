@@ -52,7 +52,7 @@ class ReceiverThread(threading.Thread):
 class PilotPublisher(object):
     def __init__(self):
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.bind('ipc:///tmp/byodr/pilot.sock')
+        publisher.bind('ipc:///byodr/pilot.sock')
         self._publisher = publisher
 
     def publish(self, data):
@@ -70,9 +70,9 @@ def main():
     driver = DriverManager(config_file=args.config)
     controller = CommandProcessor(driver=driver)
     publisher = PilotPublisher()
-    teleop = ReceiverThread(url='ipc:///tmp/byodr/teleop.sock', topic=b'aav/teleop/input')
-    vehicle = ReceiverThread(url='ipc:///tmp/byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    inference = ReceiverThread(url='ipc:///tmp/byodr/inference.sock', topic=b'aav/inference/state')
+    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
+    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
+    inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
     threads.append(teleop)
     threads.append(vehicle)
     threads.append(inference)
