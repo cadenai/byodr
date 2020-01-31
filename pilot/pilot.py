@@ -381,8 +381,8 @@ class DriverManager(object):
         self._cruise_speed_step = 0
         self._steering_stabilizer = IgnoreDifferences()
         self._driver = None
-        self._driver_ctl = 'driver_mode.teleop.direct'
-        self.switch_ctl(self._driver_ctl)
+        self._driver_ctl = None
+        self.switch_ctl()
 
     def _config(self, **kwargs):
         self._cruise_speed_step = float(kwargs['driver.cc.static.gear.step'])
@@ -428,15 +428,16 @@ class DriverManager(object):
             self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
             logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
-    def switch_ctl(self, control=None):
+    def switch_ctl(self, control='driver_mode.teleop.direct'):
         with self._lock:
             self._pilot_state.cruise_speed = 0
-        # The switch must be immediate. Do not force wait on the previous driver to deactivate.
-        if self._driver is not None:
-            threading.Thread(target=self._driver.deactivate).start()
-        self._driver_ctl = control
-        self._driver = self._get_driver(control=control)
-        threading.Thread(target=self._activate).start()
+            # The switch must be immediate. Do not force wait on the previous driver to deactivate.
+            if control != self._driver_ctl:
+                if self._driver is not None:
+                    threading.Thread(target=self._driver.deactivate).start()
+                self._driver_ctl = control
+                self._driver = self._get_driver(control=control)
+                threading.Thread(target=self._activate).start()
 
     def noop(self):
         blob = Blob()
@@ -449,8 +450,8 @@ class DriverManager(object):
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         **command)
-        self._driver.next_action(blob, vehicle, inference)
-        blob.steering = self._steering_stabilizer.calculate(blob.steering)
+            self._driver.next_action(blob, vehicle, inference)
+            blob.steering = self._steering_stabilizer.calculate(blob.steering)
         return blob
 
     def quit(self):
@@ -460,11 +461,12 @@ class DriverManager(object):
 
 
 class CommandProcessor(object):
-    def __init__(self, driver):
+    def __init__(self, driver, patience=.100):
         self._driver = driver
+        self._patience = patience
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
-        self._cache = cachetools.TTLCache(maxsize=100, ttl=.35)
+        self._cache = cachetools.TTLCache(maxsize=100, ttl=(3 * patience))
 
     def _cache_safe(self, key, func, *arguments):
         if self._cache.get(key) is None:
@@ -473,7 +475,7 @@ class CommandProcessor(object):
             finally:
                 self._cache[key] = 1
 
-    def process(self, command):
+    def _process(self, command):
         keys = {} if command is None else command.keys()
         if 'quit' in keys:
             self._driver.switch_ctl()
@@ -484,7 +486,7 @@ class CommandProcessor(object):
             self._cache_safe('dnn driver', lambda: self._driver.switch_ctl('driver_mode.inference.dnn'))
         # E
         elif command.get('button_b', 0) == 1:
-            self._cache_safe('console driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+            self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
         # S
         elif command.get('button_a', 0) == 1:
             self._cache_safe('cruise driver', lambda: self._driver.switch_ctl('driver_mode.teleop.cruise'))
@@ -501,3 +503,19 @@ class CommandProcessor(object):
                 self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
             else:
                 self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
+
+    def quit(self):
+        self._driver.quit()
+
+    def next_action(self, *args):
+        _ts = time.time()
+        _patience = self._patience
+        commands = [None if arg is None else arg if (_ts - arg.get('time') < _patience) else None for arg in args]
+        if None in commands:
+            self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+        teleop, vehicle, inference = commands
+        if teleop is None:
+            return None, False
+        else:
+            self._process(teleop)
+            return self._driver.next_action(teleop, vehicle, inference), True

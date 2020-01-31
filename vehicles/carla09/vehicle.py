@@ -33,7 +33,7 @@ class CarlaHandler(object):
         self._actor_lock = multiprocessing.Lock()
         self._actor_last_location = None
         self._actor_distance_traveled = 0.
-        self._spawn_index = 0
+        self._spawn_index = 1
         self._vehicle_tick = self._world.on_tick(lambda x: self.tick(x))
 
     def _reset_agent_travel(self):
