@@ -442,6 +442,7 @@ class DriverManager(object):
                 self._driver_ctl = control
                 self._driver = self._get_driver(control=control)
                 threading.Thread(target=self._activate).start()
+                logger.info("Pilot switch control to '{}'.".format(control))
 
     def noop(self):
         blob = Blob()
@@ -520,9 +521,12 @@ class CommandProcessor(object):
     def next_action(self, *args):
         _ts = time.time()
         _patience = self._patience
-        commands = [None if arg is None else arg if (_ts - arg.get('time') < _patience) else None for arg in args]
+        times = [None if arg is None else _ts - arg.get('time') for arg in args]
+        commands = [None if arg is None else arg if (times[i] < _patience) else None for i, arg in enumerate(args)]
         if None in commands:
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+            if None not in times:
+                logger.warning("Patience exceeded: {}.".format(times))
         teleop, vehicle, inference = commands
         if teleop is None:
             return None, False
