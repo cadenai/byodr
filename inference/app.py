@@ -65,7 +65,7 @@ class TFRunner(object):
         """Zero values below the minimum but let values larger than the maximum be scaled up. """
         return abs(max(0., v - min_) / (max_ - min_))
 
-    def forward(self, image, turn='intersection.ahead'):
+    def forward(self, image, turn):
         with self._lock:
             dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
@@ -120,8 +120,10 @@ def main():
 
     threads = []
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
     threads.append(teleop)
+    threads.append(pilot)
     threads.append(camera)
     [t.start() for t in threads]
 
@@ -134,9 +136,11 @@ def main():
             # Leave the value intact unless the control is activated.
             if command is not None and any([k in command.keys() for k in ('button_y', 'button_b', 'button_a', 'button_x')]):
                 runner.set_dagger(command.get('button_x', 0) == 1)
+            blob = pilot.get_latest()
             image = camera.capture()[-1]
             if image is not None:
-                publisher.publish(runner.forward(image=image))
+                instruction = 'intersection.ahead' if blob is None else blob.get('instruction')
+                publisher.publish(runner.forward(image=image, turn=instruction))
             _proc_sleep = max_duration - (time.time() - proc_start)
             if _proc_sleep < 0:
                 logger.warning("Cannot maintain {} Hz.".format(_process_frequency))

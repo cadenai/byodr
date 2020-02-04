@@ -108,7 +108,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'route_np': None,
                 'route_np_sim': 0.,
                 'route_np_debug1': 0.,
-                'turn': 'intersection.ahead',
+                'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))
         except Exception:

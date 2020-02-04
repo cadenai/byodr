@@ -428,6 +428,10 @@ class DriverManager(object):
             self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
             logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
+    def turn_instruction(self, turn):
+        with self._lock:
+            self._pilot_state.instruction = turn
+
     def switch_ctl(self, control='driver_mode.teleop.direct'):
         with self._lock:
             self._pilot_state.cruise_speed = 0
@@ -503,6 +507,12 @@ class CommandProcessor(object):
                 self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
             else:
                 self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
+        elif 'button_left' in keys:
+            self._cache_safe('turn left', lambda: self._driver.turn_instruction('intersection.left'))
+        elif 'button_back' in keys:
+            self._cache_safe('turn ahead', lambda: self._driver.turn_instruction('intersection.ahead'))
+        elif 'button_right' in keys:
+            self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
 
     def quit(self):
         self._driver.quit()
