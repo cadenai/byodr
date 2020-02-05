@@ -569,11 +569,12 @@ class CommunicationClient(object):
         self._term = Term(timeout=sleep)
         self._quit_event = threading.Event()
         self._control_socket = WebSocketThread(connect_string="ws://{}:{}/ws/ctl".format(ws_host, ws_port),
-                                               fn_error=(lambda x, y: time.sleep(.1)))
+                                               fn_message=self._on_ctl_message,
+                                               fn_error=(lambda x, y: time.sleep(.01)))
         self._log_socket = WebSocketThread(connect_string="ws://{}:{}/ws/log".format(ws_host, ws_port),
                                            fn_open=(lambda ws: ws.send('0')),
                                            fn_message=self._on_log_message,
-                                           fn_error=(lambda x, y: time.sleep(.1)))
+                                           fn_error=(lambda x, y: time.sleep(.01)))
         self._control_socket.start()
         self._log_socket.start()
         self._on_ctl_open('')
@@ -595,6 +596,9 @@ class CommunicationClient(object):
         except Exception as e:
             logger.error("Log socket error {} msg={}.".format(e, msg))
             logger.error("Trace: {}".format(traceback.format_exc(e)))
+
+    def _on_ctl_message(self, ws, msg):
+        pass
 
     def quit(self):
         self._quit_event.set()

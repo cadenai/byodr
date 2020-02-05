@@ -35,6 +35,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
         msg = json.loads(json_message)
         msg['time'] = time.time()
         self._fn_control(msg)
+        self.write_message('{}')
 
 
 class MessageServerSocket(websocket.WebSocketHandler):

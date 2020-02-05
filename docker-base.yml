@@ -8,7 +8,7 @@ services:
     image: byodr/teleop
     container_name: byodr_teleop
     ports:
-      - "9100:9100"
+      - "9100-9105:9100-9105"
     volumes:
       - ./common:/common
       - ./teleop:/app
