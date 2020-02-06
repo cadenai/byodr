@@ -56,13 +56,13 @@ class Blob(AttrDict):
         self.instruction = kwargs.get('instruction')
         self.save_event = kwargs.get('save_event')
         self.speed_driver = kwargs.get('speed_driver')
-        self.steering = kwargs.get('steering')
+        self.steering = kwargs.get('steering', 0)
         self.steering_driver = kwargs.get('steering_driver')
-        self.throttle = kwargs.get('throttle')
+        self.throttle = kwargs.get('throttle', 0)
         self.time = kwargs.get('time', time.time())
-        if self.forced_steering is None and self.steering is not None:
+        if self.forced_steering is None:
             self.forced_steering = abs(self.steering) > 0
-        if self.forced_throttle is None and self.throttle is not None:
+        if self.forced_throttle is None:
             self.forced_throttle = abs(self.throttle) > 0
         if self.forced_acceleration is None:
             self.forced_acceleration = self.forced_throttle and self.throttle > 0
@@ -451,6 +451,7 @@ class DriverManager(object):
 
     def next_action(self, command, vehicle, inference):
         with self._lock:
+            # The blob time must be based on the command teleop time to allow downstream processes to react.
             blob = Blob(driver=self._driver_ctl,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
@@ -525,8 +526,6 @@ class CommandProcessor(object):
         commands = [None if arg is None else arg if (times[i] < _patience) else None for i, arg in enumerate(args)]
         if None in commands:
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
-            if None not in times:
-                logger.warning("Patience exceeded: {}.".format(times))
         teleop, vehicle, inference = commands
         if teleop is None:
             return None, False

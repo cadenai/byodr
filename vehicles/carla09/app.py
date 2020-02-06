@@ -23,6 +23,7 @@ def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
     parser.add_argument('--remote', type=str, required=True, help='Carla server remote host:port')
     parser.add_argument('--clock', type=int, required=True, help='Clock frequency in hz.')
+    parser.add_argument('--patience', type=float, default=.100, help='Maximum age of a command before it is considered stale.')
     args = parser.parse_args()
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
@@ -37,12 +38,13 @@ def main():
     [t.start() for t in threads]
 
     _hz = args.clock
+    _patience = args.patience
     _period = 1. / _hz
     while not quit_event.is_set():
         command = pilot.get_latest()
         _command_time = 0 if command is None else command.get('time')
         _command_age = time.time() - _command_time
-        _on_time = _command_age < (2 * _period)
+        _on_time = _command_age < _patience
         if _on_time:
             vehicle.drive(command)
         else:

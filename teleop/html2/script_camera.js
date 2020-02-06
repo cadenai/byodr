@@ -1,15 +1,4 @@
 
-var camera_utils = {
-    create_socket: function(path, binary=true) {
-        ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
-        web_socket = new WebSocket(ws_protocol + document.location.hostname + ":" + document.location.port + path);
-        if (binary) {
-            web_socket.binaryType = 'arraybuffer';
-        }
-        return web_socket;
-    }
-}
-
 var camera_controller = {
     actual_fps: 0,
     target_fps: 15,
@@ -21,7 +10,7 @@ var camera_controller = {
     request_time: 0,
     request_timeout: 0,
     // larger = more smoothing
-    request_time_smoothing: 0.5,
+    request_time_smoothing: 0.2,
     request_target_timeout: 100,
 
     init: function(doc_location) {
@@ -58,17 +47,20 @@ var camera_controller = {
 }
 
 camera_controller.init(document.location);
-camera_controller.camera = camera_utils.create_socket("/ws/cam");
+camera_controller.socket = socket_utils.create_socket("/ws/cam", true);
 camera_controller.capture = function() {
-    // E.g. '{"quality": 50, "display": "vga"}'
     cc = camera_controller;
-    cc.camera.send('{"quality": ' + cc.jpeg_quality + ', "display": "' + cc.display_resolution + '"}');
+    // E.g. '{"quality": 50, "display": "vga"}'
+    cc.socket.send(JSON.stringify({
+        quality: cc.jpeg_quality,
+        display: cc.display_resolution
+    }));
 }
-camera_controller.camera.onopen = function() {
+camera_controller.socket.onopen = function() {
     console.log("The camera socket connection was established.");
     camera_controller.capture();
 };
-camera_controller.camera.onmessage = function(evt) {
+camera_controller.socket.onmessage = function(evt) {
     camera_controller.update_framerate();
     camera_controller.update_quality();
     $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));

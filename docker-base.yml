@@ -27,7 +27,7 @@ services:
     volumes:
       - ./common:/common
       - ./pilot:/app
-    command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_PILOT_HZ}
+    command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_PILOT_HZ} --patience=${DC_TELEOP_PATIENCE}
   recorder:
     user: '1000'
     build:

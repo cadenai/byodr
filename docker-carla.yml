@@ -12,6 +12,6 @@ services:
     volumes:
       - ./common:/common
       - ./vehicles/carla09:/app
-    command: python app.py --remote=${DC_CARLA_REMOTE} --clock=${DC_VEHICLE_HZ}
+    command: python app.py --remote=${DC_CARLA_REMOTE} --clock=${DC_VEHICLE_HZ} --patience=${DC_TELEOP_PATIENCE}
 
 

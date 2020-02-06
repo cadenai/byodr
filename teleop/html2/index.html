@@ -9,7 +9,9 @@
     <link rel="stylesheet" href="style.css">
     <script src="jquery-3.4.1.min.js"></script>
 	<script type="text/javascript" src="performance-polyfill.js"></script>
-	<script src="script.js"></script>
+	<script src="script_utils.js"></script>
+	<script src="script_teleop.js"></script>
+	<script src="script_camera.js"></script>
 </head>
 
 <body>
@@ -27,6 +29,9 @@
 		<div>
 			fps:&nbsp;<span id="frame_fps">0</span>
 			quality:&nbsp;<span id="frame_quality">0</span>
+			steer:&nbsp;<span id="pilot_steering">0</span>
+			throttle:&nbsp;<span id="pilot_throttle">0</span>
+			mu:&nbsp;<span id="inference_mu">0</span>
 		</div>
 	</section>
 	<section id="pageContent">
