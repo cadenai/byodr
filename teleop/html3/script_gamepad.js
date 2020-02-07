@@ -20,7 +20,9 @@ var NoneController = {
         return navigator.getGamepads()[0];
     },
 
-    poll: function() {}
+    poll: function() {
+        return false;
+    }
 }
 
 var Xbox360StandardController = extend(NoneController, {
@@ -42,6 +44,7 @@ var Xbox360StandardController = extend(NoneController, {
         this.button_center = pad.buttons[16].value;
         this.arrow_up = pad.buttons[12].value;
         this.arrow_down = pad.buttons[13].value;
+        return true;
     }
 });
 
@@ -64,6 +67,7 @@ var PS4StandardController = extend(NoneController, {
         this.button_center = pad.buttons[17].value;
         this.arrow_up = pad.buttons[12].value;
         this.arrow_down = pad.buttons[13].value;
+        return true;
     }
 });
 
@@ -89,6 +93,7 @@ var Xbox360Controller = extend(NoneController, {
         this.button_center = pad.buttons[10].value;
         this.arrow_up = pad.buttons[0].value;
         this.arrow_down = pad.buttons[1].value;
+        return true;
     }
 });
 

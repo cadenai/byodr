@@ -8,12 +8,17 @@ function extend(proto, literal) {
 }
 
 var socket_utils = {
-    create_socket: function(path, binary=true) {
+    create_socket: function(path, binary=true, reconnect=1000, assign=function(e) {}) {
         ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
-        web_socket = new WebSocket(ws_protocol + document.location.hostname + ":" + document.location.port + path);
+        ws_url = ws_protocol + document.location.hostname + ":" + document.location.port + path;
+        ws = new WebSocket(ws_url);
         if (binary) {
-            web_socket.binaryType = 'arraybuffer';
+            ws.binaryType = 'arraybuffer';
         }
-        return web_socket;
+        ws.onclose = function() {
+            setTimeout(function() {socket_utils.create_socket(path, binary, reconnect, assign);}, reconnect);
+        };
+        assign(ws);
     }
 }
+

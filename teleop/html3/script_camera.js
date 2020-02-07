@@ -47,7 +47,6 @@ var camera_controller = {
 }
 
 camera_controller.init(document.location);
-camera_controller.socket = socket_utils.create_socket("/ws/cam", true);
 camera_controller.capture = function() {
     cc = camera_controller;
     // E.g. '{"quality": 50, "display": "vga"}'
@@ -55,16 +54,19 @@ camera_controller.capture = function() {
         quality: cc.jpeg_quality,
         display: cc.display_resolution
     }));
-}
-camera_controller.socket.onopen = function() {
-    console.log("The camera socket connection was established.");
-    camera_controller.capture();
 };
-camera_controller.socket.onmessage = function(evt) {
-    camera_controller.update_framerate();
-    camera_controller.update_quality();
-    $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));
-    $('span#frame_fps').text(camera_controller.actual_fps);
-    $('span#frame_quality').text(camera_controller.jpeg_quality);
-    setTimeout(camera_controller.capture, camera_controller.request_timeout);
-};
+socket_utils.create_socket("/ws/cam", true, 1000, function(ws) {
+    camera_controller.socket = ws;
+    ws.onopen = function() {
+        console.log("The camera socket connection was established.");
+        camera_controller.capture();
+    };
+    ws.onmessage = function(evt) {
+        camera_controller.update_framerate();
+        camera_controller.update_quality();
+        $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));
+        $('span#frame_fps').text(camera_controller.actual_fps);
+        $('span#frame_quality').text(camera_controller.jpeg_quality);
+        setTimeout(camera_controller.capture, camera_controller.request_timeout);
+    };
+});
