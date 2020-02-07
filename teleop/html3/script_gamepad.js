@@ -1,5 +1,6 @@
 
 var NoneController = {
+    gamepad_index: 0,
     steering: 0,
     throttle: 0,
     button_y: 0,
@@ -17,7 +18,7 @@ var NoneController = {
     },
 
     gamepad: function() {
-        return navigator.getGamepads()[0];
+        return navigator.getGamepads()[this.gamepad_index];
     },
 
     poll: function() {
@@ -112,6 +113,7 @@ var gamepad_controller = {
                 result = Object.create(PS4StandardController);
             }
         }
+        result.gamepad_index = gamepad.index;
         return result;
     },
 

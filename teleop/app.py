@@ -55,25 +55,12 @@ def main():
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/(.*)", web.StaticFileHandler, {
-                'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html'),
-                'default_filename': 'index.htm'
-            })
-        ])
-        tmp_app = web.Application([
-            (r"/ws/ctl", ControlServerSocket, dict(fn_control=(lambda x: publisher.publish(x)))),
-            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: (pilot.get_latest(),
-                                                                      vehicle.get_latest(),
-                                                                      inference.get_latest(),
-                                                                      recorder.get_latest())))),
-            (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
-            (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html3'),
                 'default_filename': 'index.htm'
             })
         ])
         port = args.port
         web_app.listen(port)
-        tmp_app.listen(port + 1)
         logger.info("Web service starting on port {}.".format(port))
         io_loop.start()
     except KeyboardInterrupt:
