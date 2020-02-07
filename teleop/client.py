@@ -633,9 +633,9 @@ class CommunicationClient(object):
             elif _c in ('8', '9', '0'):
                 kwargs['reload_weights'] = 1
             elif _c == '-':
-                kwargs['cc_speed'] = 'less'
+                kwargs['arrow_down'] = 1
             elif _c == '=':
-                kwargs['cc_speed'] = 'more'
+                kwargs['arrow_up'] = 1
             elif _c == '1':
                 kwargs['autopilot'] = 1
             elif _c == 'h':

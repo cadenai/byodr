@@ -431,6 +431,7 @@ class DriverManager(object):
     def turn_instruction(self, turn):
         with self._lock:
             self._pilot_state.instruction = turn
+            logger.info("Instruction set to '{}'.".format(turn))
 
     def switch_ctl(self, control='driver_mode.teleop.direct'):
         with self._lock:
@@ -504,16 +505,11 @@ class CommandProcessor(object):
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
         elif command.get('arrow_down', 0) == 1:
             self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
-        elif 'cc_speed' in keys:
-            if command['cc_speed'] == 'more':
-                self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
-            else:
-                self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
-        elif 'button_left' in keys:
+        elif command.get('button_left', 0) == 1:
             self._cache_safe('turn left', lambda: self._driver.turn_instruction('intersection.left'))
-        elif 'button_back' in keys:
+        elif command.get('button_back', 0) == 1:
             self._cache_safe('turn ahead', lambda: self._driver.turn_instruction('intersection.ahead'))
-        elif 'button_right' in keys:
+        elif command.get('button_right', 0) == 1:
             self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
 
     def quit(self):

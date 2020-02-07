@@ -1,0 +1,40 @@
+<html>
+<!-- Adapted from https://github.com/Bronkoknorb/PyImageStream -->
+<head>
+    <meta charset="UTF-8">
+    <title>Teleop</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="jquery-3.4.1.min.js"></script>
+    <script type="text/javascript" src="performance-polyfill.js"></script>
+	<script src="script_utils.js"></script>
+	<script src="script_teleop.js"></script>
+	<script src="script_camera.js"></script>
+</head>
+<body>
+<div id="container" class="centered">
+    <div id="column">
+        <div id="bar">
+            <img id="arrow" class="left"/>
+            <div id="desired_speed">
+                <div id="desired_speed_value">0</div>
+                <div id="desired_speed_text">MAX</div>
+            </div>
+            <div id="current_speed">
+                <div id="current_speed_value">0</div>
+                <div id="current_speed_units">km/h</div>
+            </div>
+            <img id="steeringWheel" class="right"/>
+        </div>
+        <img id="liveImg" width="800" height="600"/>
+    </div>
+    <div id="navigation">
+    </div>
+    <div id="debug_values">
+        <div id="debug_steering">ste: <span id="pilot_steering">0</span></div>
+        <div id="debug_throttle">thr: <span id="pilot_throttle">0</span></div>
+        <div id="debug_fps">fps: <span id="frame_fps">0</span></div>
+        <div id="debug_quality">qua: <span id="frame_quality">0</span></div>
+    </div>
+</div>
+</body>
+</html>
