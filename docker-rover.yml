@@ -41,6 +41,6 @@ services:
       - ./vehicles/rover:/app
     environment:
       ROS_MASTER_URI: 'http://byodr_rover_ros:11311'
-    command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_VEHICLE_HZ} --patience=${DC_TELEOP_PATIENCE}
+    command: python app.py --config=/app/${DC_JSON_ROVER} --clock=${DC_VEHICLE_HZ} --patience=${DC_TELEOP_PATIENCE}
 
 

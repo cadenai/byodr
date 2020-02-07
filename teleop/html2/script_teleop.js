@@ -12,18 +12,24 @@ var GameController = {
     arrow_up: 0,
     arrow_down: 0,
 
+    collapse: function(value, zone=0) {
+        return Math.abs(value) <= zone ? 0 : value > 0 ? value - zone : value + zone;
+    },
+
     poll: function() {}
 }
 
 var Xbox360Wired = extend(GameController, {
     gamepad: null,
+    threshold: 0.18,
+    scale: 0.5,
 
     poll: function() {
         pad = this.gamepad;
-        this.steering = pad.axes[3];
+        this.steering = this.collapse(pad.axes[3], this.threshold) * this.scale;
         accelerate = pad.axes[2];
         brake = pad.axes[5];
-        // Before activation of these axes their values are unscaled zero.
+        // Before activation of these axes their values are exactly zero.
         accelerate = accelerate == 0 ? 0 : (accelerate + 1) / 2;
         brake = brake == 0 ? 0 : (brake + 1) / 2;
         this.throttle = brake > 0.01 ? -1 * brake : accelerate;
