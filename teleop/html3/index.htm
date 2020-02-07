@@ -7,6 +7,7 @@
     <script src="jquery-3.4.1.min.js"></script>
     <script type="text/javascript" src="performance-polyfill.js"></script>
 	<script src="script_utils.js"></script>
+	<script src="script_gamepad.js"></script>
 	<script src="script_teleop.js"></script>
 	<script src="script_camera.js"></script>
 </head>
@@ -32,6 +33,9 @@
     <div id="debug_values">
         <div id="debug_steering">ste: <span id="pilot_steering">0</span></div>
         <div id="debug_throttle">thr: <span id="pilot_throttle">0</span></div>
+        <div id="debug_corridor">cor: <span id="inference_corridor">0</span></div>
+        <div id="debug_obstacle">obs: <span id="inference_obstacle">0</span></div>
+        <div id="debug_recorder">rec: <span id="state_recorder">n/a</span></div>
         <div id="debug_fps">fps: <span id="frame_fps">0</span></div>
         <div id="debug_quality">qua: <span id="frame_quality">0</span></div>
     </div>
