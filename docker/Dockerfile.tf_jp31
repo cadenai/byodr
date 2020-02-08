@@ -1,0 +1,41 @@
+# docker build -f Dockerfile.tf_jp31 -t byodr/tf .
+FROM ubuntu:bionic
+
+ENV TZ=Europe/Amsterdam
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libhdf5-serial-dev \
+    hdf5-tools \
+    libhdf5-dev \
+    zlib1g-dev zip \
+    libjpeg8-dev \
+    python-dev \
+    python-opencv \
+    python-pip \
+    python-setuptools \
+    python-wheel \
+    wget \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade numpy \
+  && pip install "pyzmq >=18.1, <19.0" \
+  && pip install "astor>=0.6.0" \
+  && pip install "tensorboard<1.12.0,>=1.11.0" \
+  && pip install "termcolor>=1.1.0" \
+  && pip install "backports.weakref>=1.0rc1" \
+  && pip install "enum34>=1.1.6" \
+  && pip install "absl-py>=0.1.6" \
+  && pip install "gast>=0.2.0" \
+  && pip install "mock>=2.0.0" \
+  && pip install "grpcio>=1.8.6"
+
+# First copied /usr/lib/aarch64-linux-gnu/libcudnn* to tegra/ on the host - see volumes.
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu/tegra
+
+COPY ./deps deps/
+
+ENV HDF5_DIR=/usr/lib/aarch64-linux-gnu/hdf5/serial
+
+RUN pip install /deps/tensorflow-1.11.0-cp27-cp27mu-linux_aarch64.whl

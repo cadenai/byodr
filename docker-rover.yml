@@ -7,6 +7,8 @@ services:
       dockerfile: vehicles/rover/Dockerfile.rosserial
     image: byodr/vehicle_rover_ros
     container_name: byodr_rover_ros
+    volumes:
+      - ./vehicles/rover:/app
     devices:
       - ${DC_ROS_SERIAL_DEVICE}
     ports:
