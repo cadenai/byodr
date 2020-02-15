@@ -8,7 +8,7 @@ import signal
 from tornado import web, ioloop
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
-from server import CameraServerSocket, ControlServerSocket, MessageServerSocket
+from server import CameraServerSocket, ControlServerSocket, MessageServerSocket, FFMPegThread, MpegServerSocket
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +39,13 @@ def main():
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
     recorder = ReceiverThread(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state', event=quit_event)
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
+    mpeg = FFMPegThread(lambda: camera.capture()[1], quit_event)
     threads.append(pilot)
     threads.append(vehicle)
     threads.append(inference)
     threads.append(recorder)
     threads.append(camera)
+    threads.append(mpeg)
     [t.start() for t in threads]
 
     try:
@@ -54,6 +56,7 @@ def main():
                                                                       inference.get_latest(),
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
+            (r"/ws/mpeg", MpegServerSocket, dict(registry=mpeg)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html3'),
                 'default_filename': 'index.htm'

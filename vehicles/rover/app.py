@@ -20,7 +20,7 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 quit_event = multiprocessing.Event()
 
-CAMERA_SHAPE = (240, 320, 3)
+CAMERA_SHAPE = (320, 480, 3)
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
 

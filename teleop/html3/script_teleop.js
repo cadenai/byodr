@@ -36,8 +36,8 @@ gamepad_controller.capture = function() {
             msg.arrow_down = ct.arrow_down;
         }
         gc.socket.send(JSON.stringify(msg));
-    } else {
-        gc.socket.close();
+//    } else {
+//        gc.socket.close();
     }
 }
 socket_utils.create_socket("/ws/ctl", false, 1000, function(ws) {

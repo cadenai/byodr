@@ -1,0 +1,11 @@
+FROM webhippie/nodejs
+
+RUN git clone https://github.com/phoboslab/jsmpeg.git
+
+RUN cd jsmpeg && npm install ws
+
+WORKDIR /srv/app/jsmpeg
+
+RUN groupadd --gid 1000 --system app \
+  && useradd --uid 1000 --gid 1000 --system --create-home --shell /bin/bash app
+

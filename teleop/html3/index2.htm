@@ -78,7 +78,7 @@
           margin: 117px 0 0 20px;
         }
 
-        img#liveImg {
+        canvas#videoCanvas {
           width: 1024px;
           height: 600px;
           border: 1px solid white;
@@ -108,12 +108,12 @@
           margin: 110px 0 0 20px;
         }
     </style>
+    <script src="jsmpeg.min.js"></script>
     <script src="jquery-3.4.1.min.js"></script>
     <script type="text/javascript" src="performance-polyfill.js"></script>
 	<script src="script_utils.js"></script>
 	<script src="script_gamepad.js"></script>
 	<script src="script_teleop.js"></script>
-	<script src="script_camera.js"></script>
 </head>
 <body>
 <div id="container" class="centered">
@@ -130,7 +130,7 @@
             </div>
             <img id="steeringWheel" class="right"/>
         </div>
-        <img id="liveImg"/>
+        <div><canvas id="videoCanvas"></canvas></div>
     </div>
     <div id="navigation">
     </div>
@@ -144,5 +144,6 @@
         <div id="debug_quality">qua: <span id="frame_quality">0</span></div>
     </div>
 </div>
+<script src="script_camera2.js"></script>
 </body>
 </html>

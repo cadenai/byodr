@@ -1,11 +1,15 @@
 #!/usr/bin/env python
+
 import collections
 import json
 import logging
+import threading
 import time
 import traceback
+from struct import Struct
 
 import cv2
+import ffmpeg
 import numpy as np
 from tornado import websocket
 
@@ -163,3 +167,77 @@ class CameraServerSocket(websocket.WebSocketHandler):
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
             logger.error("JSON message:---\n{}\n---".format(message))
+
+
+class FFMPegThread(threading.Thread):
+    def __init__(self, fn_capture, event):
+        super(FFMPegThread, self).__init__()
+        self._capture = fn_capture
+        self._quit_event = event
+        self.consumers = []
+
+    def add_consumer(self, _fn):
+        self.consumers.append(_fn)
+
+    def remove_consumer(self, _fn):
+        self.consumers.remove(_fn)
+
+    def run(self):
+        # Determine the image shape first.
+        _shape = None
+        while not self._quit_event.is_set() and _shape is None:
+            img = self._capture()
+            if img is not None:
+                _shape = img.shape
+            else:
+                time.sleep(.100)
+        height, width = _shape[:2]
+        process = ffmpeg.input('pipe:', format='rawvideo', pix_fmt='bgr24', s='{}x{}'.format(width, height))
+        process = process.output('pipe:', format='mpegts', vcodec='mpeg1video', s='480x320', video_bitrate='1000k', bf=0)
+        while not self._quit_event.is_set():
+            try:
+                img = self._capture()
+                if img is not None and self.consumers:
+                    frame, err = process.run(capture_stdout=True, capture_stderr=True, input=img.astype(np.uint8).tobytes())
+                    [c(frame) for c in self.consumers]
+                time.sleep(.040)
+            except StandardError as e:
+                logger.error("Trace: {}".format(traceback.format_exc(e)))
+                time.sleep(1)
+        process.stdin.close()
+        process.stdout.close()
+        process.wait()
+
+
+class MpegServerSocket(websocket.WebSocketHandler):
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self.shape = (320, 480, 3)
+        self._registry = kwargs.get('registry')
+
+    def _frame(self, b):
+        try:
+            self.write_message(b, binary=True)
+        except websocket.WebSocketClosedError:
+            pass
+
+    def check_origin(self, origin):
+        return True
+
+    def data_received(self, chunk):
+        pass
+
+    def open(self, *args, **kwargs):
+        logger.info("Mpeg client connected.")
+        _header = Struct('>4sHH')
+        _magic = b'jsmp'
+        _height, _width = self.shape[:2]
+        self.write_message(_header.pack(_magic, _width, _height), binary=True)
+        self._registry.add_consumer(self._frame)
+
+    def on_close(self):
+        self._registry.remove_consumer(self._frame)
+        logger.info("Mpeg client disconnected.")
+
+    def on_message(self, message):
+        pass
