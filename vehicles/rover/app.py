@@ -20,7 +20,7 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 quit_event = multiprocessing.Event()
 
-CAMERA_SHAPE = (320, 480, 3)
+CAMERA_SHAPE = (360, 640, 3)
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
 
@@ -165,7 +165,7 @@ def main():
            "location=rtsp://user1:HelloUser1@192.168.50.64:554/Streaming/Channels/102 " \
            "latency=0 drop-on-latency=true ! queue ! " \
            "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-           "videoscale ! video/x-raw,width={},height={},format=BGR ! queue".format(CAMERA_SHAPE[1], CAMERA_SHAPE[0])
+           "videoscale ! video/x-raw,format=BGR ! queue"
     gst_source = GstRawSource(fn_callback=_image, command=_url)
     gst_source.open()
 

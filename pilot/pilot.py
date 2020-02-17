@@ -473,7 +473,7 @@ class CommandProcessor(object):
         self._patience = patience
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
-        self._cache = cachetools.TTLCache(maxsize=100, ttl=(3 * patience))
+        self._cache = cachetools.TTLCache(maxsize=100, ttl=patience)
 
     def _cache_safe(self, key, func, *arguments):
         if self._cache.get(key) is None:

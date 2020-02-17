@@ -7,6 +7,7 @@ import signal
 import time
 import traceback
 
+import cv2
 from jsoncomment import JsonComment
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
@@ -126,7 +127,7 @@ def main():
                 blob_time, image_time = blob.get('time'), image_md.get('time')
                 _now = time.time()
                 if (_now - blob_time) < _patience and (_now - image_time) < _patience:
-                    handler.record(blob, vehicle.get_latest(), image)
+                    handler.record(blob, vehicle.get_latest(), cv2.resize(image, (320, 240)))
             state_publisher.publish(handler.state())
             _proc_sleep = max_duration - (time.time() - proc_start)
             if _proc_sleep < 0:
