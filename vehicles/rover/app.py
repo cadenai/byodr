@@ -90,6 +90,7 @@ class TwistHandler(object):
             self._steer_calibration_shift = _steer_shift
             self._throttle_calibration_shift = _throttle_shift
             self._throttle_forward_scale = float(cfg.get('platform.throttle.forward.scale'))
+            self._throttle_forward_shift = float(cfg.get('platform.throttle.forward.shift'))
             self._throttle_backward_scale = float(cfg.get('platform.throttle.backward.scale'))
             logger.info("Calibration steer, throttle is {:2.2f}, {:2.2f}.".format(_steer_shift, _throttle_shift))
         except TypeError:
@@ -100,7 +101,8 @@ class TwistHandler(object):
         # First shift.
         _steering += self._steer_calibration_shift
         _throttle += self._throttle_calibration_shift
-        # Then scale.
+        # Then scale and handle the dead-zone when forwards.
+        _throttle = _throttle if _throttle < 0 else (_throttle + self._throttle_forward_shift)
         _throttle = (_throttle * self._throttle_backward_scale) if _throttle < 0 else (_throttle * self._throttle_forward_scale)
         # Protect boundaries.
         _steering = int(max(-1, min(1, _steering)) * 180 / 2 + 90)
