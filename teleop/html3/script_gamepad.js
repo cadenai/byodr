@@ -72,7 +72,7 @@ var PS4StandardController = extend(NoneController, {
     }
 });
 
-var Xbox360Controller = extend(NoneController, {
+var Xbox360StandardController = extend(NoneController, {
     threshold: 0.18,
     scale: 0.5,
 
@@ -98,6 +98,29 @@ var Xbox360Controller = extend(NoneController, {
     }
 });
 
+var PS4Controller = extend(NoneController, {
+    threshold: 0.05,
+    scale: 0.5,
+
+    poll: function() {
+        pad = this.gamepad();
+        this.steering = this.collapse(pad.axes[2], this.threshold) * this.scale;
+        accelerate = pad.buttons[6].value;
+        brake = pad.buttons[7].value;
+        this.throttle = brake > 0.01 ? -1 * brake : accelerate;
+        this.button_y = pad.buttons[3].value;
+        this.button_b = pad.buttons[2].value;
+        this.button_x = pad.buttons[0].value;
+        this.button_a = pad.buttons[1].value;
+        this.button_left = pad.buttons[4].value;
+        this.button_right = pad.buttons[5].value;
+        this.button_center = pad.buttons[13].value;
+        this.arrow_up = pad.buttons[14].value;
+        this.arrow_down = pad.buttons[15].value;
+        return true;
+    }
+});
+
 var gamepad_controller = {
     controller: Object.create(NoneController),
 
@@ -106,14 +129,16 @@ var gamepad_controller = {
         // Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)
         var gid = gamepad.id;
         var result = null;
-        if (gamepad.mapping == 'standard') {
-            if (gid.includes('45e')) {
-                result = Object.create(Xbox360StandardController);
-            } else if (gid.includes('54c')) {
-                result = Object.create(PS4StandardController);
-            }
+        if (gamepad.mapping == 'standard' && gid.includes('45e')) {
+            result = Object.create(Xbox360StandardController);
+        } else if (gamepad.mapping == 'standard' && gid.includes('54c')) {
+            result = Object.create(PS4StandardController);
+        } else if (gid.includes('54c')) {
+            result = Object.create(PS4Controller);
         }
-        result.gamepad_index = gamepad.index;
+        if (result) {
+            result.gamepad_index = gamepad.index;
+        }
         return result;
     },
 

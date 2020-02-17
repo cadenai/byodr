@@ -5,9 +5,11 @@ window.addEventListener("gamepaddisconnected", function(e) { gamepad_controller.
 gamepad_controller.capture = function() {
     gc = gamepad_controller;
     ct = gc.controller;
+    msg = {};
     if (ct.poll()) {
-        // Skip button message content when not pressed to save bandwidth.
-        msg = {steering: ct.steering, throttle: ct.throttle};
+        // Skip buttons when not pressed to save bandwidth.
+        msg.steering = ct.steering;
+        msg.throttle = ct.throttle;
         if (ct.button_center) {
             msg.button_back = ct.button_center;
         }
@@ -35,10 +37,8 @@ gamepad_controller.capture = function() {
         if (ct.arrow_down) {
             msg.arrow_down = ct.arrow_down;
         }
-        gc.socket.send(JSON.stringify(msg));
-//    } else {
-//        gc.socket.close();
     }
+    gc.socket.send(JSON.stringify(msg));
 }
 socket_utils.create_socket("/ws/ctl", false, 1000, function(ws) {
     gamepad_controller.socket = ws;

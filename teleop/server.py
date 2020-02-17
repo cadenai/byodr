@@ -193,14 +193,14 @@ class FFMPegThread(threading.Thread):
                 time.sleep(.100)
         height, width = _shape[:2]
         process = ffmpeg.input('pipe:', format='rawvideo', pix_fmt='bgr24', s='{}x{}'.format(width, height))
-        process = process.output('pipe:', format='mpegts', vcodec='mpeg1video', s='480x320', video_bitrate='1000k', bf=0)
+        process = process.output('pipe:', format='mpegts', vcodec='mpeg1video', s='480x320',
+                                 video_bitrate='1024', tune='zerolatency', fflags='nobuffer')
         while not self._quit_event.is_set():
             try:
                 img = self._capture()
                 if img is not None and self.consumers:
                     frame, err = process.run(capture_stdout=True, capture_stderr=True, input=img.astype(np.uint8).tobytes())
                     [c(frame) for c in self.consumers]
-                time.sleep(.040)
             except StandardError as e:
                 logger.error("Trace: {}".format(traceback.format_exc(e)))
                 time.sleep(1)
