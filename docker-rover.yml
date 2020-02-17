@@ -29,25 +29,6 @@ services:
       - '/dev/nvmap'
       - '/dev/nvhost-gpu'
       - '/dev/nvhost-as-gpu'
-#  jsmpeg:
-#    user: '1000'
-#    build:
-#      context: ./
-#      dockerfile: vehicles/rover/Dockerfile.jsmpeg
-#    image: byodr/jsmpeg_server
-#    container_name: byodr_jsmpeg
-#    ports:
-#      - "9501-9502:9501-9502"
-#    command: node websocket-relay.js yeppr 9501 9502
-#    stop_signal: SIGKILL
-#  ffmpeg:
-#    user: '1000'
-#    image: itlabstar/ffmpeg
-#    container_name: byodr_ffmpeg
-#    depends_on:
-#      - jsmpeg
-#    restart: unless-stopped
-#    command: ffmpeg -i rtsp://user1:HelloUser1@192.168.50.64:554/Streaming/Channels/102 -preset ultrafast -f mpegts -codec:v mpeg1video -s 480x320 -b:v 1000k -bf 0 http://byodr_jsmpeg:9501/yeppr -async 1 -vsync 1
   vehicle:
     user: '1000'
     build:
