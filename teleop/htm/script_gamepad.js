@@ -72,7 +72,7 @@ var PS4StandardController = extend(NoneController, {
     }
 });
 
-var Xbox360StandardController = extend(NoneController, {
+var Xbox360Controller = extend(NoneController, {
     threshold: 0.18,
     scale: 0.5,
 
@@ -133,6 +133,8 @@ var gamepad_controller = {
             result = Object.create(Xbox360StandardController);
         } else if (gamepad.mapping == 'standard' && gid.includes('54c')) {
             result = Object.create(PS4StandardController);
+        } else if (gid.includes('45e')) {
+            result = Object.create(Xbox360Controller);
         } else if (gid.includes('54c')) {
             result = Object.create(PS4Controller);
         }

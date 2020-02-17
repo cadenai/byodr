@@ -55,7 +55,7 @@ def main():
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/(.*)", web.StaticFileHandler, {
-                'path': os.path.join(os.environ.get('TELEOP_HOME'), 'html3'),
+                'path': os.path.join(os.environ.get('TELEOP_HOME'), 'htm'),
                 'default_filename': 'index.htm'
             })
         ])
