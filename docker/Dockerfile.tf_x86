@@ -1,5 +1,5 @@
 # docker build -f Dockerfile.tf_x86 -t byodr/tf .
-FROM tensorflow/tensorflow:1.15.0-gpu
+FROM tensorflow/tensorflow:1.9.0-gpu
 
 ENV TZ=Europe/Amsterdam
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone

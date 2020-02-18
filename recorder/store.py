@@ -1,9 +1,9 @@
 import StringIO
+import datetime
 import io
 import logging
 import multiprocessing
 import os
-import time
 import zipfile
 from abc import ABCMeta, abstractmethod
 
@@ -89,7 +89,7 @@ class ZipDataSource(AbstractDataSource):
                 return
             self._running = True
             self._read_only = session is not None
-            session = str(int(time.time() * 1e6)) if session is None else session
+            session = datetime.datetime.today().strftime('%Y%b%dT%H%M_%S%s') if session is None else session
             self._session = session
             _filename = os.path.join(self._directory, session + '.zip')
             if self._read_only:
