@@ -29,6 +29,7 @@ class OriginType(ClassificationType):
     DAGGER = 'src.dagger'  # Human expert recorded under dropout dagger.
     CRUISE_CONTROL = 'src.cruise'  # Determined in an automatic fashion.
     DNN = 'src.dnn'  # Determined by an automated model.
+    DNN_PRE_INTERVENTION = 'src.dnn.pre-intervention'
     ANALYSED = 'src.analysed'
     AUGMENTED = 'src.augmented'
     OPEN_AI_DEEPDRIVE = 'src.open_ai.deepdrive'
@@ -326,6 +327,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
 
     def __init__(self):
         super(DeepNetworkDriver, self).__init__('driver_mode.inference.dnn')
+        self._piv_count = 0
 
     def set_config(self, **kwargs):
         super(DeepNetworkDriver, self).set_config(**kwargs)
@@ -358,9 +360,17 @@ class DeepNetworkDriver(AbstractCruiseControl):
         # Handle steering.
         _use_expert_steering = blob.forced_steering
         if _use_expert_steering or blob.forced_acceleration:
-            steering, steering_driver = blob.steering, (OriginType.DAGGER if _dagger else OriginType.CONSOLE)
+            # Any intervention type is sufficient to set the steering coming in from the user.
+            steering = blob.steering
+            # Mark the first few interventions as such.
+            if self._piv_count > 1:
+                steering_driver = (OriginType.DAGGER if _dagger else OriginType.CONSOLE)
+            else:
+                self._piv_count += 1
+                steering_driver = OriginType.DNN_PRE_INTERVENTION
         else:
             steering, steering_driver = action_out, OriginType.DNN
+            self._piv_count = 0
         blob.steering = self._apply_dead_zone(steering, dead_zone=0)
         blob.steering_driver = steering_driver
         blob.save_event = _use_expert_steering or _speed_intervention
