@@ -81,7 +81,7 @@ class EventHandler(object):
             self._active = False
             self._recorder = self._instance(_driver)
             self._recorder.start()
-        if self._active and blob.get('save_event', False):
+        if self._active:
             self._recorder.do_record(to_event(blob, vehicle, image))
 
 
