@@ -1,4 +1,6 @@
 {
+# Scale incoming steering commands.
+"driver.steering.teleop.scale": 0.5,
 # Type of throttle control - direct or pid.
 "driver.cc.control.type": "direct",
 "driver.cc.static.gear.step": 0.10,

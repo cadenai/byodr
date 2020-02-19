@@ -14,7 +14,9 @@ var NoneController = {
     arrow_down: 0,
 
     collapse: function(value, zone=0) {
-        return Math.abs(value) <= zone ? 0 : value > 0 ? value - zone : value + zone;
+        result = Math.abs(value) <= zone ? 0 : value > 0 ? value - zone : value + zone;
+        // Scale back.
+        return result / (1 - zone);
     },
 
     gamepad: function() {
@@ -28,11 +30,10 @@ var NoneController = {
 
 var Xbox360StandardController = extend(NoneController, {
     threshold: 0.18,
-    scale: 0.5,
 
     poll: function() {
         pad = this.gamepad();
-        this.steering = this.collapse(pad.axes[2], this.threshold) * this.scale;
+        this.steering = this.collapse(pad.axes[2], this.threshold);
         accelerate = pad.buttons[6].value;
         brake = pad.buttons[7].value;
         this.throttle = brake > 0.01 ? -1 * brake : accelerate;
@@ -51,11 +52,10 @@ var Xbox360StandardController = extend(NoneController, {
 
 var PS4StandardController = extend(NoneController, {
     threshold: 0.05,
-    scale: 0.5,
 
     poll: function() {
         pad = this.gamepad();
-        this.steering = this.collapse(pad.axes[2], this.threshold) * this.scale;
+        this.steering = this.collapse(pad.axes[2], this.threshold);
         accelerate = pad.buttons[6].value;
         brake = pad.buttons[7].value;
         this.throttle = brake > 0.01 ? -1 * brake : accelerate;
@@ -74,11 +74,10 @@ var PS4StandardController = extend(NoneController, {
 
 var Xbox360Controller = extend(NoneController, {
     threshold: 0.18,
-    scale: 0.5,
 
     poll: function() {
         pad = this.gamepad();
-        this.steering = this.collapse(pad.axes[3], this.threshold) * this.scale;
+        this.steering = this.collapse(pad.axes[3], this.threshold);
         accelerate = pad.axes[2];
         brake = pad.axes[5];
         // Before activation of these axes their values are exactly zero.
@@ -100,11 +99,10 @@ var Xbox360Controller = extend(NoneController, {
 
 var PS4Controller = extend(NoneController, {
     threshold: 0.05,
-    scale: 0.5,
 
     poll: function() {
         pad = this.gamepad();
-        this.steering = this.collapse(pad.axes[2], this.threshold) * this.scale;
+        this.steering = this.collapse(pad.axes[2], this.threshold);
         accelerate = pad.buttons[6].value;
         brake = pad.buttons[7].value;
         this.throttle = brake > 0.01 ? -1 * brake : accelerate;
@@ -135,8 +133,10 @@ var gamepad_controller = {
             result = Object.create(PS4StandardController);
         } else if (gid.includes('45e')) {
             result = Object.create(Xbox360Controller);
-        } else if (gid.includes('54c')) {
-            result = Object.create(PS4Controller);
+        //
+        // Not to be used yet because the triggers are interpreted as binary which results in zero or max throttle.
+        // } else if (gid.includes('54c')) {
+        //    result = Object.create(PS4Controller);
         }
         if (result) {
             result.gamepad_index = gamepad.index;

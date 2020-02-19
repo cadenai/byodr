@@ -378,6 +378,7 @@ class DriverManager(object):
         self._pilot_state = PilotState()
         self._driver_cache = {}
         self._lock = multiprocessing.RLock()
+        self._principal_steer_scale = 0
         self._cruise_speed_step = 0
         self._steering_stabilizer = IgnoreDifferences()
         self._driver = None
@@ -385,6 +386,7 @@ class DriverManager(object):
         self.switch_ctl()
 
     def _config(self, **kwargs):
+        self._principal_steer_scale = float(kwargs['driver.steering.teleop.scale'])
         self._cruise_speed_step = float(kwargs['driver.cc.static.gear.step'])
         self._steering_stabilizer = IgnoreDifferences(threshold=float(kwargs['driver.handler.steering.diff.threshold']))
 
@@ -457,6 +459,7 @@ class DriverManager(object):
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         **command)
+            blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
             blob.steering = self._steering_stabilizer.calculate(blob.steering)
         return blob
