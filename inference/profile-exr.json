@@ -1,0 +1,19 @@
+{
+# Images for inference.
+"dnn.image.transform.dave": "dave__exr1",
+"dnn.image.transform.alex": "alex__exr1",
+# Dagger.
+"driver.dnn.dagger.conv.dropout": 0.2,
+# Autopilot.
+"driver.dnn.steering.scale.left": -0.492001,
+"driver.dnn.steering.scale.right": 0.5739787,
+"driver.dnn.obstacle.scale.min": 0.0,
+"driver.dnn.obstacle.scale.max": 0.10,
+"driver.dnn.steer.corridor.scale.min": 0.0,
+"driver.dnn.steer.corridor.scale.max": 0.030,
+"driver.autopilot.filter.momentum.up": 1.0,
+"driver.autopilot.filter.momentum.down": 0.35,
+"driver.autopilot.filter.ceiling": 2.0,
+# Navigation.
+"navigation.point.similarity.threshold": 0.699
+}

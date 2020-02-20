@@ -1,4 +1,6 @@
 {
+# Height by width.
+"recorder.image.persist.scale": "240x320",
 "recorder.constant.vehicle.type": "vehicle.carla.car.tesla.model3",
 "recorder.constant.vehicle.config": "0.9.6_a"
 }

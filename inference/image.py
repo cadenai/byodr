@@ -31,10 +31,33 @@ def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=T
     return image
 
 
+def _exr_dave_img(image):
+    frame = np.zeros((240, 320, 3), dtype=np.uint8)
+    frame[:190, :, :] = image[50:240, :, :]
+    frame[190:, :, :] = image[-190:-140, :, :]
+    return caffe_dave_200_66(frame)
+
+
+def _exr_alex_img(image, top=True):
+    return hwc_alexnet(image[:240] if top else image[-240:])
+
+
+class Alternator(object):
+    def __init__(self, f1, f2):
+        self.f_list = [f1, f2]
+        self.index = 0
+
+    def __call__(self, *args, **kwargs):
+        self.index = 0 if self.index == 1 else 1
+        return self.f_list[self.index](*args, **kwargs)
+
+
 _registered_functions = {
     'alex__227_227': partial(hwc_alexnet),
     'dave__320_240__200_66__0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(0, 0, 0, 0)),
-    'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0))
+    'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0)),
+    'dave__exr1': partial(_exr_dave_img),
+    'alex__exr1': Alternator(partial(_exr_alex_img, top=True), partial(_exr_alex_img, top=False))
 }
 
 

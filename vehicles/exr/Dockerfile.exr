@@ -1,0 +1,44 @@
+# docker build -f vehicles/exr/Dockerfile.exr -t byodr/vehicle_exr .
+FROM byodr/ros_melodic
+
+# ueye
+# on the host disable the usb daemon: sudo update-rc.d ueyeusbdrc disable
+# in the container the ueyeusbdrc must be started manually since containers do not use initd nor systemd.
+# use privilegd, or capabilities
+# and even when priviliged mount volume /dev/ueye:/dev/ueye
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    usbutils \
+    udev \
+    libpopt-dev \
+    net-tools \
+    iproute2 \
+    kmod \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY ./common common/
+COPY ./docker/deps deps/
+COPY ./vehicles/exr app/
+
+#RUN git clone https://github.com/jetsonhacks/buildJetsonTX2Kernel.git \
+#  && git checkout vL4T28.2 \
+#  && cd buildJetsonTX2Kernel \
+#  && ./getKernelSources.sh
+
+#RUN cd /deps/peak-linux-driver-8.9.3 \
+#  && make KERNEL_LOCATION=/deps/linux-headers-4.4.38-tegra clean \
+#  && make KERNEL_LOCATION=/deps/linux-headers-4.4.38-tegra \
+#  && make KERNEL_LOCATION=/deps/linux-headers-4.4.38-tegra install
+
+WORKDIR /app
+RUN /bin/cp exr_entry.sh /exr_entry.sh \
+  && /bin/bash -c "chmod +x /exr_entry.sh"
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+RUN /deps/ueye_4.92.0.0_arm64.run --auto \
+  && ueyesetup -i usb
+
+RUN useradd --uid 1000 --gid 1000 --system --create-home --shell /bin/bash app
+
+ENTRYPOINT ["/exr_entry.sh"]

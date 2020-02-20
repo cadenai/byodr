@@ -51,6 +51,9 @@ class EventHandler(object):
         self._directory = directory
         self._vehicle = kwargs.get('recorder.constant.vehicle.type')
         self._config = kwargs.get('recorder.constant.vehicle.config')
+        _im_height, _im_width = kwargs.get('recorder.image.persist.scale').split('x')
+        self._im_height = int(_im_height)
+        self._im_width = int(_im_width)
         self._active = False
         self._driver = None
         self._recorder = get_or_create_recorder(directory=directory, mode=None)
@@ -82,6 +85,8 @@ class EventHandler(object):
             self._recorder = self._instance(_driver)
             self._recorder.start()
         if self._active:
+            if image.shape != (self._im_height, self._im_width, 3):
+                image = cv2.resize(image, (self._im_width, self._im_height))
             self._recorder.do_record(to_event(blob, vehicle, image))
 
 
@@ -127,7 +132,7 @@ def main():
                 blob_time, image_time = blob.get('time'), image_md.get('time')
                 _now = time.time()
                 if (_now - blob_time) < _patience and (_now - image_time) < _patience:
-                    handler.record(blob, vehicle.get_latest(), cv2.resize(image, (320, 240)))
+                    handler.record(blob, vehicle.get_latest(), image)
             state_publisher.publish(handler.state())
             _proc_sleep = max_duration - (time.time() - proc_start)
             if _proc_sleep < 0:

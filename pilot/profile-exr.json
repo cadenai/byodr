@@ -1,0 +1,20 @@
+{
+# Scale incoming steering commands.
+"driver.steering.teleop.scale": 0.60,
+# Type of throttle control - direct or pid.
+"driver.cc.control.type": "direct",
+"driver.cc.static.gear.step": 0.5,
+"driver.cc.static.speed.max": 3.0,
+"driver.cc.static.speed.min": 0.49,
+# Direct settings - not used on pid control.
+"driver.throttle.direct.up.momentum": 0.25,
+"driver.throttle.direct.down.momentum": 0.90,
+# Pid settings - not used on direct control.
+"driver.cc.stop.pid_controller.p": 0,
+"driver.cc.throttle.pid_controller.p": 0.0,
+"driver.cc.throttle.pid_controller.i": 0.0,
+"driver.cc.throttle.pid_controller.d": 0.0,
+# Steering.
+# The threshold is used to bin values.
+"driver.handler.steering.diff.threshold": 0.0
+}
