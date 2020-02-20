@@ -1,11 +1,17 @@
 # docker build -f vehicles/exr/Dockerfile.exr -t byodr/vehicle_exr .
 FROM byodr/ros_melodic
 
+#
 # ueye
 # on the host disable the usb daemon: sudo update-rc.d ueyeusbdrc disable
-# in the container the ueyeusbdrc must be started manually since containers do not use initd nor systemd.
+# in the container the ueyeusbdrc must be script started since containers do not use initd nor systemd.
 # use privilegd, or capabilities
-# and even when priviliged mount volume /dev/ueye:/dev/ueye
+# container mount volume /dev/ueye:/dev/ueye
+#
+# pcan
+# use privilegd, or capabilities
+# container mount pcan devices as volumes and provide access to the compiled libpcan* via LD_LIBRARY_PATH
+#
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     usbutils \
@@ -19,16 +25,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY ./common common/
 COPY ./docker/deps deps/
 COPY ./vehicles/exr app/
-
-#RUN git clone https://github.com/jetsonhacks/buildJetsonTX2Kernel.git \
-#  && git checkout vL4T28.2 \
-#  && cd buildJetsonTX2Kernel \
-#  && ./getKernelSources.sh
-
-#RUN cd /deps/peak-linux-driver-8.9.3 \
-#  && make KERNEL_LOCATION=/deps/linux-headers-4.4.38-tegra clean \
-#  && make KERNEL_LOCATION=/deps/linux-headers-4.4.38-tegra \
-#  && make KERNEL_LOCATION=/deps/linux-headers-4.4.38-tegra install
 
 WORKDIR /app
 RUN /bin/cp exr_entry.sh /exr_entry.sh \
