@@ -107,7 +107,7 @@ class CanBusThread(threading.Thread):
         self._bus_name = bus
         self._ms = 1. / frequency
         self._quit_event = event
-        self._queue = collections.deque(maxlen=2)
+        self._queue = collections.deque(maxlen=1)
         self._bus = NoneBus()
         self.reset()
 
@@ -118,18 +118,25 @@ class CanBusThread(threading.Thread):
         elif name.lower() == 'pcan':
             self._bus = can.ThreadSafeBus(bustype='pcan', bitrate=PEAK_CAN_BIT_RATE)
         else:
-            self._bus = can.ThreadSafeBus(bustype='socketcan', channel=name, bitrate=500000)
+            self._bus = can.ThreadSafeBus(bustype='socketcan', channel=name, bitrate=PEAK_CAN_BIT_RATE)
 
-    def reset(self):
-        try:
-            self._bus.shutdown()
-            self._create_bus()
-            init_drives(self._bus)
-            param_drives(self._bus)
-        except CanError as e:
-            logger.warn("Reset failed with '{}'.".format(e))
+    def _reset_once(self):
+        self._bus.shutdown()
+        self._create_bus()
+        init_drives(self._bus)
+        param_drives(self._bus)
+
+    def reset(self, tries=0):
         self.set_command()
-        logger.info("Reset successful.")
+        while tries < 4:
+            try:
+                self._reset_once()
+                logger.info("Reset successful.")
+                break
+            except CanError as e:
+                logger.warn("Reset failed with '{}'.".format(e))
+                tries += 1
+                time.sleep(1)
 
     def set_command(self, steering=0., throttle=0.):
         self._queue.appendleft((steering, throttle))
@@ -141,7 +148,6 @@ class CanBusThread(threading.Thread):
                 time.sleep(self._ms)
             except CanError as be:
                 logger.error(be)
-                time.sleep(1)
                 self.reset()
 
     def quit(self):
@@ -274,5 +280,5 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(format=log_format)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     main()
