@@ -193,7 +193,7 @@ def main():
         state_publisher.publish(vehicle.state())
         time.sleep(_period)
 
-    logger.info("Waiting on threads to stop.")
+    logger.info("Waiting on stream source to close.")
     gst_source.close()
 
     logger.info("Waiting on threads to stop.")
