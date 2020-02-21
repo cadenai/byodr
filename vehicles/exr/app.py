@@ -28,7 +28,7 @@ quit_event = multiprocessing.Event()
 CAMERA_SHAPE = (240, 320, 3)
 
 PEAK_CAN_BIT_RATE = 100000
-CAN_BUS_HZ = 25
+CAN_BUS_HZ = 20
 
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
 signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
