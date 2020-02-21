@@ -11,7 +11,8 @@ services:
       - teleop:rw
     volumes:
       - ./common:/common
+      - ./docker/deps:/deps
       - ./vehicles/carla09:/app
-    command: python app.py --remote=${DC_CARLA_REMOTE} --clock=${DC_VEHICLE_HZ} --patience=${DC_TELEOP_PATIENCE}
+    command: python app.py --config=${DC_CONFIG_FILES}
 
 

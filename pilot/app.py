@@ -4,6 +4,7 @@ import multiprocessing
 import signal
 import time
 import traceback
+from ConfigParser import SafeConfigParser
 
 from byodr.utils.ipc import ReceiverThread, JSONPublisher
 from pilot import DriverManager, CommandProcessor
@@ -23,13 +24,22 @@ def _interrupt():
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, default=50, help='Clock frequency in hz.')
-    parser.add_argument('--patience', type=float, default=.100, help='Maximum age of a command before it is considered stale.')
     args = parser.parse_args()
 
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in args.config.split(',')]
+    cfg = dict(parser.items('pilot'))
+    for key in sorted(cfg):
+        logger.info("{} = {}".format(key, cfg[key]))
+
+    # Determine the process frequency - we have no control over the frequency of the teleop inputs.
+    _process_frequency = int(cfg.get('clock.hz'))
+    _patience = float(cfg.get('patience.ms')) / 1000
+    logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience * 1000))
+    max_duration = 1. / _process_frequency
+
     threads = []
-    _patience = args.patience
-    controller = CommandProcessor(driver=DriverManager(config_file=args.config), patience=_patience)
+    controller = CommandProcessor(driver=DriverManager(**cfg), patience=_patience)
     publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
@@ -38,11 +48,6 @@ def main():
     threads.append(vehicle)
     threads.append(inference)
     [t.start() for t in threads]
-
-    # Determine the process frequency - we have no control over the frequency of the teleop inputs.
-    _process_frequency = args.clock
-    logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience * 1000))
-    max_duration = 1. / _process_frequency
 
     # Teleop commands or states can be none or stale when not connected or slow - default to noop.
     while not quit_event.is_set():
@@ -57,7 +62,7 @@ def main():
             _proc_sleep = max_duration - (time.time() - _ts)
             if _proc_sleep < 0:
                 logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
-            time.sleep(max(0, _proc_sleep))
+            time.sleep(max(0., _proc_sleep))
         except Exception as e:
             logger.error("{}".format(traceback.format_exc(e)))
             quit_event.set()

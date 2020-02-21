@@ -1,6 +1,0 @@
-{
-# Height by width.
-"recorder.image.persist.scale": "480x320",
-"recorder.constant.vehicle.type": "vehicle.can.exr1",
-"recorder.constant.vehicle.config": "2020a"
-}

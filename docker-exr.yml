@@ -33,6 +33,6 @@ services:
       - /dev/pcan32:/dev/pcan32
       - /dev/pcan-usb:/dev/pcan-usb
       - /dev/pcanusb32:/dev/pcanusb32
-    command: python app.py --can=pcan --clock=${DC_VEHICLE_HZ} --patience=${DC_TELEOP_PATIENCE}
+    command: python app.py --config=${DC_CONFIG_FILES}
 
 

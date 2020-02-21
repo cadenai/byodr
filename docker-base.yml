@@ -27,7 +27,7 @@ services:
     volumes:
       - ./common:/common
       - ./pilot:/app
-    command: python app.py --config=/app/${DC_JSON_CONFIG} --clock=${DC_PILOT_HZ} --patience=${DC_TELEOP_PATIENCE}
+    command: python app.py --config=${DC_CONFIG_FILES}
   recorder:
     user: '1000'
     build:
@@ -41,7 +41,7 @@ services:
       - ./common:/common
       - ./recorder:/app
       - ${DC_RECORDER_SESSIONS}:/sessions
-    command: python app.py --sessions=/sessions --config=/app/${DC_JSON_CONFIG} --clock=${DC_RECORDER_HZ}
+    command: python app.py --sessions=/sessions --config=${DC_CONFIG_FILES}
   inference:
     user: '1000'
     build:
@@ -55,6 +55,6 @@ services:
       - ./common:/common
       - ./inference:/app
       - ${DC_INFERENCE_MODELS}:/models
-    command: python app.py --models=/models --config=/app/${DC_JSON_CONFIG} --gpu=${DC_INFERENCE_GPU} --clock=${DC_INFERENCE_HZ}
+    command: python app.py --models=/models --config=${DC_CONFIG_FILES}
 
 

@@ -1,14 +1,13 @@
 import argparse
-import json
 import logging
 import multiprocessing
 import os
 import signal
 import time
 import traceback
+from ConfigParser import SafeConfigParser
 
 import cv2
-from jsoncomment import JsonComment
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
 from recorder import get_or_create_recorder
@@ -49,9 +48,9 @@ def to_event(blob, vehicle, image):
 class EventHandler(object):
     def __init__(self, directory, **kwargs):
         self._directory = directory
-        self._vehicle = kwargs.get('recorder.constant.vehicle.type')
-        self._config = kwargs.get('recorder.constant.vehicle.config')
-        _im_height, _im_width = kwargs.get('recorder.image.persist.scale').split('x')
+        self._vehicle = kwargs.get('constant.vehicle.type')
+        self._config = kwargs.get('constant.vehicle.config')
+        _im_height, _im_width = kwargs.get('image.persist.scale').split('x')
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
         self._active = False
@@ -94,20 +93,19 @@ def main():
     parser = argparse.ArgumentParser(description='Recorder.')
     parser.add_argument('--sessions', type=str, required=True, help='Sessions directory.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, required=True, help='Clock frequency in hz.')
-    parser.add_argument('--patience', type=float, default=.050, help='Maximum age of an event before it is considered stale.')
     args = parser.parse_args()
 
     sessions_dir = os.path.expanduser(args.sessions)
     assert os.path.exists(sessions_dir), "Cannot use sessions directory '{}'".format(sessions_dir)
 
-    with open(args.config, 'r') as cfg_file:
-        cfg = JsonComment(json).loads(cfg_file.read())
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in args.config.split(',')]
+    cfg = dict(parser.items('recorder'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))
 
-    _process_frequency = args.clock
-    _patience = args.patience
+    _process_frequency = int(cfg.get('clock.hz'))
+    _patience = float(cfg.get('patience.ms')) / 1000
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
     max_duration = 1. / _process_frequency
 
@@ -137,7 +135,7 @@ def main():
             _proc_sleep = max_duration - (time.time() - proc_start)
             if _proc_sleep < 0:
                 logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
-            time.sleep(max(0, _proc_sleep))
+            time.sleep(max(0., _proc_sleep))
     except KeyboardInterrupt:
         quit_event.set()
     except StandardError as e:

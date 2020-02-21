@@ -7,6 +7,7 @@ import signal
 import struct
 import threading
 import time
+from ConfigParser import SafeConfigParser
 from functools import partial
 
 import can
@@ -240,25 +241,31 @@ class TwistHandler(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Exr main.')
-    parser.add_argument('--clock', type=int, required=True, help='Main loop frequency in hz.')
-    parser.add_argument('--patience', type=float, default=.100, help='Maximum age of a command before it is considered stale.')
-    parser.add_argument('--can', type=str, default='none', help='CAN interface name')
-
+    parser.add_argument('--config', type=str, required=True, help='Config file location.')
     args = parser.parse_args()
+
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in args.config.split(',')]
+    cfg = dict(parser.items('vehicle'))
+    cfg.update(dict(parser.items('platform')))
+    for key in sorted(cfg):
+        logger.info("{} = {}".format(key, cfg[key]))
+
+    _process_frequency = int(cfg.get('clock.hz'))
+    _patience = float(cfg.get('patience.ms')) / 1000
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
-    vehicle = TwistHandler(bus_name=args.can, fn_callback=(lambda im: image_publisher.publish(im)))
+    _interface = cfg.get('can.interface')
+    vehicle = TwistHandler(bus_name=_interface, fn_callback=(lambda im: image_publisher.publish(im)))
     threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     threads.append(pilot)
     [t.start() for t in threads]
 
-    _hz = args.clock
-    _patience = args.patience
-    _period = 1. / _hz
-    logger.info("Running at {} hz.".format(_hz))
+    _period = 1. / _process_frequency
     while not quit_event.is_set():
         command = pilot.get_latest()
         _command_time = 0 if command is None else command.get('time')

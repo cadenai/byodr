@@ -1,4 +1,3 @@
-import json
 import logging
 import multiprocessing
 import threading
@@ -8,7 +7,6 @@ from abc import ABCMeta, abstractmethod
 
 import cachetools
 import pid_controller.pid as pic
-from jsoncomment import JsonComment
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +109,8 @@ class AbstractDriverBase(object):
         self._previous_config = None
 
     def set_config(self, **kwargs):
-        # Print the changes in configuration or all when not previous configuration is known.
-        entries = kwargs.keys()
+        # Print the changes in configuration when the previous configuration is known.
+        entries = []
         if self._previous_config is not None:
             entries = filter(lambda k: kwargs.get(k, None) != self._previous_config.get(k, None), kwargs.keys())
         for key in sorted(entries):
@@ -383,22 +381,17 @@ class PilotState(object):
 
 
 class DriverManager(object):
-    def __init__(self, config_file):
-        self._config_file = config_file
-        self._pilot_state = PilotState()
-        self._driver_cache = {}
-        self._lock = multiprocessing.RLock()
-        self._principal_steer_scale = 0
-        self._cruise_speed_step = 0
-        self._steering_stabilizer = IgnoreDifferences()
-        self._driver = None
-        self._driver_ctl = None
-        self.switch_ctl()
-
-    def _config(self, **kwargs):
+    def __init__(self, **kwargs):
+        self._settings = kwargs
         self._principal_steer_scale = float(kwargs['driver.steering.teleop.scale'])
         self._cruise_speed_step = float(kwargs['driver.cc.static.gear.step'])
         self._steering_stabilizer = IgnoreDifferences(threshold=float(kwargs['driver.handler.steering.diff.threshold']))
+        self._pilot_state = PilotState()
+        self._driver_cache = {}
+        self._lock = multiprocessing.RLock()
+        self._driver = None
+        self._driver_ctl = None
+        self.switch_ctl()
 
     def _get_driver(self, control=None):
         if control in self._driver_cache:
@@ -420,10 +413,7 @@ class DriverManager(object):
         try:
             self._lock.acquire()
             if self._driver is not None:
-                with open(self._config_file, 'r') as cfg_file:
-                    cfg = JsonComment(json).loads(cfg_file.read())
-                self._config(**cfg)
-                self._driver.set_config(**cfg)
+                self._driver.set_config(**self._settings)
                 self._driver.activate()
         except Exception as e:
             logger.error("Driver activation: {}".format(traceback.format_exc(e)))

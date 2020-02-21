@@ -1,16 +1,16 @@
 import argparse
 import collections
-import json
 import logging
 import multiprocessing
 import signal
 import sys
 import time
+import traceback
+from ConfigParser import SafeConfigParser
 
 import numpy as np
 import rospy
 from geometry_msgs.msg import Twist, TwistStamped
-from jsoncomment import JsonComment
 
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
 from video import GstRawSource
@@ -77,25 +77,24 @@ class FakeGate(RosGate):
 
 
 class TwistHandler(object):
-    def __init__(self, config_file, ros_gate):
+    def __init__(self, ros_gate, **kwargs):
         super(TwistHandler, self).__init__()
         self._gate = ros_gate
         self._steer_calibration_shift = None
         self._throttle_calibration_shift = None
+        cfg = kwargs
         try:
-            with open(config_file, 'r') as cfg_file:
-                cfg = JsonComment(json).loads(cfg_file.read())
-            _steer_shift = float(cfg.get('platform.calibrate.steer.shift'))
-            _throttle_shift = float(cfg.get('platform.calibrate.throttle.shift'))
+            _steer_shift = float(cfg.get('calibrate.steer.shift'))
+            _throttle_shift = float(cfg.get('calibrate.throttle.shift'))
             self._steer_calibration_shift = _steer_shift
             self._throttle_calibration_shift = _throttle_shift
-            self._throttle_forward_scale = float(cfg.get('platform.throttle.forward.scale'))
-            self._throttle_forward_shift = float(cfg.get('platform.throttle.forward.shift'))
-            self._throttle_backward_scale = float(cfg.get('platform.throttle.backward.scale'))
+            self._throttle_forward_scale = float(cfg.get('throttle.forward.scale'))
+            self._throttle_forward_shift = float(cfg.get('throttle.forward.shift'))
+            self._throttle_backward_scale = float(cfg.get('throttle.backward.scale'))
             logger.info("Calibration steer, throttle is {:2.2f}, {:2.2f}.".format(_steer_shift, _throttle_shift))
-        except TypeError:
-            _sub_dict = {k: v for k, v in cfg.items() if k.startswith('platform')}
-            raise AssertionError("Please specify valid calibration values - not '{}'.".format(_sub_dict))
+        except TypeError as e:
+            logger.error(traceback.format_exc(e))
+            raise e
 
     def _scale(self, _throttle, _steering):
         # First shift.
@@ -145,12 +144,21 @@ def _ros_init():
 def main():
     parser = argparse.ArgumentParser(description='Rover main.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, required=True, help='Main loop frequency in hz.')
-    parser.add_argument('--patience', type=float, default=.100, help='Maximum age of a command before it is considered stale.')
-    parser.add_argument('--dry', default=False, type=lambda x: (str(x).lower() == 'true'), help='Dry run')
-
     args = parser.parse_args()
-    if args.dry:
+
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in args.config.split(',')]
+    cfg = dict(parser.items('vehicle'))
+    cfg.update(dict(parser.items('platform')))
+    for key in sorted(cfg):
+        logger.info("{} = {}".format(key, cfg[key]))
+
+    _process_frequency = int(cfg.get('clock.hz'))
+    _patience = float(cfg.get('patience.ms')) / 1000
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
+
+    dry_run = cfg.get('dry.run')
+    if dry_run:
         gate = FakeGate()
     else:
         _ros_init()
@@ -171,16 +179,13 @@ def main():
     gst_source = GstRawSource(fn_callback=_image, command=_url)
     gst_source.open()
 
-    vehicle = TwistHandler(config_file=args.config, ros_gate=gate)
+    vehicle = TwistHandler(ros_gate=gate, **cfg)
     threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     threads.append(pilot)
     [t.start() for t in threads]
 
-    _hz = args.clock
-    _patience = args.patience
-    _period = 1. / _hz
-    logger.info("Running at {} hz.".format(_hz))
+    _period = 1. / _process_frequency
     while not quit_event.is_set():
         command = pilot.get_latest()
         _command_time = 0 if command is None else command.get('time')

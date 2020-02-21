@@ -1,6 +1,0 @@
-{
-# Height by width.
-"recorder.image.persist.scale": "240x320",
-"recorder.constant.vehicle.type": "vehicle.ros.rover3.cam7a",
-"recorder.constant.vehicle.config": "2020a"
-}

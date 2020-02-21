@@ -1,7 +1,0 @@
-{
-# Hardware calibration constants.
-"platform.calibrate.steer.shift": 0.005,
-"platform.calibrate.throttle.shift": 0.30,
-"platform.throttle.forward.scale": 0.13,
-"platform.throttle.backward.scale": 0.30
-}

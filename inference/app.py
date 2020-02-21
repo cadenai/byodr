@@ -1,14 +1,13 @@
 import argparse
-import json
 import logging
 import multiprocessing
 import signal
 import time
 import traceback
+from ConfigParser import SafeConfigParser
 from functools import partial
 
 import numpy as np
-from jsoncomment import JsonComment
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
 from image import get_registered_function
@@ -105,17 +104,17 @@ def main():
     parser = argparse.ArgumentParser(description='Inference server.')
     parser.add_argument('--models', type=str, required=True, help='Directory with the inference models.')
     parser.add_argument('--config', type=str, required=True, help='Config file location.')
-    parser.add_argument('--clock', type=int, required=True, help='Clock frequency in hz.')
-    parser.add_argument('--gpu', type=int, default=0, help='GPU number')
     args = parser.parse_args()
 
-    with open(args.config, 'r') as cfg_file:
-        cfg = JsonComment(json).loads(cfg_file.read())
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in args.config.split(',')]
+    cfg = dict(parser.items('inference'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))
 
-    _process_frequency = args.clock
-    logger.info("Processing at {} Hz.".format(_process_frequency))
+    _gpu_id = int(cfg.get('gpu.id'))
+    _process_frequency = int(cfg.get('clock.hz'))
+    logger.info("Processing at {} Hz on gpu {}.".format(_process_frequency, _gpu_id))
     max_duration = 1. / _process_frequency
 
     threads = []
@@ -128,7 +127,7 @@ def main():
     [t.start() for t in threads]
 
     publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
-    runner = TFRunner(model_directory=args.models, gpu_id=args.gpu, **cfg)
+    runner = TFRunner(model_directory=args.models, gpu_id=_gpu_id, **cfg)
     try:
         while not quit_event.is_set():
             proc_start = time.time()
@@ -144,7 +143,7 @@ def main():
             _proc_sleep = max_duration - (time.time() - proc_start)
             if _proc_sleep < 0:
                 logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
-            time.sleep(max(0, _proc_sleep))
+            time.sleep(max(0., _proc_sleep))
     except KeyboardInterrupt:
         quit_event.set()
     except StandardError as e:

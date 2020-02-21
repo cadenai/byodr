@@ -10,7 +10,7 @@ services:
     volumes:
       - ./vehicles/rover:/app
     devices:
-      - ${DC_ROS_SERIAL_DEVICE}
+      - /dev/ttyACM0
     ports:
       - "11311:11311"
     command: roslaunch rosserial.launch
@@ -43,6 +43,6 @@ services:
       - ./vehicles/rover:/app
     environment:
       ROS_MASTER_URI: 'http://byodr_rover_ros:11311'
-    command: python app.py --config=/app/${DC_JSON_ROVER} --clock=${DC_VEHICLE_HZ} --patience=${DC_TELEOP_PATIENCE}
+    command: python app.py --config=${DC_CONFIG_FILES}
 
 
