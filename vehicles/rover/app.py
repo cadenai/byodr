@@ -157,7 +157,7 @@ def main():
     _patience = float(cfg.get('patience.ms')) / 1000
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
 
-    dry_run = cfg.get('dry.run')
+    dry_run = bool(int(cfg.get('dry.run')))
     if dry_run:
         gate = FakeGate()
     else:

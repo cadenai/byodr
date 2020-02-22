@@ -117,17 +117,19 @@ socket_utils.create_socket("/ws/log", false, 1000, function(ws) {
             }
         }
         //
-        var steer_penalty = command.debug1 < 1;
-        var str_command_ctl = command.ctl + '_' + steer_penalty;
+        var corridor_penalty = command.debug1;
+        var obstacle_penalty = command.debug2;
+        var total_penalty = corridor_penalty + obstacle_penalty;
+        var can_continue = total_penalty < 1;
+        var str_command_ctl = command.ctl + '_' + can_continue;
         if (view.command_ctl != str_command_ctl) {
             view.command_ctl = str_command_ctl;
-            el_steering_wheel.attr('src', 'im_wheel_a.png');
-            if (command.ctl == 5) {
-                if (steer_penalty) {
-                    el_steering_wheel.attr('src', 'im_wheel_b.png');
-                } else {
-                    el_steering_wheel.attr('src', 'im_wheel_c.png');
-                }
+            if (can_continue && command.ctl == 5) {
+                el_steering_wheel.attr('src', 'im_wheel_blue.png');
+            } else if (can_continue) {
+                el_steering_wheel.attr('src', 'im_wheel_black.png');
+            } else {
+                el_steering_wheel.attr('src', 'im_wheel_red.png');
             }
         }
         var display_rotation = Math.floor(command.ste * 90.0)

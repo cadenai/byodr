@@ -73,10 +73,12 @@ class EventHandler(object):
 
     def record(self, blob, vehicle, image):
         # Switch on automatically and then off only when the driver changes.
-        if not self._active and blob.get('cruise_speed') > 1e-3:
+        _driver = blob.get('driver')
+        _start_recorder_dnn = not self._active and _driver == 'driver_mode.inference.dnn'
+        _start_recorder_cruise = not self._active and _driver == 'driver_mode.teleop.cruise' and blob.get('cruise_speed') > 1e-3
+        if _start_recorder_dnn or _start_recorder_cruise:
             self._recorder.start()
             self._active = True
-        _driver = blob.get('driver')
         if self._active and self._driver != _driver:
             self._driver = _driver
             self._recorder.stop()
