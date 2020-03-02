@@ -361,7 +361,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
             # Any intervention type is sufficient to set the steering coming in from the user.
             steering = blob.steering
             # Mark the first few interventions as such.
-            if self._piv_count > 1:
+            if self._piv_count > 2:
                 steering_driver = (OriginType.DAGGER if _dagger else OriginType.CONSOLE)
             else:
                 self._piv_count += 1

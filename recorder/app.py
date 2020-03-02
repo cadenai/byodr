@@ -1,4 +1,5 @@
 import argparse
+import collections
 import logging
 import multiprocessing
 import os
@@ -56,6 +57,7 @@ class EventHandler(object):
         self._active = False
         self._driver = None
         self._recorder = get_or_create_recorder(directory=directory, mode=None)
+        self._recent = collections.deque(maxlen=100)
 
     def _instance(self, driver):
         mode = None
@@ -77,6 +79,7 @@ class EventHandler(object):
         _start_recorder_dnn = not self._active and _driver == 'driver_mode.inference.dnn'
         _start_recorder_cruise = not self._active and _driver == 'driver_mode.teleop.cruise' and blob.get('cruise_speed') > 1e-3
         if _start_recorder_dnn or _start_recorder_cruise:
+            self._recent.clear()
             self._recorder.start()
             self._active = True
         if self._active and self._driver != _driver:
@@ -84,11 +87,15 @@ class EventHandler(object):
             self._recorder.stop()
             self._active = False
             self._recorder = self._instance(_driver)
+            self._recent.clear()
             self._recorder.start()
         if self._active:
             if image.shape != (self._im_height, self._im_width, 3):
                 image = cv2.resize(image, (self._im_width, self._im_height))
-            self._recorder.do_record(to_event(blob, vehicle, image))
+            blob_time = blob.get('time')
+            if blob_time not in self._recent:
+                self._recent.append(blob_time)
+                self._recorder.do_record(to_event(blob, vehicle, image))
 
 
 def main():
@@ -130,8 +137,7 @@ def main():
             image_md, image = camera.capture()
             if None not in (blob, image_md):
                 blob_time, image_time = blob.get('time'), image_md.get('time')
-                _now = time.time()
-                if (_now - blob_time) < _patience and (_now - image_time) < _patience:
+                if abs(blob_time - image_time) < _patience:
                     handler.record(blob, vehicle.get_latest(), image)
             state_publisher.publish(handler.state())
             _proc_sleep = max_duration - (time.time() - proc_start)
