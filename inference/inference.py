@@ -11,21 +11,6 @@ from tensorflow.python.framework.errors_impl import CancelledError, FailedPrecon
 
 logger = logging.getLogger(__name__)
 
-_optimization_transforms = [
-    # 'add_default_attributes',
-    # 'remove_nodes(op=Identity)', We currently use identity nodes in the runtime graph.
-    'merge_duplicate_nodes',
-    'strip_unused_nodes',
-    'fold_constants(ignore_errors=true)',
-    'fold_batch_norms',
-    'fold_old_batch_norms'
-    # 'obfuscate_names',
-    # 'round_weights(num_steps=256)'
-    # 'quantize_nodes',  Current implementation only supports equal length strides in the row and column dimensions.
-    # 'quantize_weights'  Worse inference performance on jetson.
-    # 'sort_by_execution_order'
-]
-
 
 class DynamicMomentum(object):
     """Low-pass filter with separate acceleration and deceleration momentum."""

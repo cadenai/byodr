@@ -79,6 +79,7 @@ socket_utils.create_socket("/ws/log", false, 1000, function(ws) {
         view = log_controller;
         var el_pilot_steering = $('span#pilot_steering');
         var el_pilot_throttle = $('span#pilot_throttle');
+        var el_inference_penalty = $('span#inference_penalty');
         var el_inference_corridor = $('span#inference_corridor');
         var el_inference_obstacle = $('span#inference_obstacle');
         var el_state_recorder = $('span#state_recorder');
@@ -92,6 +93,7 @@ socket_utils.create_socket("/ws/log", false, 1000, function(ws) {
         var command = JSON.parse(evt.data);
         el_pilot_steering.text(command.ste.toFixed(3));
         el_pilot_throttle.text(command.thr.toFixed(3));
+        el_inference_penalty.text(command.debug3.toFixed(3));
         el_inference_corridor.text(command.debug1.toFixed(3));
         el_inference_obstacle.text(command.debug2.toFixed(3));
         el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));

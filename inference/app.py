@@ -84,7 +84,6 @@ class TFRunner(object):
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
-        # _obstacle_penalty += _obstacle_penalty * _norm_speed * self._brake_speed_multiplier
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         return dict(action=float(self._dnn_steering(action_out)),
