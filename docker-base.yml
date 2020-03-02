@@ -14,7 +14,7 @@ services:
       - ./teleop:/app
     environment:
       TELEOP_HOME: '/app'
-    command: python app.py --port=9100
+    command: python app.py --port=9100 --config=${DC_CONFIG_FILES}
   pilot:
     user: '1000'
     build:

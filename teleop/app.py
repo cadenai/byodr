@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 import os
 import signal
+from ConfigParser import SafeConfigParser
 
 from tornado import web, ioloop
 
@@ -30,7 +31,16 @@ def _interrupt():
 def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--port', type=int, default=9100, help='Port number')
+    parser.add_argument('--config', type=str, required=True, help='Config file location.')
     args = parser.parse_args()
+
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in args.config.split(',')]
+    cfg = dict(parser.items('teleop'))
+    for key in sorted(cfg):
+        logger.info("{} = {}".format(key, cfg[key]))
+
+    _display_speed_scale = float(cfg.get('display.speed.scale'))
 
     threads = []
     publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
@@ -49,7 +59,8 @@ def main():
     try:
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=(lambda x: publisher.publish(x)))),
-            (r"/ws/log", MessageServerSocket, dict(fn_state=(lambda: (pilot.get_latest(),
+            (r"/ws/log", MessageServerSocket, dict(speed_scale=_display_speed_scale,
+                                                   fn_state=(lambda: (pilot.get_latest(),
                                                                       vehicle.get_latest(),
                                                                       inference.get_latest(),
                                                                       recorder.get_latest())))),
