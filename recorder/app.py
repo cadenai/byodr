@@ -141,8 +141,7 @@ def main():
                     handler.record(blob, vehicle.get_latest(), image)
             state_publisher.publish(handler.state())
             _proc_sleep = max_duration - (time.time() - proc_start)
-            if _proc_sleep < 0:
-                logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
+            # if _proc_sleep < 0: logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
             time.sleep(max(0., _proc_sleep))
     except KeyboardInterrupt:
         quit_event.set()
