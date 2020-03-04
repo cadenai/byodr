@@ -119,9 +119,7 @@ socket_utils.create_socket("/ws/log", false, 1000, function(ws) {
             }
         }
         //
-        var corridor_penalty = command.debug1;
-        var obstacle_penalty = command.debug2;
-        var total_penalty = corridor_penalty + obstacle_penalty;
+        var total_penalty = command.debug3;
         var can_continue = total_penalty < 1;
         var str_command_ctl = command.ctl + '_' + can_continue;
         if (view.command_ctl != str_command_ctl) {
