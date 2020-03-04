@@ -131,12 +131,12 @@ var gamepad_controller = {
             result = Object.create(Xbox360StandardController);
         } else if (gamepad.mapping == 'standard' && gid.includes('054c')) {
             result = Object.create(PS4StandardController);
-        } else if (gid.includes('045e')) {
-            result = Object.create(Xbox360Controller);
         //
-        // Not to be used yet because the triggers are interpreted as binary which results in zero or max throttle.
-        // } else if (gid.includes('54c')) {
+        // Not to be used yet - without standard mapping the triggers can be non-zero resulting in non-zero throttle.
+        // } else if (gid.includes('054c')) {
         //    result = Object.create(PS4Controller);
+        // } else if (gid.includes('045e')) {
+        //    result = Object.create(Xbox360Controller);
         }
         if (result) {
             result.gamepad_index = gamepad.index;
