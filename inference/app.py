@@ -29,6 +29,7 @@ class TFRunner(object):
     def __init__(self, **kwargs):
         self._lock = multiprocessing.Lock()
         self._dagger = False
+        self._model_task = int(kwargs['dnn.model.task'])
         self._steering_scale_left = abs(float(kwargs['driver.dnn.steering.scale.left']))
         self._steering_scale_right = float(kwargs['driver.dnn.steering.scale.right'])
         _penalty_up_momentum = float(kwargs['driver.autopilot.filter.momentum.up'])
@@ -70,7 +71,8 @@ class TFRunner(object):
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
         action_out, brake_out, surprise_out, critic_out, entropy_out = \
-            self._driver.forward(dave_image=_dave_img,
+            self._driver.forward(task=self._model_task,
+                                 dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  posor_image=_alex_img,
                                  turn=turn,
