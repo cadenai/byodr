@@ -67,9 +67,13 @@ def param_drives(bus):
     bus.send(can.Message(check=True, arbitration_id=0x121, is_extended_id=False, data=([0x64, 0, 0, 0, 0x06, 0x40, 0, 0])))
 
 
-def drive_values(steering=0, throttle=0):
-    left = max(-1, min(1, throttle + steering))
-    right = max(-1, min(1, throttle - steering))
+def tanh(x, scale):
+    return (1 - math.exp(-scale * x)) / (1 + math.exp(-scale * x))
+
+
+def drive_values(steering=0., throttle=0., scale=1.):
+    left = max(-1., min(1., throttle + tanh(steering, scale=scale)))
+    right = max(-1., min(1., throttle - tanh(steering, scale=scale)))
     return left, right
 
 
@@ -81,8 +85,8 @@ def drive_bytes(x):
     return struct.pack('>i', int(x * math.pow(2, 24)))
 
 
-def m_speed_ref(steering, throttle):
-    left, right = drive_values(steering, throttle)
+def m_speed_ref(steering, throttle, scale):
+    left, right = drive_values(steering, throttle, scale)
     _data = drive_bytes(left) + drive_bytes(-right)
     m = can.Message(check=True, arbitration_id=0x111, is_extended_id=False, data=_data)
     return m
@@ -103,11 +107,12 @@ class NoneBus(object):
 
 
 class CanBusThread(threading.Thread):
-    def __init__(self, bus, event, frequency=CAN_BUS_HZ):
+    def __init__(self, bus, event, scale=1., frequency=CAN_BUS_HZ):
         super(CanBusThread, self).__init__()
         self._bus_name = bus
         self._ms = 1. / frequency
         self._quit_event = event
+        self._scale = scale
         self._queue = collections.deque(maxlen=1)
         self._bus = NoneBus()
         self.reset()
@@ -145,7 +150,8 @@ class CanBusThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             try:
-                self._bus.send(m_speed_ref(*self._queue[0]))
+                steering, throttle = self._queue[0]
+                self._bus.send(m_speed_ref(steering=steering, throttle=throttle, scale=self._scale))
                 time.sleep(self._ms)
             except CanError as be:
                 logger.error(be)
@@ -177,12 +183,12 @@ class IDSImagingThread(FrameThread):
 
 
 class TwistHandler(object):
-    def __init__(self, image_shape=CAMERA_SHAPE, bus_name=None, event=quit_event, fn_callback=(lambda x: x)):
+    def __init__(self, image_shape=CAMERA_SHAPE, bus_name=None, event=quit_event, steering_scale=1., fn_callback=(lambda x: x)):
         super(TwistHandler, self).__init__()
         self._image_shape = image_shape
         self._bus_name = bus_name
         self._fn_callback = fn_callback
-        self._gate = CanBusThread(bus=bus_name, event=event)
+        self._gate = CanBusThread(bus=bus_name, event=event, scale=steering_scale)
         self._gate.start()
         self._queue1 = collections.deque(maxlen=2)
         self._queue2 = collections.deque(maxlen=2)
@@ -259,7 +265,8 @@ def main():
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
     _interface = cfg.get('can.interface')
-    vehicle = TwistHandler(bus_name=_interface, fn_callback=(lambda im: image_publisher.publish(im)))
+    _steering_scale = float(cfg.get('drive.motor.steering.scale'))
+    vehicle = TwistHandler(bus_name=_interface, steering_scale=_steering_scale, fn_callback=(lambda im: image_publisher.publish(im)))
     threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     threads.append(pilot)
