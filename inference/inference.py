@@ -50,10 +50,10 @@ def _create_input_nodes():
     input_dave_image = placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
     input_speed_image = placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
     input_command = placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
-    input_task = placeholder(dtype=tf.float32, shape=[None, 8], name='input/task')
+    # input_task = placeholder(dtype=tf.float32, shape=[None, 8], name='input/task')
     input_use_dropout = placeholder(tf.bool, shape=(), name='input/use_dropout')
     input_p_dropout = placeholder(tf.float32, shape=(), name='input/p_dropout')
-    return (input_dave_image, input_command, input_task, input_use_dropout, input_p_dropout), (input_speed_image, input_command)
+    return (input_dave_image, input_command, input_use_dropout, input_p_dropout), (input_speed_image, input_command)
 
 
 def _newest_file(path, pattern):
@@ -95,7 +95,7 @@ class TFDriver(object):
         self.input_alex_image = None
         self.input_posor_image = None
         self.input_command = None
-        self.input_task = None
+        # self.input_task = None
         self.input_use_dropout = None
         self.input_p_dropout = None
         self.tf_steering = None
@@ -151,13 +151,13 @@ class TFDriver(object):
                 return
             with graph.as_default():
                 nodes_tuple = _create_input_nodes()
-                self.input_dave_image, self.input_command, self.input_task, self.input_use_dropout, self.input_p_dropout = nodes_tuple[0]
+                self.input_dave_image, self.input_command,  self.input_use_dropout, self.input_p_dropout = nodes_tuple[0]
                 self.input_alex_image = nodes_tuple[-1][0]
                 self.input_posor_image = tf.placeholder(dtype=tf.uint8, shape=[1, 227, 227, 3])
                 _input_maneuver = {
                     'input/dave_image': self.input_dave_image,
                     'input/command': self.input_command,
-                    'input/task': self.input_task,
+                    # 'input/task': self.input_task,
                     'input/use_dropout': self.input_use_dropout,
                     'input/p_dropout': self.input_p_dropout
                 }
@@ -199,8 +199,8 @@ class TFDriver(object):
                     self.input_posor_image: [posor_image],
                     self.input_use_dropout: dagger,
                     self.input_p_dropout: self.p_conv_dropout if dagger else 0,
-                    self.input_command: [_cmd_vector(turn=turn)],
-                    self.input_task: [_task_vector(task)]
+                    self.input_command: [_cmd_vector(turn=turn)]
+                    # self.input_task: [_task_vector(task)]
                 }
                 try:
                     _steer, _brake, _surprise, _critic, _entropy = self.sess.run(_ops, feed_dict=feeder)
