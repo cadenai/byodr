@@ -71,9 +71,11 @@ def tanh(x, scale):
     return (1 - math.exp(-scale * x)) / (1 + math.exp(-scale * x))
 
 
-def drive_values(steering=0., throttle=0., scale=1.):
-    left = max(-1., min(1., throttle + tanh(steering, scale=scale)))
-    right = max(-1., min(1., throttle - tanh(steering, scale=scale)))
+def drive_values(steering=0., throttle=0., scale=1., is_teleop=True):
+    # Disable tank drive or turn on spot unless under direct control.
+    _minimum = -1. if is_teleop else 0.
+    left = max(_minimum, min(1., throttle + tanh(steering, scale=scale)))
+    right = max(_minimum, min(1., throttle - tanh(steering, scale=scale)))
     return left, right
 
 
@@ -85,8 +87,8 @@ def drive_bytes(x):
     return struct.pack('>i', int(x * math.pow(2, 24)))
 
 
-def m_speed_ref(steering, throttle, scale):
-    left, right = drive_values(steering, throttle, scale)
+def m_speed_ref(steering, throttle, scale, is_teleop):
+    left, right = drive_values(steering, throttle, scale, is_teleop)
     _data = drive_bytes(left) + drive_bytes(-right)
     m = can.Message(check=True, arbitration_id=0x111, is_extended_id=False, data=_data)
     return m
@@ -144,14 +146,14 @@ class CanBusThread(threading.Thread):
                 tries += 1
                 time.sleep(1)
 
-    def set_command(self, steering=0., throttle=0.):
-        self._queue.appendleft((steering, throttle))
+    def set_command(self, steering=0., throttle=0., is_teleop=True):
+        self._queue.appendleft((steering, throttle, is_teleop))
 
     def run(self):
         while not self._quit_event.is_set():
             try:
-                steering, throttle = self._queue[0]
-                self._bus.send(m_speed_ref(steering=steering, throttle=throttle, scale=self._scale))
+                steering, throttle, is_teleop = self._queue[0]
+                self._bus.send(m_speed_ref(steering=steering, throttle=throttle, scale=self._scale, is_teleop=is_teleop))
                 time.sleep(self._ms)
             except CanError as be:
                 logger.error(be)
@@ -221,10 +223,8 @@ class TwistHandler(object):
 
     def _drive(self, steering, throttle, driver=None):
         try:
-            # Refrain from steering if the throttle is nearly zero except when driving joystick.
-            if driver != 'driver_mode.teleop.direct' and abs(throttle) < 1e-2:
-                steering, throttle = 0., 0.
-            self._gate.set_command(steering=steering, throttle=throttle)
+            is_teleop = driver == 'driver_mode.teleop.direct'
+            self._gate.set_command(steering=steering, throttle=throttle, is_teleop=is_teleop)
         except Exception as e:
             logger.error("{}".format(e))
 
