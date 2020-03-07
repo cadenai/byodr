@@ -12,6 +12,7 @@ var NoneController = {
     button_center: 0,
     arrow_up: 0,
     arrow_down: 0,
+    healthy: false,
 
     collapse: function(value, zone=0) {
         result = Math.abs(value) <= zone ? 0 : value > 0 ? value - zone : value + zone;
@@ -21,6 +22,18 @@ var NoneController = {
 
     gamepad: function() {
         return navigator.getGamepads()[this.gamepad_index];
+    },
+
+    set_throttle: function(left_trigger, right_trigger) {
+        // Observed gamepads which reported half-full throttle before use of any buttons.
+        if (!this.healthy && left_trigger < 0.01 && right_trigger < 0.01) {
+            this.healthy = true;
+        }
+        if (this.healthy) {
+            this.throttle = right_trigger > 0.01 ? -1 * right_trigger : left_trigger;
+        } else {
+            this.throttle = false;
+        }
     },
 
     poll: function() {
@@ -33,10 +46,8 @@ var Xbox360StandardController = extend(NoneController, {
 
     poll: function() {
         pad = this.gamepad();
+        this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
         this.steering = this.collapse(pad.axes[2], this.threshold);
-        accelerate = pad.buttons[6].value;
-        brake = pad.buttons[7].value;
-        this.throttle = brake > 0.01 ? -1 * brake : accelerate;
         this.button_y = pad.buttons[3].value;
         this.button_b = pad.buttons[1].value;
         this.button_x = pad.buttons[2].value;
@@ -46,7 +57,7 @@ var Xbox360StandardController = extend(NoneController, {
         this.button_center = pad.buttons[16].value;
         this.arrow_up = pad.buttons[12].value;
         this.arrow_down = pad.buttons[13].value;
-        return true;
+        return this.healthy;
     }
 });
 
@@ -55,10 +66,8 @@ var PS4StandardController = extend(NoneController, {
 
     poll: function() {
         pad = this.gamepad();
+        this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
         this.steering = this.collapse(pad.axes[2], this.threshold);
-        accelerate = pad.buttons[6].value;
-        brake = pad.buttons[7].value;
-        this.throttle = brake > 0.01 ? -1 * brake : accelerate;
         this.button_y = pad.buttons[3].value;
         this.button_b = pad.buttons[1].value;
         this.button_x = pad.buttons[2].value;
@@ -68,54 +77,7 @@ var PS4StandardController = extend(NoneController, {
         this.button_center = pad.buttons[17].value;
         this.arrow_up = pad.buttons[12].value;
         this.arrow_down = pad.buttons[13].value;
-        return true;
-    }
-});
-
-var Xbox360Controller = extend(NoneController, {
-    threshold: 0.18,
-
-    poll: function() {
-        pad = this.gamepad();
-        this.steering = this.collapse(pad.axes[3], this.threshold);
-        accelerate = pad.axes[2];
-        brake = pad.axes[5];
-        // Before activation of these axes their values are exactly zero.
-        accelerate = accelerate == 0 ? 0 : (accelerate + 1) / 2;
-        brake = brake == 0 ? 0 : (brake + 1) / 2;
-        this.throttle = brake > 0.01 ? -1 * brake : accelerate;
-        this.button_y = pad.buttons[14].value;
-        this.button_b = pad.buttons[12].value;
-        this.button_x = pad.buttons[13].value;
-        this.button_a = pad.buttons[11].value;
-        this.button_left = pad.buttons[8].value;
-        this.button_right = pad.buttons[9].value;
-        this.button_center = pad.buttons[10].value;
-        this.arrow_up = pad.buttons[0].value;
-        this.arrow_down = pad.buttons[1].value;
-        return true;
-    }
-});
-
-var PS4Controller = extend(NoneController, {
-    threshold: 0.05,
-
-    poll: function() {
-        pad = this.gamepad();
-        this.steering = this.collapse(pad.axes[2], this.threshold);
-        accelerate = pad.buttons[6].value;
-        brake = pad.buttons[7].value;
-        this.throttle = brake > 0.01 ? -1 * brake : accelerate;
-        this.button_y = pad.buttons[3].value;
-        this.button_b = pad.buttons[2].value;
-        this.button_x = pad.buttons[0].value;
-        this.button_a = pad.buttons[1].value;
-        this.button_left = pad.buttons[4].value;
-        this.button_right = pad.buttons[5].value;
-        this.button_center = pad.buttons[13].value;
-        this.arrow_up = pad.buttons[14].value;
-        this.arrow_down = pad.buttons[15].value;
-        return true;
+        return this.healthy;
     }
 });
 
@@ -132,7 +94,7 @@ var gamepad_controller = {
         } else if (gamepad.mapping == 'standard' && gid.includes('054c')) {
             result = Object.create(PS4StandardController);
         //
-        // Not to be used yet - without standard mapping the triggers can be non-zero resulting in non-zero throttle.
+        // Not to be used yet - without standard mapping the triggers can result in non-zero throttle before use.
         // } else if (gid.includes('054c')) {
         //    result = Object.create(PS4Controller);
         // } else if (gid.includes('045e')) {
