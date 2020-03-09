@@ -224,6 +224,8 @@ class TwistHandler(object):
     def _drive(self, steering, throttle, driver=None):
         try:
             is_teleop = driver == 'driver_mode.teleop.direct'
+            if not is_teleop and abs(throttle) < 1e-2:
+                steering, throttle = 0., 0.
             self._gate.set_command(steering=steering, throttle=throttle, is_teleop=is_teleop)
         except Exception as e:
             logger.error("{}".format(e))
