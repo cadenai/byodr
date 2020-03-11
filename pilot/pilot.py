@@ -1,12 +1,13 @@
 import logging
 import multiprocessing
 import threading
-import time
 import traceback
 from abc import ABCMeta, abstractmethod
 
 import cachetools
 import pid_controller.pid as pic
+
+from byodr.utils import timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class Blob(AttrDict):
         self.steering = kwargs.get('steering', 0)
         self.steering_driver = kwargs.get('steering_driver')
         self.throttle = kwargs.get('throttle', 0)
-        self.time = kwargs.get('time', time.time())
+        self.time = kwargs.get('time', timestamp())
         if self.forced_steering is None:
             self.forced_steering = abs(self.steering) > 0
         if self.forced_throttle is None:
@@ -471,12 +472,12 @@ class DriverManager(object):
 
 
 class CommandProcessor(object):
-    def __init__(self, driver, patience=.100):
+    def __init__(self, driver, patience_ms=100.):
         self._driver = driver
-        self._patience = patience
+        self._patience_micro = patience_ms * 1000
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
-        self._cache = cachetools.TTLCache(maxsize=100, ttl=patience)
+        self._cache = cachetools.TTLCache(maxsize=100, ttl=(patience_ms * 1e-3))
 
     def _cache_safe(self, key, func, *arguments):
         if self._cache.get(key) is None:
@@ -519,8 +520,8 @@ class CommandProcessor(object):
         self._driver.quit()
 
     def next_action(self, *args):
-        _ts = time.time()
-        _patience = self._patience
+        _ts = timestamp()
+        _patience = self._patience_micro
         times = [None if arg is None else _ts - arg.get('time') for arg in args]
         commands = [None if arg is None else arg if (times[i] < _patience) else None for i, arg in enumerate(args)]
         if None in commands:

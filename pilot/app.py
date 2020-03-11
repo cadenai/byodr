@@ -34,12 +34,12 @@ def main():
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience = float(cfg.get('patience.ms')) / 1000
-    logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience * 1000))
+    _patience_ms = float(cfg.get('patience.ms'))
+    logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience_ms))
     max_duration = 1. / _process_frequency
 
     threads = []
-    controller = CommandProcessor(driver=DriverManager(**cfg), patience=_patience)
+    controller = CommandProcessor(driver=DriverManager(**cfg), patience_ms=_patience_ms)
     publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)

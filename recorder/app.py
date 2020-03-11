@@ -4,11 +4,13 @@ import logging
 import multiprocessing
 import os
 import signal
+import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
 
 import cv2
+import numpy as np
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
 from recorder import get_or_create_recorder
@@ -46,9 +48,11 @@ def to_event(blob, vehicle, image):
     return event
 
 
-class EventHandler(object):
-    def __init__(self, directory, **kwargs):
+class EventHandler(threading.Thread):
+    def __init__(self, directory, event, **kwargs):
+        super(EventHandler, self).__init__()
         self._directory = directory
+        self._quit_event = event
         self._vehicle = kwargs.get('constant.vehicle.type')
         self._config = kwargs.get('constant.vehicle.config')
         _im_height, _im_width = kwargs.get('image.persist.scale').split('x')
@@ -58,6 +62,7 @@ class EventHandler(object):
         self._driver = None
         self._recorder = get_or_create_recorder(directory=directory, mode=None)
         self._recent = collections.deque(maxlen=100)
+        self._buffer = collections.deque(maxlen=10000)
 
     def _instance(self, driver):
         mode = None
@@ -73,7 +78,7 @@ class EventHandler(object):
     def state(self):
         return dict(active=self._active, mode=self._recorder.get_mode())
 
-    def record(self, blob, vehicle, image):
+    def record(self, blob, vehicle, image, image_md):
         # Switch on automatically and then off only when the driver changes.
         _driver = blob.get('driver')
         _start_recorder_dnn = not self._active and _driver == 'driver_mode.inference.dnn'
@@ -90,12 +95,23 @@ class EventHandler(object):
             self._recent.clear()
             self._recorder.start()
         if self._active:
-            if image.shape != (self._im_height, self._im_width, 3):
-                image = cv2.resize(image, (self._im_width, self._im_height))
-            blob_time = blob.get('time')
-            if blob_time not in self._recent:
-                self._recent.append(blob_time)
-                self._recorder.do_record(to_event(blob, vehicle, image))
+            # Do not process the same image more than once.
+            key_time = image_md.get('time')
+            if key_time not in self._recent:
+                self._recent.append(key_time)
+                self._buffer.append(to_event(blob, vehicle, np.copy(image)))
+
+    def run(self):
+        while not self._quit_event.is_set():
+            try:
+                event = self._buffer.pop()
+                if event.image.shape != (self._im_height, self._im_width, 3):
+                    event.image = cv2.resize(event.image, (self._im_width, self._im_height))
+                self._recorder.do_record(event)
+                # Allow the main thread access to the cpu.
+                time.sleep(2e-3)
+            except IndexError:
+                pass
 
 
 def main():
@@ -114,34 +130,38 @@ def main():
         logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience = float(cfg.get('patience.ms')) / 1000
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
-    max_duration = 1. / _process_frequency
+    _publish_frequency = int(cfg.get('publish.hz'))
+    logger.info("Processing at {} Hz publishing at {} Hz.".format(_process_frequency, _publish_frequency))
+    max_process_duration = 1. / _process_frequency
+    max_publish_duration = 1. / _publish_frequency
 
-    handler = EventHandler(directory=sessions_dir, **cfg)
     state_publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
 
     threads = []
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    handler = EventHandler(directory=sessions_dir, event=quit_event, **cfg)
     threads.append(camera)
     threads.append(pilot)
     threads.append(vehicle)
+    threads.append(handler)
     [t.start() for t in threads]
 
     try:
+        _last_publish = time.time()
         while not quit_event.is_set():
             proc_start = time.time()
             blob = pilot.get_latest()
             image_md, image = camera.capture()
             if None not in (blob, image_md):
-                blob_time, image_time = blob.get('time'), image_md.get('time')
-                if abs(blob_time - image_time) < _patience:
-                    handler.record(blob, vehicle.get_latest(), image)
-            state_publisher.publish(handler.state())
-            _proc_sleep = max_duration - (time.time() - proc_start)
-            # if _proc_sleep < 0: logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
+                handler.record(blob, vehicle.get_latest(), image, image_md)
+            if time.time() - _last_publish > max_publish_duration:
+                state_publisher.publish(handler.state())
+                _last_publish = time.time()
+            _proc_sleep = max_process_duration - (time.time() - proc_start)
+            if _proc_sleep < 0:
+                logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
             time.sleep(max(0., _proc_sleep))
     except KeyboardInterrupt:
         quit_event.set()

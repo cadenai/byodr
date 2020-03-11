@@ -16,6 +16,7 @@ import numpy as np
 from can import CanError
 from pyueye import ueye
 
+from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
 from camera import Camera, FrameThread
 
@@ -237,7 +238,7 @@ class TwistHandler(object):
                     y_coordinate=y,
                     heading=0,
                     velocity=0,
-                    time=time.time())
+                    time=timestamp())
 
     def noop(self):
         self._drive(steering=0, throttle=0)
@@ -260,8 +261,8 @@ def main():
         logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience = float(cfg.get('patience.ms')) / 1000
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
+    _patience_micro = float(cfg.get('patience.ms')) * 1000
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
@@ -278,8 +279,8 @@ def main():
     while not quit_event.is_set():
         command = pilot.get_latest()
         _command_time = 0 if command is None else command.get('time')
-        _command_age = time.time() - _command_time
-        _on_time = _command_age < _patience
+        _command_age = timestamp() - _command_time
+        _on_time = _command_age < _patience_micro
         if _on_time:
             vehicle.drive(command)
         else:

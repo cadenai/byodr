@@ -5,6 +5,7 @@ import signal
 import time
 from ConfigParser import SafeConfigParser
 
+from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
 from vehicle import create_handler
 
@@ -33,8 +34,8 @@ def main():
         logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience = float(cfg.get('patience.ms')) / 1000
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
+    _patience_micro = float(cfg.get('patience.ms')) * 1000
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
@@ -52,8 +53,8 @@ def main():
     while not quit_event.is_set():
         command = pilot.get_latest()
         _command_time = 0 if command is None else command.get('time')
-        _command_age = time.time() - _command_time
-        _on_time = _command_age < _patience
+        _command_age = timestamp() - _command_time
+        _on_time = _command_age < _patience_micro
         if _on_time:
             vehicle.drive(command)
         else:

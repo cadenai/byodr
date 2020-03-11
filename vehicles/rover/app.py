@@ -12,6 +12,7 @@ import numpy as np
 import rospy
 from geometry_msgs.msg import Twist, TwistStamped
 
+from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
 from video import GstRawSource
 
@@ -121,7 +122,7 @@ class TwistHandler(object):
                     y_coordinate=y,
                     heading=0,
                     velocity=self._gate.get_odometer_value(),
-                    time=time.time())
+                    time=timestamp())
 
     def noop(self):
         self._drive(steering=0, throttle=0)
@@ -154,8 +155,8 @@ def main():
         logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience = float(cfg.get('patience.ms')) / 1000
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience * 1000))
+    _patience_micro = float(cfg.get('patience.ms')) * 1000
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     dry_run = bool(int(cfg.get('dry.run')))
     if dry_run:
@@ -189,8 +190,8 @@ def main():
     while not quit_event.is_set():
         command = pilot.get_latest()
         _command_time = 0 if command is None else command.get('time')
-        _command_age = time.time() - _command_time
-        _on_time = _command_age < _patience
+        _command_age = timestamp() - _command_time
+        _on_time = _command_age < _patience_micro
         if _on_time:
             vehicle.drive(command)
         else:

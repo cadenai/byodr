@@ -1,10 +1,11 @@
 import collections
 import json
 import threading
-import time
 
 import numpy as np
 import zmq
+
+from byodr.utils import timestamp
 
 
 class JSONPublisher(object):
@@ -27,13 +28,13 @@ class ImagePublisher(object):
 
     def publish(self, _img):
         self._publisher.send_multipart([self._topic,
-                                        json.dumps(dict(time=time.time(), shape=_img.shape)),
+                                        json.dumps(dict(time=timestamp(), shape=_img.shape)),
                                         np.ascontiguousarray(_img, dtype=np.uint8)],
                                        flags=zmq.NOBLOCK)
 
 
 class ReceiverThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', receive_timeout_ms=10):
+    def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
         super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.setsockopt(zmq.RCVHWM, 1)
@@ -57,7 +58,7 @@ class ReceiverThread(threading.Thread):
 
 
 class CameraThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', receive_timeout_ms=20):
+    def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
         super(CameraThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.setsockopt(zmq.RCVHWM, 1)

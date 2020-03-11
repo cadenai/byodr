@@ -9,6 +9,7 @@ from functools import partial
 
 import numpy as np
 
+from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum
@@ -97,7 +98,7 @@ class TFRunner(object):
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
                     surprise=float(surprise_out),
-                    time=time.time()
+                    time=timestamp()
                     )
 
 

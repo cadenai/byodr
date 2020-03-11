@@ -1,10 +1,11 @@
 import logging
 import math
 import multiprocessing
-import time
 
 import carla
 import numpy as np
+
+from byodr.utils import timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,7 @@ class CarlaHandler(object):
                     y_coordinate=y,
                     heading=self._heading(),
                     velocity=self._velocity(),
-                    time=time.time())
+                    time=timestamp())
 
     def start(self):
         self._reset()

@@ -13,6 +13,8 @@ import ffmpeg
 import numpy as np
 from tornado import websocket
 
+from byodr.utils import timestamp
+
 logger = logging.getLogger(__name__)
 
 
@@ -37,7 +39,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
 
     def on_message(self, json_message):
         msg = json.loads(json_message)
-        msg['time'] = time.time()
+        msg['time'] = timestamp()
         self._fn_control(msg)
         self.write_message('{}')
 
