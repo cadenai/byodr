@@ -78,7 +78,7 @@ class EventHandler(threading.Thread):
     def state(self):
         return dict(active=self._active, mode=self._recorder.get_mode())
 
-    def record(self, blob, vehicle, image, image_md):
+    def record(self, blob, vehicle, image):
         # Switch on automatically and then off only when the driver changes.
         _driver = blob.get('driver')
         _start_recorder_dnn = not self._active and _driver == 'driver_mode.inference.dnn'
@@ -95,8 +95,8 @@ class EventHandler(threading.Thread):
             self._recent.clear()
             self._recorder.start()
         if self._active:
-            # Do not process the same image more than once.
-            key_time = image_md.get('time')
+            # Do not process the same event more than once.
+            key_time = blob.get('time')
             if key_time not in self._recent:
                 self._recent.append(key_time)
                 self._buffer.append(to_event(blob, vehicle, np.copy(image)))
@@ -155,7 +155,7 @@ def main():
             blob = pilot.get_latest()
             image_md, image = camera.capture()
             if None not in (blob, image_md):
-                handler.record(blob, vehicle.get_latest(), image, image_md)
+                handler.record(blob, vehicle.get_latest(), image)
             if time.time() - _last_publish > max_publish_duration:
                 state_publisher.publish(handler.state())
                 _last_publish = time.time()
