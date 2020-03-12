@@ -58,7 +58,7 @@ class ImageEventLog(object):
     Select the closest data to the image by timestamp.
     """
 
-    def __init__(self, buffer_size=int(2e3), window_ms=20):
+    def __init__(self, buffer_size=int(2e3), window_ms=30):
         self._micro = window_ms * 1e3
         self._observed = None
         self._events = collections.deque(maxlen=buffer_size)
@@ -73,10 +73,10 @@ class ImageEventLog(object):
         if self._observed != img_ts:
             self._observed = img_ts
             d_pilot = abs(img_ts - get_ts(pilot))
-            d_vehicle = abs(img_ts - get_ts(vehicle))
-            if d_pilot <= self._micro and d_vehicle <= self._micro:
+            if d_pilot <= self._micro:
                 self._events.append(to_event(img_ts, copy.deepcopy(pilot), copy.deepcopy(vehicle), np.copy(image)))
             else:
+                d_vehicle = abs(img_ts - get_ts(vehicle))
                 logger.warn("Data window violation of pilot {} ms and vehicle {} ms - skipping image {}.".format(
                     d_pilot * 1e-3, d_vehicle * 1e-3, img_ts)
                 )
