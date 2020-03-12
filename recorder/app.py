@@ -1,5 +1,6 @@
 import argparse
 import collections
+import copy
 import logging
 import multiprocessing
 import os
@@ -28,9 +29,9 @@ def _interrupt():
     quit_event.set()
 
 
-def to_event(blob, vehicle, image):
+def to_event(ts, blob, vehicle, image):
     event = Event(
-        timestamp=blob.get('time'),
+        timestamp=ts,
         image=image,
         steer_src=blob.get('steering_driver'),
         speed_src=blob.get('speed_driver'),
@@ -48,6 +49,51 @@ def to_event(blob, vehicle, image):
     return event
 
 
+def get_ts(val):
+    return val.get('time')
+
+
+class ImageEventLog(object):
+    """
+    Select the closest data to the image by timestamp.
+    """
+
+    def __init__(self, buffer_size=int(5e3), window_ms=20):
+        self._micro = window_ms * 1e3
+        self._observed = None
+        self._collect = collections.deque(maxlen=int(500. / window_ms))
+        self._events = collections.deque(maxlen=buffer_size)
+
+    def clear(self):
+        self._collect.clear()
+        self._events.clear()
+
+    def append(self, pilot, vehicle, image_meta, image):
+        # The image timestamp decides the event timestamp.
+        img_ts = get_ts(image_meta)
+        data = (pilot, vehicle)
+        # Skip duplicate processing.
+        if self._observed != img_ts:
+            self._observed = img_ts
+            # Look for the closest recent pilot data.
+            best = abs(img_ts - get_ts(pilot))
+            while self._collect:
+                candidate = self._collect.pop()
+                c_duration = abs(get_ts(candidate[0]) - img_ts)
+                if c_duration < best:
+                    best = c_duration
+                    data = candidate
+            if best <= self._micro:
+                self._events.append(to_event(img_ts, data[0], data[1], image))
+            else:
+                logger.warn("Data window violation of {} ms - skipping event {}.".format(best * 1e-3, img_ts))
+        # Collect the recent pilot data.
+        self._collect.append(data)
+
+    def pop(self):
+        return self._events.pop() if self._events else None
+
+
 class EventHandler(threading.Thread):
     def __init__(self, directory, event, **kwargs):
         super(EventHandler, self).__init__()
@@ -59,10 +105,9 @@ class EventHandler(threading.Thread):
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
         self._active = False
-        self._driver = None
+        self._tracker = ImageEventLog()
         self._recorder = get_or_create_recorder(directory=directory, mode=None)
         self._recent = collections.deque(maxlen=100)
-        self._buffer = collections.deque(maxlen=10000)
 
     def _instance(self, driver):
         mode = None
@@ -78,36 +123,31 @@ class EventHandler(threading.Thread):
     def state(self):
         return dict(active=self._active, mode=self._recorder.get_mode())
 
-    def record(self, blob, vehicle, image):
+    def record(self, blob, vehicle, image_meta, image):
         # Switch on automatically and then off only when the driver changes.
         _driver = blob.get('driver')
-        _start_recorder_dnn = not self._active and _driver == 'driver_mode.inference.dnn'
-        _start_recorder_cruise = not self._active and _driver == 'driver_mode.teleop.cruise' and blob.get('cruise_speed') > 1e-3
-        if _start_recorder_dnn or _start_recorder_cruise:
-            self._recent.clear()
+        _recorder_dnn = _driver == 'driver_mode.inference.dnn'
+        _recorder_cruise = _driver == 'driver_mode.teleop.cruise' and blob.get('cruise_speed') > 1e-3
+        if not self._active and (_recorder_dnn or _recorder_cruise):
+            self._tracker.clear()
+            self._recorder = self._instance(_driver)
             self._recorder.start()
             self._active = True
-        if self._active and self._driver != _driver:
-            self._driver = _driver
+        elif self._active and not (_recorder_dnn or _recorder_cruise):
             self._recorder.stop()
-            self._active = False
             self._recorder = self._instance(_driver)
-            self._recent.clear()
-            self._recorder.start()
+            self._active = False
         if self._active:
-            # Do not process the same event more than once.
-            key_time = blob.get('time')
-            if key_time not in self._recent:
-                self._recent.append(key_time)
-                self._buffer.append(to_event(blob, vehicle, np.copy(image)))
+            self._tracker.append(copy.deepcopy(blob), copy.deepcopy(vehicle), copy.deepcopy(image_meta), np.copy(image))
 
     def run(self):
         while not self._quit_event.is_set():
             try:
-                event = self._buffer.pop()
-                if event.image.shape != (self._im_height, self._im_width, 3):
-                    event.image = cv2.resize(event.image, (self._im_width, self._im_height))
-                self._recorder.do_record(event)
+                event = self._tracker.pop()
+                if event is not None:
+                    if event.image.shape != (self._im_height, self._im_width, 3):
+                        event.image = cv2.resize(event.image, (self._im_width, self._im_height))
+                    self._recorder.do_record(event)
                 # Allow the main thread access to the cpu.
                 time.sleep(2e-3)
             except IndexError:
@@ -152,10 +192,11 @@ def main():
         _last_publish = time.time()
         while not quit_event.is_set():
             proc_start = time.time()
-            blob = pilot.get_latest()
+            m_pilot = pilot.get_latest()
+            m_vehicle = vehicle.get_latest()
             image_md, image = camera.capture()
-            if None not in (blob, image_md):
-                handler.record(blob, vehicle.get_latest(), image)
+            if None not in (m_pilot, m_vehicle, image_md):
+                handler.record(m_pilot, m_vehicle, image_md, image)
             if time.time() - _last_publish > max_publish_duration:
                 state_publisher.publish(handler.state())
                 _last_publish = time.time()

@@ -46,6 +46,7 @@ class AttrDict(dict):
 class Blob(AttrDict):
     def __init__(self, **kwargs):
         super(Blob, self).__init__(**kwargs)
+        self.time = timestamp()
         self.cruise_speed = kwargs.get('cruise_speed')
         self.desired_speed = kwargs.get('desired_speed')
         self.driver = kwargs.get('driver')
@@ -59,7 +60,6 @@ class Blob(AttrDict):
         self.steering = kwargs.get('steering', 0)
         self.steering_driver = kwargs.get('steering_driver')
         self.throttle = kwargs.get('throttle', 0)
-        self.time = kwargs.get('time', timestamp())
         if self.forced_steering is None:
             self.forced_steering = abs(self.steering) > 0
         if self.forced_throttle is None:
@@ -130,7 +130,9 @@ class AbstractDriverBase(object):
     def noop(blob):
         blob.steering = 0
         blob.throttle = 0
+        blob.cruise_speed = 0
         blob.desired_speed = 0
+        blob.instruction = 'intersection.ahead'
         blob.steering_driver = OriginType.UNDETERMINED
         blob.speed_driver = OriginType.UNDETERMINED
         blob.save_event = False
@@ -455,11 +457,13 @@ class DriverManager(object):
 
     def next_action(self, command, vehicle, inference):
         with self._lock:
-            # The blob time must be based on the command teleop time to allow downstream processes to react.
+            # The blob time is now.
+            # If downstream processes need the teleop time then use an extra attribute.
             blob = Blob(driver=self._driver_ctl,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         **command)
+            # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
             blob.steering = self._steering_stabilizer.calculate(blob.steering)
@@ -528,7 +532,7 @@ class CommandProcessor(object):
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
         teleop, vehicle, inference = commands
         if teleop is None:
-            return None, False
+            return self._driver.noop(), True
         else:
             self._process(teleop)
             return self._driver.next_action(teleop, vehicle, inference), True
