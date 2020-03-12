@@ -359,8 +359,8 @@ class DeepNetworkDriver(AbstractCruiseControl):
         blob.speed_driver = OriginType.CONSOLE if _speed_intervention else OriginType.DNN
         blob.throttle = self.calculate_throttle(desired_speed=blob.desired_speed, current_speed=(vehicle.get('velocity', 0)))
         # Handle steering.
-        _use_expert_steering = blob.forced_steering
-        if _use_expert_steering or blob.forced_acceleration:
+        if blob.forced_steering or blob.forced_acceleration:
+            blob.save_event = blob.desired_speed > 1e-3
             # Any intervention type is sufficient to set the steering coming in from the user.
             steering = blob.steering
             # Mark the first few interventions as such.
@@ -370,11 +370,12 @@ class DeepNetworkDriver(AbstractCruiseControl):
                 self._piv_count += 1
                 steering_driver = OriginType.DNN_PRE_INTERVENTION
         else:
+            blob.save_event = False
             steering, steering_driver = action_out, OriginType.DNN
             self._piv_count = 0
+        # Finalize.
         blob.steering = self._apply_dead_zone(steering, dead_zone=0)
         blob.steering_driver = steering_driver
-        blob.save_event = _speed_intervention or (_use_expert_steering and blob.desired_speed > 1e-3)
 
 
 class PilotState(object):
