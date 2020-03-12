@@ -58,37 +58,28 @@ class ImageEventLog(object):
     Select the closest data to the image by timestamp.
     """
 
-    def __init__(self, buffer_size=int(5e3), window_ms=20):
+    def __init__(self, buffer_size=int(2e3), window_ms=20):
         self._micro = window_ms * 1e3
         self._observed = None
-        self._collect = collections.deque(maxlen=int(500. / window_ms))
         self._events = collections.deque(maxlen=buffer_size)
 
     def clear(self):
-        self._collect.clear()
         self._events.clear()
 
     def append(self, pilot, vehicle, image_meta, image):
         # The image timestamp decides the event timestamp.
         img_ts = get_ts(image_meta)
-        data = (pilot, vehicle)
         # Skip duplicate processing.
         if self._observed != img_ts:
             self._observed = img_ts
-            # Look for the closest recent pilot data.
-            best = abs(img_ts - get_ts(pilot))
-            while self._collect:
-                candidate = self._collect.pop()
-                c_duration = abs(get_ts(candidate[0]) - img_ts)
-                if c_duration < best:
-                    best = c_duration
-                    data = candidate
-            if best <= self._micro:
-                self._events.append(to_event(img_ts, data[0], data[1], image))
+            d_pilot = abs(img_ts - get_ts(pilot))
+            d_vehicle = abs(img_ts - get_ts(vehicle))
+            if d_pilot <= self._micro and d_vehicle <= self._micro:
+                self._events.append(to_event(img_ts, copy.deepcopy(pilot), copy.deepcopy(vehicle), np.copy(image)))
             else:
-                logger.warn("Data window violation of {} ms - skipping event {}.".format(best * 1e-3, img_ts))
-        # Collect the recent pilot data.
-        self._collect.append(data)
+                logger.warn("Data window violation of pilot {} ms and vehicle {} ms - skipping image {}.".format(
+                    d_pilot * 1e-3, d_vehicle * 1e-3, img_ts)
+                )
 
     def pop(self):
         return self._events.pop() if self._events else None
@@ -138,7 +129,7 @@ class EventHandler(threading.Thread):
             self._recorder = self._instance(_driver)
             self._active = False
         if self._active:
-            self._tracker.append(copy.deepcopy(blob), copy.deepcopy(vehicle), copy.deepcopy(image_meta), np.copy(image))
+            self._tracker.append(blob, vehicle, image_meta, image)
 
     def run(self):
         while not self._quit_event.is_set():
@@ -148,7 +139,7 @@ class EventHandler(threading.Thread):
                     if event.image.shape != (self._im_height, self._im_width, 3):
                         event.image = cv2.resize(event.image, (self._im_width, self._im_height))
                     self._recorder.do_record(event)
-                # Allow the main thread access to the cpu.
+                # Allow other threads access to cpu.
                 time.sleep(2e-3)
             except IndexError:
                 pass

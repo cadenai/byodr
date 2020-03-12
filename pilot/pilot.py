@@ -374,7 +374,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
             self._piv_count = 0
         blob.steering = self._apply_dead_zone(steering, dead_zone=0)
         blob.steering_driver = steering_driver
-        blob.save_event = _use_expert_steering or _speed_intervention
+        blob.save_event = _speed_intervention or (_use_expert_steering and blob.desired_speed > 1e-3)
 
 
 class PilotState(object):
