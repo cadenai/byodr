@@ -1,5 +1,4 @@
 import argparse
-import collections
 import logging
 import multiprocessing
 import signal
@@ -41,32 +40,33 @@ class RosGate(object):
     def __init__(self, connect=True):
         """
         """
-        # Keep half a second worth of readings.
-        self._odometer_deque = collections.deque(maxlen=5)
+        self._circum_m = .30  # Meters.
+        self._e_time = time.time()
+        self._dt = 1e12
 
         if connect:
             rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
             self._pub = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
 
     def _update_odometer(self, message):
-        # Comes in at 10Hz.
-        counter = int(message.twist.linear.y)
-        self._odometer_deque.append(counter)
+        # Either zero or one for the hall effect.
+        effect = int(message.twist.linear.y)
+        if effect == 1:
+            self._dt = time.time() - self._e_time
+            self._e_time = time.time()
 
     def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
         if not quit_event.is_set():
             # The button state does not need to go to ros but currently there is no separate state holder (server side)
             # for the button state per timestamp.
-            # Scale the throttle as a replacement for a 'mechanical' throttle maximizer.
             twist = Twist()
             twist.angular.x, twist.angular.z, twist.linear.x, twist.linear.z = (channel, steering, control, throttle)
             twist.linear.y = button
             self._pub.publish(twist)
 
     def get_odometer_value(self):
-        # Convert to meters / second. Scale is determined by the vehicle.
-        # Reverse measurements not currently possible.
-        return max(0, sum(list(self._odometer_deque)) / 20.)
+        # Meters per second.
+        return self._circum_m / self._dt
 
 
 class FakeGate(RosGate):
