@@ -8,7 +8,7 @@
 #include <geometry_msgs/TwistStamped.h>
 
 // Time the last command was received on the throttle channel.
-volatile uint32_t lastCmdReceivedTime, lastHallSentTime = 0;
+volatile uint32_t lastCmdReceivedTime = 0;
 
 ros::NodeHandle nodeHandle;
 geometry_msgs::TwistStamped message;
@@ -17,7 +17,7 @@ geometry_msgs::TwistStamped message;
 Servo servoThrottle;
 Servo servoSteering;
 
-int hallEffect, hallState, hallCount = 0;
+int hallEffect, hallState = 0;
 
 /*
    Ros command topic listener drives the servos with the command values.
@@ -75,7 +75,7 @@ void setup() {
 void loop() {
   // Stop the vehicle when command communication slows down or stops functioning.
   // Convert to ms.
-  if ((micros() - lastCmdReceivedTime) / 1000 > 500) {
+  if ((micros() - lastCmdReceivedTime) / 1000 > 100) {
     servoThrottle.write(90);
   }
 
@@ -87,16 +87,9 @@ void loop() {
   if (hallEffect > 250) {
     if (hallState == 0) {
       hallState = 1;
-      hallCount++;
+      publish_odometer(hallState);
     }
   } else {
     hallState = 0;
-  }
-
-  // Publish the counter every 100 ms.
-  if ((micros() - lastHallSentTime) / 1000 > 100) {
-    publish_odometer(hallCount);
-    lastHallSentTime = micros();
-    hallCount = 0;
   }
 }
