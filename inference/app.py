@@ -72,10 +72,8 @@ class TFRunner(object):
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
         action_out, brake_out, surprise_out, critic_out, entropy_out = \
-            self._driver.forward(task=self._model_task,
-                                 dave_image=_dave_img,
+            self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
-                                 posor_image=_alex_img,
                                  turn=turn,
                                  dagger=dagger)
 

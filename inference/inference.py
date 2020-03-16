@@ -87,7 +87,6 @@ class TFDriver(object):
         self._lock = multiprocessing.Lock()
         self.input_dave_image = None
         self.input_alex_image = None
-        self.input_posor_image = None
         self.input_command = None
         self.input_task = None
         self.input_use_dropout = None
@@ -147,11 +146,9 @@ class TFDriver(object):
                 nodes_tuple = _create_input_nodes()
                 self.input_dave_image, self.input_command, self.input_task, self.input_use_dropout, self.input_p_dropout = nodes_tuple[0]
                 self.input_alex_image = nodes_tuple[-1][0]
-                self.input_posor_image = tf.placeholder(dtype=tf.uint8, shape=[1, 227, 227, 3])
                 _input_maneuver = {
                     'input/dave_image': self.input_dave_image,
                     'input/command': self.input_command,
-                    # 'input/task': self.input_task,
                     'input/use_dropout': self.input_use_dropout,
                     'input/p_dropout': self.input_p_dropout
                 }
@@ -160,8 +157,7 @@ class TFDriver(object):
                     'input/command': self.input_command
                 }
                 _input_posor = {
-                    'input/posor_image':
-                        self.input_posor_image
+                    'input/alex_image': self.input_alex_image
                 }
                 tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
                 tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
@@ -179,7 +175,7 @@ class TFDriver(object):
                 self.sess.close()
                 self.sess = None
 
-    def forward(self, task, dave_image, alex_image, posor_image, turn, dagger=False):
+    def forward(self, dave_image, alex_image, turn, dagger=False):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_steering, self.tf_brake, self.tf_surprise, self.tf_critic, self.tf_entropy]
@@ -190,7 +186,6 @@ class TFDriver(object):
                 feeder = {
                     self.input_dave_image: [dave_image],
                     self.input_alex_image: [alex_image],
-                    self.input_posor_image: [posor_image],
                     self.input_use_dropout: dagger,
                     self.input_p_dropout: self.p_conv_dropout if dagger else 0,
                     self.input_command: [_cmd_vector(turn=turn)],
@@ -213,7 +208,7 @@ class TFDriver(object):
             if self.tf_features is None:
                 return _ret
             with self.sess.graph.as_default():
-                feeder = {self.input_posor_image: [image]}
+                feeder = {self.input_alex_image: [image]}
                 try:
                     return self.sess.run(self.tf_features, feed_dict=feeder).ravel()
                 except (StandardError, CancelledError) as e:
