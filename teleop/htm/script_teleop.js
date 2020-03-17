@@ -97,13 +97,13 @@ socket_utils.create_socket("/ws/log", false, 1000, function(ws) {
         el_inference_corridor.text(command.debug1.toFixed(3));
         el_inference_obstacle.text(command.debug2.toFixed(3));
         el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
-        // console.max_speed is the maximum speed
-        // console.speed is the desired speed
-        // console.vel_y is the actual vehicle speed
+        // max_speed is the maximum speed
+        // speed is the desired speed
+        // vel_y is the actual vehicle speed
         // console.log(command);
         // Math.ceil(command.max_speed);
-        el_current_speed.text(command.speed.toFixed(1));
         el_max_speed.text(command.max_speed.toFixed(1));
+        el_current_speed.text(command.vel_y.toFixed(2));
         if (view.command_turn != command.turn) {
             view.command_turn = command.turn;
             switch(command.turn) {

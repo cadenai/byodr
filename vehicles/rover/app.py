@@ -1,5 +1,7 @@
 import argparse
+import collections
 import logging
+import math
 import multiprocessing
 import signal
 import sys
@@ -35,25 +37,34 @@ def _interrupt():
 
 class RosGate(object):
     """
+         rostopic hz /roy_teleop/sensor/odometer
+         subscribed to [/roy_teleop/sensor/odometer]
+         average rate: 81.741
     """
 
     def __init__(self, connect=True):
         """
         """
-        self._circum_m = .30  # Meters.
-        self._e_time = time.time()
-        self._dt = 1e12
+        self._radius_m = .10  # Meters.
+        self._circum_m = 2 * math.pi * self._radius_m
+        self._gear_ratio = 20  # Sensor ticks to wheel turn ratio
+        self._d_ticks = collections.deque(maxlen=40)  # Half a second worth.
+        self._hall_state = 0
+        self._hall_threshold = 150
 
         if connect:
             rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
             self._pub = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
 
     def _update_odometer(self, message):
-        # Either zero or one for the hall effect.
+        # This is the strength of the hall effect.
         effect = int(message.twist.linear.y)
-        if effect == 1:
-            self._dt = time.time() - self._e_time
-            self._e_time = time.time()
+        if effect > self._hall_threshold:
+            if self._hall_state == 0:
+                self._hall_state = 1
+        else:
+            self._hall_state = 0
+        self._d_ticks.append(self._hall_state)
 
     def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
         if not quit_event.is_set():
@@ -66,7 +77,12 @@ class RosGate(object):
 
     def get_odometer_value(self):
         # Meters per second.
-        return self._circum_m / self._dt
+        if self._d_ticks:
+            num = np.sum(self._d_ticks)
+            # Scale to one second.
+            return (num * self._circum_m) / (2. * self._gear_ratio)
+        else:
+            return 0
 
 
 class FakeGate(RosGate):

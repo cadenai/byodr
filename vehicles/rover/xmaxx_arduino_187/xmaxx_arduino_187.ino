@@ -17,8 +17,6 @@ geometry_msgs::TwistStamped message;
 Servo servoThrottle;
 Servo servoSteering;
 
-int hallEffect, hallState = 0;
-
 /*
    Ros command topic listener drives the servos with the command values.
     angular.x = channel {0: none, 1: throttle, 2: steering, 3: both}
@@ -65,7 +63,7 @@ void setup() {
 
   servoThrottle.attach(9);
   // Pin 5 on aav01 and 10 on r3.
-  servoSteering.attach(5);
+  servoSteering.attach(10);
       
   nodeHandle.initNode();
   nodeHandle.subscribe(subscriber);
@@ -79,17 +77,8 @@ void loop() {
     servoThrottle.write(90);
   }
 
-  nodeHandle.spinOnce();
-
   // Process the odometer.
-  hallEffect = analogRead(A0);
-  // The threshold is determined empirically.
-  if (hallEffect > 250) {
-    if (hallState == 0) {
-      hallState = 1;
-      publish_odometer(hallState);
-    }
-  } else {
-    hallState = 0;
-  }
+  publish_odometer(analogRead(A0));
+
+  nodeHandle.spinOnce();
 }
