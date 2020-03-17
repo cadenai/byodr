@@ -13,6 +13,12 @@ volatile uint32_t lastCmdReceivedTime = 0;
 ros::NodeHandle nodeHandle;
 geometry_msgs::TwistStamped message;
 
+// For odometry.
+int hallSensorPin = 2;
+byte h_up, h_rotation;
+float h_rpm, h_detect;
+unsigned long h_prev;
+
 // Servo objects generate the signals expected by the Electronic Speed Controller (ESC) and steering servo.
 Servo servoThrottle;
 Servo servoSteering;
@@ -52,22 +58,42 @@ ros::Subscriber<geometry_msgs::Twist> subscriber("/roy_teleop/command/drive", &m
 
 ros::Publisher publisher("/roy_teleop/sensor/odometer", &message);
 
-void publish_odometer(int value) {
+void publish_odometer() {
   message.header.stamp = nodeHandle.now();  
-  message.twist.linear.y = value;
+  message.twist.linear.x = h_up;
+  message.twist.linear.y = h_rpm;
   publisher.publish(&message);
 }
 
 void setup() {
   Serial.begin(57600);
 
+  h_up = 0;
+  h_rpm = 0;
+  h_detect = 0;
+  h_rotation = 0;
+  h_prev = 0;
+
+  pinMode(hallSensorPin, INPUT);   
+  
+  // Throttle is pin 9.
   servoThrottle.attach(9);
-  // Pin 5 on aav01 and 10 on r3.
-  servoSteering.attach(10);
+  // Steering is pin 5.
+  servoSteering.attach(5);
       
   nodeHandle.initNode();
   nodeHandle.subscribe(subscriber);
   nodeHandle.advertise(publisher);
+}
+
+void hall_detect() {
+  h_rotation++;
+  h_detect = millis();
+  if (h_rotation >= 3) {
+    h_rpm = (1000 / (millis() - h_prev)) * 60; 
+    h_prev = millis();
+    h_rotation = 0;
+  }
 }
 
 void loop() {
@@ -78,7 +104,20 @@ void loop() {
   }
 
   // Process the odometer.
-  publish_odometer(analogRead(A0));
+  if (digitalRead(hallSensorPin) == HIGH) {
+    if (h_up == 0) {
+      h_up = 1;
+      hall_detect();
+    }
+  } else {
+    h_up = 0;
+  }
+
+  // Drop to zero when stopped.
+  if (millis() - h_detect > 200) {
+    h_rpm = 0;
+  } 
+  publish_odometer();
 
   nodeHandle.spinOnce();
 }

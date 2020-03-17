@@ -1,5 +1,4 @@
 import argparse
-import collections
 import logging
 import math
 import multiprocessing
@@ -48,23 +47,17 @@ class RosGate(object):
         self._radius_m = .10  # Meters.
         self._circum_m = 2 * math.pi * self._radius_m
         self._gear_ratio = 20  # Sensor ticks to wheel turn ratio
-        self._d_ticks = collections.deque(maxlen=40)  # Half a second worth.
-        self._hall_state = 0
-        self._hall_threshold = 150
+        self._rpm = 0
+        self._rpm_moment = .1
 
         if connect:
             rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
             self._pub = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
 
     def _update_odometer(self, message):
-        # This is the strength of the hall effect.
-        effect = int(message.twist.linear.y)
-        if effect > self._hall_threshold:
-            if self._hall_state == 0:
-                self._hall_state = 1
-        else:
-            self._hall_state = 0
-        self._d_ticks.append(self._hall_state)
+        # The odometer publishes ticks (1 or 0) and rpm.
+        rpm = float(message.twist.linear.y) / 60
+        self._rpm = self._rpm_moment * rpm + (1. - self._rpm_moment) * self._rpm
 
     def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
         if not quit_event.is_set():
@@ -76,13 +69,8 @@ class RosGate(object):
             self._pub.publish(twist)
 
     def get_odometer_value(self):
-        # Meters per second.
-        if self._d_ticks:
-            num = np.sum(self._d_ticks)
-            # Scale to one second.
-            return (num * self._circum_m) / (2. * self._gear_ratio)
-        else:
-            return 0
+        # Convert to meters per second.
+        return (self._rpm / self._gear_ratio) * self._circum_m
 
 
 class FakeGate(RosGate):
