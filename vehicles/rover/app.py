@@ -46,7 +46,7 @@ class RosGate(object):
         """
         _radius_m = .10  # Wheel radius in meters.
         self._circum_m = 2 * math.pi * _radius_m  # Convert to circumference.
-        self._gear_ratio = 18  # Sensor tick to wheel turn ratio.
+        self._gear_ratio = 8  # Sensor tick to wheel turn ratio.
         self._rps = 0  # Hall sensor revolutions per second.
 
         if connect:

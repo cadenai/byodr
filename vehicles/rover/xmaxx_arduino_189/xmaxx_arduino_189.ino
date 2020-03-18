@@ -17,7 +17,7 @@
 
 volatile byte h_up;
 volatile float h_val, h_rps;
-volatile uint32_t h_detect_time;
+volatile uint32_t h_detect_time, h_publish_time;
 
 // Time the last command was received on the throttle channel.
 volatile uint32_t lastCmdReceivedTime;
@@ -90,7 +90,8 @@ void setup() {
   h_val = 0;
   h_rps = 0;
   h_detect_time = 0;
-
+  h_publish_time = 0;
+  
   lastCmdReceivedTime = 0;
   
   servoSteering.attach(STEERING_OUT_PIN);
@@ -105,7 +106,6 @@ void setup() {
 
 void loop() {
   // Stop the vehicle when command communication slows down or stops functioning.
-  // Convert to ms.
   if (micros() - lastCmdReceivedTime > 100000) {
     servoThrottle.write(90);
   }
@@ -115,7 +115,12 @@ void loop() {
   if (micros() - h_detect_time > 500000) {
     h_rps = (1.0 - H_RPS_MOMENT) * h_rps;
   } 
-  publish_odometer();
+
+  // Avoid flooding the topic.
+  if (micros() - h_publish_time > 50000) {
+    publish_odometer();
+    h_publish_time = micros();
+  }
 
   nodeHandle.spinOnce();
 }
