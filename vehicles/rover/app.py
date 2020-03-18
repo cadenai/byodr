@@ -44,11 +44,10 @@ class RosGate(object):
     def __init__(self, connect=True):
         """
         """
-        self._radius_m = .10  # Meters.
-        self._circum_m = 2 * math.pi * self._radius_m
-        self._gear_ratio = 20  # Sensor tick to wheel turn ratio
-        self._rps_moment = .2
-        self._rps = 0
+        _radius_m = .10  # Wheel radius in meters.
+        self._circum_m = 2 * math.pi * _radius_m  # Convert to circumference.
+        self._gear_ratio = 18  # Sensor tick to wheel turn ratio.
+        self._rps = 0  # Hall sensor revolutions per second.
 
         if connect:
             rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
@@ -56,8 +55,7 @@ class RosGate(object):
 
     def _update_odometer(self, message):
         # The odometer publishes revolutions per second.
-        rps = float(message.twist.linear.y)
-        self._rps = self._rps_moment * rps + (1. - self._rps_moment) * self._rps
+        self._rps = float(message.twist.linear.y)
 
     def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
         if not quit_event.is_set():
@@ -69,7 +67,7 @@ class RosGate(object):
             self._pub.publish(twist)
 
     def get_odometer_value(self):
-        # Convert to meters per second.
+        # Convert to travel speed in meters per second.
         return (self._rps / self._gear_ratio) * self._circum_m
 
 
