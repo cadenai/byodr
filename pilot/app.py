@@ -1,6 +1,8 @@
 import argparse
+import glob
 import logging
 import multiprocessing
+import os
 import signal
 import time
 import traceback
@@ -27,7 +29,7 @@ def main():
     args = parser.parse_args()
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in args.config.split(',')]
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('pilot'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))

@@ -1,6 +1,7 @@
 import argparse
 import collections
 import copy
+import glob
 import logging
 import multiprocessing
 import os
@@ -155,7 +156,7 @@ def main():
     assert os.path.exists(sessions_dir), "Cannot use sessions directory '{}'".format(sessions_dir)
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in args.config.split(',')]
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('recorder'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))

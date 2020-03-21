@@ -1,6 +1,8 @@
 import argparse
+import glob
 import logging
 import multiprocessing
+import os
 import signal
 import time
 import traceback
@@ -30,7 +32,6 @@ class TFRunner(object):
     def __init__(self, **kwargs):
         self._lock = multiprocessing.Lock()
         self._dagger = False
-        self._model_task = int(kwargs['dnn.model.task'])
         self._steering_scale_left = abs(float(kwargs['driver.dnn.steering.scale.left']))
         self._steering_scale_right = float(kwargs['driver.dnn.steering.scale.right'])
         _penalty_up_momentum = float(kwargs['driver.autopilot.filter.momentum.up'])
@@ -107,7 +108,7 @@ def main():
     args = parser.parse_args()
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in args.config.split(',')]
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('inference'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))

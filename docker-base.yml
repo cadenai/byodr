@@ -12,9 +12,10 @@ services:
     volumes:
       - ./common:/common
       - ./teleop:/app
+      - ${DC_CONFIG_DIR}:/config
     environment:
       TELEOP_HOME: '/app'
-    command: python app.py --port=9100 --config=${DC_CONFIG_FILES}
+    command: python app.py --port=9100 --config=/config
   pilot:
     user: '1000'
     build:
@@ -27,7 +28,8 @@ services:
     volumes:
       - ./common:/common
       - ./pilot:/app
-    command: python app.py --config=${DC_CONFIG_FILES}
+      - ${DC_CONFIG_DIR}:/config
+    command: python app.py --config=/config
   recorder:
     user: '1000'
     build:
@@ -40,8 +42,9 @@ services:
     volumes:
       - ./common:/common
       - ./recorder:/app
+      - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions
-    command: python app.py --sessions=/sessions --config=${DC_CONFIG_FILES}
+    command: python app.py --sessions=/sessions --config=/config
   inference:
     user: '1000'
     build:
@@ -54,7 +57,8 @@ services:
     volumes:
       - ./common:/common
       - ./inference:/app
+      - ${DC_CONFIG_DIR}:/config
       - ${DC_INFERENCE_MODELS}:/models
-    command: python app.py --models=/models --config=${DC_CONFIG_FILES}
+    command: python app.py --models=/models --config=/config
 
 

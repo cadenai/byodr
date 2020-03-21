@@ -33,6 +33,7 @@ services:
       - /dev/pcan32:/dev/pcan32
       - /dev/pcan-usb:/dev/pcan-usb
       - /dev/pcanusb32:/dev/pcanusb32
-    command: python app.py --config=${DC_CONFIG_FILES}
+      - ${DC_CONFIG_DIR}:/config
+    command: python app.py --config=/config
 
 

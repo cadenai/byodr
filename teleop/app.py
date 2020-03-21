@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import glob
 import logging
 import multiprocessing
 import os
@@ -35,7 +36,7 @@ def main():
     args = parser.parse_args()
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in args.config.split(',')]
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('teleop'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))

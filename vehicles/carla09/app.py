@@ -1,6 +1,8 @@
 import argparse
+import glob
 import logging
 import multiprocessing
+import os
 import signal
 import time
 from ConfigParser import SafeConfigParser
@@ -27,7 +29,7 @@ def main():
     args = parser.parse_args()
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in args.config.split(',')]
+    [parser.read(_f) for _f in glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('vehicle'))
     cfg.update(dict(parser.items('platform')))
     for key in sorted(cfg):

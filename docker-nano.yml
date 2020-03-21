@@ -33,8 +33,9 @@ services:
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app
+      - ${DC_CONFIG_DIR}:/config
     environment:
       ROS_MASTER_URI: 'http://byodr_rover_ros:11311'
-    command: python app.py --config=${DC_CONFIG_FILES}
+    command: python app.py --config=/config
 
 
