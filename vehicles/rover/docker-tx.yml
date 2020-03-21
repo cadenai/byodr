@@ -19,7 +19,6 @@ services:
       - teleop:rw
     volumes:
       - './inference:/app'
-      - '/mnt/data1:/data1'
       - '/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra'
       - '/usr/local/cuda-9.0:/usr/local/cuda'
     devices:

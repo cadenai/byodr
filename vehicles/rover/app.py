@@ -23,7 +23,6 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 quit_event = multiprocessing.Event()
 
-CAMERA_SHAPE = (360, 640, 3)
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
 
@@ -160,6 +159,9 @@ def main():
 
     _process_frequency = int(cfg.get('clock.hz'))
     _patience_micro = float(cfg.get('patience.ms')) * 1000
+    _camera_hwc = cfg.get('camera.shape.hwc')
+    _camera_uri = cfg.get('camera.location.uri')
+    _camera_shape = _camera_hwc.split('x')
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     dry_run = bool(int(cfg.get('dry.run')))
@@ -174,13 +176,13 @@ def main():
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
     def _image(_b):
-        image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(CAMERA_SHAPE))
+        image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(_camera_shape))
 
     _url = "rtspsrc " \
-           "location=rtsp://user1:HelloUser1@192.168.50.64:554/Streaming/Channels/102 " \
+           "location={} " \
            "latency=0 drop-on-latency=true ! queue ! " \
            "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-           "videoscale ! video/x-raw,format=BGR ! queue"
+           "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_uri)
     gst_source = GstRawSource(fn_callback=_image, command=_url)
     gst_source.open()
 
