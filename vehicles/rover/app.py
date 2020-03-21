@@ -161,7 +161,7 @@ def main():
     _patience_micro = float(cfg.get('patience.ms')) * 1000
     _camera_hwc = cfg.get('camera.shape.hwc')
     _camera_uri = cfg.get('camera.location.uri')
-    _camera_shape = _camera_hwc.split('x')
+    _camera_shape = [int(x) for x in _camera_hwc.split('x')]
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     dry_run = bool(int(cfg.get('dry.run')))
