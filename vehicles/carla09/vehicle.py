@@ -96,8 +96,9 @@ class CarlaHandler(object):
         self._camera_callback(img)
 
     def _carla_vel(self):
+        # Carla measures in meters and seconds.
         velocity = self._actor.get_velocity()
-        return math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2) / 1.6 / 3.6
+        return math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
 
     def _position(self):
         location = None if self._actor is None else self._actor.get_location()
