@@ -21,6 +21,13 @@ services:
       - './inference:/app'
       - '/usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu'
       - '/usr/local/cuda-10.0:/usr/local/cuda'
+    devices:
+      - '/dev/nvhost-ctrl'
+      - '/dev/nvhost-ctrl-gpu'
+      - '/dev/nvhost-prof-gpu'
+      - '/dev/nvmap'
+      - '/dev/nvhost-gpu'
+      - '/dev/nvhost-as-gpu'
   vehicle:
     user: '1000'
     build:
