@@ -9,7 +9,6 @@ import traceback
 from struct import Struct
 
 import cv2
-import ffmpeg
 import numpy as np
 from tornado import websocket
 
@@ -186,6 +185,7 @@ class FFMPegThread(threading.Thread):
         self.consumers.remove(_fn)
 
     def run(self):
+        import ffmpeg
         # Determine the image shape first.
         _shape = None
         while not self._quit_event.is_set() and _shape is None:

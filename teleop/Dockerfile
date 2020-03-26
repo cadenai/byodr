@@ -1,9 +1,5 @@
 FROM centipede2donald/byodr:bionic-opencv-python27
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ffmpeg \
- && rm -rf /var/lib/apt/lists/*
-
 COPY ./common common/
 COPY ./teleop app/
 WORKDIR /app
