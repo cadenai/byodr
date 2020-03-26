@@ -1,4 +1,6 @@
-FROM byodr/tf
+FROM byodr/tensorflow:jetpack-python27
+
+RUN pip install --extra-index-url https://developer.download.nvidia.com/compute/redist/jp33 tensorflow-gpu
 
 COPY ./common common/
 COPY ./inference app/

@@ -1,4 +1,4 @@
-FROM byodr/ubuntu_bionic
+FROM byodr/bionic:opencv-python27
 
 COPY ./common common/
 COPY ./recorder app/

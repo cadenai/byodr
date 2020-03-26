@@ -1,4 +1,4 @@
-FROM byodr/ubuntu_bionic
+FROM byodr/bionic:opencv-python27
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \

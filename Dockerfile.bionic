@@ -1,4 +1,4 @@
-# docker build -f Dockerfile.bionic -t byodr/ubuntu_bionic .
+# docker build -f Dockerfile.bionic -t byodr/bionic:opencv-python27 .
 FROM ubuntu:bionic
 
 ENV TZ=Europe/Amsterdam

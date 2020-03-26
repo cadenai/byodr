@@ -1,0 +1,23 @@
+FROM tensorflow/tensorflow:1.11.0-gpu
+
+ENV TZ=Europe/Amsterdam
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python-opencv \
+    python-pip \
+    python-setuptools \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN pip install "pyzmq >=18.1, <19.0"
+
+COPY ./common common/
+COPY ./inference app/
+WORKDIR /app
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create the user as part of the video group.
+RUN useradd --uid 1000 --gid 44 --system --create-home --shell /bin/bash app
+
+ENV PYTHONPATH "${PYTHONPATH}:/common"

@@ -1,6 +1,9 @@
 version: '2'
 services:
   inference:
+    build:
+      context: ./
+      dockerfile: inference/Dockerfile.jp
     volumes_from:
       - teleop:rw
     volumes:

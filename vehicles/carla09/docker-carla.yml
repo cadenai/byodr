@@ -1,5 +1,9 @@
 version: '2'
 services:
+  inference:
+    build:
+      context: ./
+      dockerfile: inference/Dockerfile.x86
   vehicle:
     user: '1000'
     build:
