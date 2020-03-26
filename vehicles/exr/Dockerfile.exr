@@ -1,5 +1,4 @@
-# docker build -f vehicles/exr/Dockerfile.exr -t byodr/vehicle_exr .
-FROM byodr/ros_melodic
+FROM centipede2donald/byodr:melodic-gstreamer10-python27
 
 #
 # ueye

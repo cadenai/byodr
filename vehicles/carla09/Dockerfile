@@ -1,6 +1,6 @@
 FROM carlasim/carla:0.9.6 AS builder
 
-FROM byodr/bionic:opencv-python27
+FROM centipede2donald/byodr:bionic-opencv-python27
 
 COPY ./common common/
 COPY ./vehicles/carla09 app/

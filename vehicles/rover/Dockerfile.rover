@@ -1,4 +1,4 @@
-FROM byodr/ros_melodic
+FROM centipede2donald/byodr:melodic-gstreamer10-python27
 
 COPY ./common common/
 COPY ./vehicles/rover app/

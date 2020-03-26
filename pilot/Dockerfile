@@ -1,4 +1,4 @@
-FROM byodr/bionic:opencv-python27
+FROM centipede2donald/byodr:bionic-opencv-python27
 
 COPY ./common common/
 COPY ./pilot app/

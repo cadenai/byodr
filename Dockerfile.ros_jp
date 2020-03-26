@@ -1,4 +1,4 @@
-# docker build -f Dockerfile.ros_jp -t byodr/ros_melodic .
+# docker build -f Dockerfile.ros_jp -t centipede2donald/byodr:melodic-gstreamer10-python27 .
 FROM ros:melodic
 
 ENV TZ=Europe/Amsterdam
@@ -11,9 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-pip \
     python-setuptools \
     python-wheel \
-    wget
-
-RUN apt-get install -f -y \
+    wget \
     gstreamer1.0-plugins-base \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
