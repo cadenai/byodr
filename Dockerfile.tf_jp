@@ -1,26 +1,16 @@
-# docker build -f Dockerfile.tf_jp43 -t byodr/tensorflow:jetpack-python27 .
-FROM ubuntu:bionic
+# docker build -f Dockerfile.tf_jp -t centipede2donald/byodr:tf-jetpack-python27 .
+FROM centipede2donald/byodr:bionic-opencv-python27
 
-ENV TZ=Europe/Amsterdam
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+RUN apt-get install -y --no-install-recommends \
     libhdf5-serial-dev \
     hdf5-tools \
     libhdf5-dev \
     zlib1g-dev zip \
     libjpeg8-dev \
-    python-dev \
-    python-opencv \
-    python-pip \
-    python-setuptools \
-    python-wheel \
     wget \
  && rm -rf /var/lib/apt/lists/*
 
-RUN pip install "pyzmq >=18.1, <19.0" \
-  && pip install "astor>=0.6.0" \
+RUN pip install "astor>=0.6.0" \
   && pip install "termcolor>=1.1.0" \
   && pip install "backports.weakref>=1.0rc1" \
   && pip install "enum34>=1.1.6" \

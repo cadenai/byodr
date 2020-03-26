@@ -14,4 +14,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-wheel \
  && rm -rf /var/lib/apt/lists/*
 
-RUN pip install "pyzmq >=18.1, <19.0"
+# Include here to avoid long build times on arm64 due to missing wheels.
+RUN pip install "pyzmq >=18.1, <19.0" \
+  && pip install "pandas >=0.22, <1.0"
