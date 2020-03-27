@@ -22,8 +22,6 @@ services:
       - teleop:rw
     volumes:
       - './inference:/app'
-      - '/usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu'
-      - ${DC_CUDA_DIR}:/usr/local/cuda
     devices:
       - '/dev/nvhost-ctrl'
       - '/dev/nvhost-ctrl-gpu'
