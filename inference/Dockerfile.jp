@@ -1,4 +1,4 @@
-FROM centipede2donald/byodr:tensorflow111-jetpack33-python27
+FROM centipede2donald/byodr:tensorflow113-jetpack43-python27
 
 COPY ./common common/
 COPY ./inference app/
@@ -8,5 +8,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Create the user as part of the video group.
 RUN useradd --uid 1000 --gid 44 --system --create-home --shell /bin/bash app
+
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda/targets/aarch64-linux/lib
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
