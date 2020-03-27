@@ -1,7 +1,7 @@
 # docker build -f Dockerfile.tf_jp -t centipede2donald/byodr:tf-jetpack-python27 .
 FROM centipede2donald/byodr:bionic-opencv-python27
 
-RUN apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-serial-dev \
     hdf5-tools \
     libhdf5-dev \
