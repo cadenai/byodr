@@ -24,10 +24,11 @@ RUN pip install "astor>=0.6.0" \
 
 COPY --from=builder /usr/local/cuda-9.0 /usr/local/cuda
 COPY --from=builder /usr/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu
-COPY /tensorflow-1.11.0-cp27-cp27mu-linux_aarch64.whl /binaries
+COPY /tensorflow-1.11.0-cp27-cp27mu-linux_aarch64.whl /
 
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu:/usr/lib/aarch64-linux-gnu/tegra
+ENV HDF5_DIR=/usr/lib/aarch64-linux-gnu/hdf5/serial
 
-RUN pip install /binaries/tensorflow-1.11.0-cp27-cp27mu-linux_aarch64.whl
+RUN pip install /tensorflow-1.11.0-cp27-cp27mu-linux_aarch64.whl
 
 WORKDIR /
