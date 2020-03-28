@@ -20,9 +20,8 @@ services:
       context: ./
       dockerfile: vehicles/exr/Dockerfile
     image: centipede2donald/byodr-ce:vehicle-exr
-    volumes_from:
-      - teleop:rw
     volumes:
+      - volume_byodr:/byodr
       - ./common:/common
       - ./docker/deps:/deps
       - ./vehicles/exr:/app

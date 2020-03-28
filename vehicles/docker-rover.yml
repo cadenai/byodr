@@ -34,9 +34,8 @@ services:
       context: ./
       dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:vehicle-rover
-    volumes_from:
-      - teleop:rw
     volumes:
+      - volume_byodr:/byodr
       - ./common:/common
       - ./vehicles/rover:/app
       - ${DC_CONFIG_DIR}:/config
