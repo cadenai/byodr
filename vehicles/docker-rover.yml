@@ -32,7 +32,7 @@ services:
     user: '1000'
     build:
       context: ./
-      dockerfile: vehicles/rover/Dockerfile.rover
+      dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:vehicle-rover
     volumes_from:
       - teleop:rw
