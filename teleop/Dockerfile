@@ -1,4 +1,4 @@
-FROM centipede2donald/byodr:bionic-opencv-python27
+FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
 COPY ./common common/
 COPY ./teleop app/

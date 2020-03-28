@@ -1,4 +1,4 @@
-FROM centipede2donald/byodr:melodic-gstreamer10-python27
+FROM centipede2donald/ros-melodic:python27-opencv32-gstreamer10
 
 COPY ./common common/
 COPY ./vehicles/rover app/

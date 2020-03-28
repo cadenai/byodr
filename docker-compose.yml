@@ -1,12 +1,11 @@
-version: '2.3'
+version: '2'
 services:
   teleop:
     user: '1000'
     build:
       context: ./
       dockerfile: teleop/Dockerfile
-    image: byodr/teleop
-    container_name: byodr_teleop
+    image: centipede2donald/byodr-ce:teleop
     ports:
       - "9100-9105:9100-9105"
     volumes:
@@ -21,8 +20,7 @@ services:
     build:
       context: ./
       dockerfile: pilot/Dockerfile
-    image: byodr/pilot
-    container_name: byodr_pilot
+    image: centipede2donald/byodr-ce:pilot
     volumes_from:
       - teleop:rw
     volumes:
@@ -35,8 +33,7 @@ services:
     build:
       context: ./
       dockerfile: recorder/Dockerfile
-    image: byodr/recorder
-    container_name: byodr_recorder
+    image: centipede2donald/byodr-ce:recorder
     volumes_from:
       - teleop:rw
     volumes:
@@ -47,9 +44,7 @@ services:
     command: python app.py --sessions=/sessions --config=/config
   inference:
     user: '1000'
-#    runtime: nvidia
-    image: byodr/inference
-    container_name: byodr_inference
+    image: centipede2donald/byodr-ce:inference
     volumes_from:
       - teleop:rw
     volumes:

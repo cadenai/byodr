@@ -1,4 +1,4 @@
-version: '2.3'
+version: '2'
 services:
   inference:
     build:
@@ -9,8 +9,7 @@ services:
     build:
       context: ./
       dockerfile: vehicles/carla09/Dockerfile
-    image: byodr/vehicle_carla
-    container_name: byodr_carla
+    image: centipede2donald/byodr-ce:vehicle-carla
     volumes_from:
       - teleop:rw
     volumes:

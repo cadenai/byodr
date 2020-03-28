@@ -1,5 +1,5 @@
-# docker build -f Dockerfile.bionic -t centipede2donald/byodr:bionic-opencv-python27 .
-# docker buildx build --platform linux/arm64,linux/amd64 --push -f Dockerfile.bionic -t centipede2donald/byodr:bionic-opencv-python27 .
+# docker build -f Dockerfile.ubuntu_opencv -t centipede2donald/ubuntu-bionic:python27-opencv32 .
+# docker buildx build --platform linux/arm64,linux/amd64 --push -f Dockerfile.ubuntu_opencv -t centipede2donald/ubuntu-bionic:python27-opencv32 .
 FROM ubuntu:bionic
 
 ENV TZ=Europe/Amsterdam
@@ -14,6 +14,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-wheel \
  && rm -rf /var/lib/apt/lists/*
 
-# Include here to avoid long build times on arm64 due to missing wheels.
+# Included here to avoid the long build times on arm64 child images when missing wheels.
 RUN pip install "pyzmq >=18.1, <19.0" \
   && pip install "pandas >=0.22, <1.0"

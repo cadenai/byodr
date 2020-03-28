@@ -1,5 +1,5 @@
-# docker build -f Dockerfile.tf_jp33 -t centipede2donald/byodr:tensorflow114-jetpack33-python27 .
-FROM centipede2donald/byodr:bionic-opencv-python27
+# docker build -f Dockerfile.tf_jp33 -t centipede2donald/nvidia-jetson:jp33-python27-tensorflow114 .
+FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
  && rm -rf /var/lib/apt/lists/*
 
+# Origin https://developer.download.nvidia.com/compute/redist/jp/v33/tensorflow-gpu
 COPY /tensorflow_gpu-1.14.0* /
 
 ENV HDF5_DIR=/usr/lib/aarch64-linux-gnu/hdf5/serial

@@ -1,6 +1,6 @@
 FROM carlasim/carla:0.9.6 AS builder
 
-FROM centipede2donald/byodr:bionic-opencv-python27
+FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
 COPY ./common common/
 COPY ./vehicles/carla09 app/

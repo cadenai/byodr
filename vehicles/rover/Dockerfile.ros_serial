@@ -1,0 +1,9 @@
+FROM centipede2donald/ros-melodic:rosserial
+
+COPY . app/
+WORKDIR /app
+
+# The dialout group is 20.
+RUN useradd --uid 1000 --gid 20 --system --create-home --shell /bin/bash app
+
+ENTRYPOINT ["/ros_entrypoint.sh"]

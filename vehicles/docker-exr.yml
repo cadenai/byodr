@@ -1,11 +1,9 @@
-version: '2.3'
+version: '2'
 services:
   inference:
     build:
       context: ./
       dockerfile: inference/Dockerfile.jp
-    volumes_from:
-      - teleop:rw
     volumes:
       - './inference:/app'
     devices:
@@ -21,8 +19,7 @@ services:
     build:
       context: ./
       dockerfile: vehicles/exr/Dockerfile
-    image: byodr/vehicle_exr
-    container_name: byodr_exr
+    image: centipede2donald/byodr-ce:vehicle-exr
     volumes_from:
       - teleop:rw
     volumes:
