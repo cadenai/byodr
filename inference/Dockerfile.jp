@@ -15,3 +15,5 @@ ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
+
+COPY ./build/*optimized.pb /models/

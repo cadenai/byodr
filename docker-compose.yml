@@ -51,7 +51,6 @@ services:
       - ./common:/common
       - ./inference:/app
       - ${DC_CONFIG_DIR}:/config
-      - ${DC_INFERENCE_MODELS}:/models
     command: python app.py --models=/models --config=/config
 
 
