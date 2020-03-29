@@ -6,13 +6,13 @@ services:
       context: ./
       dockerfile: vehicles/rover/Dockerfile.ros_serial
     image: centipede2donald/byodr-ce:ros-serial
+    container_name: byodr_ros_serial
     volumes:
       - ./vehicles/rover:/app
     devices:
       - /dev/ttyACM0
     ports:
       - "11311:11311"
-    command: roslaunch rosserial.launch
   inference:
     build:
       context: ./
@@ -40,7 +40,6 @@ services:
       - ./vehicles/rover:/app
       - ${DC_CONFIG_DIR}:/config
     environment:
-      ROS_MASTER_URI: 'http://byodr_rover_ros:11311'
-    command: python app.py --config=/config
+      ROS_MASTER_URI: 'http://byodr_ros_serial:11311'
 
 

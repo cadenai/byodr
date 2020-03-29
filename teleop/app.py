@@ -32,7 +32,7 @@ def _interrupt():
 def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--port', type=int, default=9100, help='Port number')
-    parser.add_argument('--config', type=str, required=True, help='Config file location.')
+    parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
     parser = SafeConfigParser()
@@ -67,7 +67,7 @@ def main():
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/(.*)", web.StaticFileHandler, {
-                'path': os.path.join(os.environ.get('TELEOP_HOME'), 'htm'),
+                'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'
             })
         ])

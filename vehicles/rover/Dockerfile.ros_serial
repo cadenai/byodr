@@ -7,3 +7,5 @@ WORKDIR /app
 RUN useradd --uid 1000 --gid 20 --system --create-home --shell /bin/bash app
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
+
+CMD ["roslaunch", "rosserial.launch"]

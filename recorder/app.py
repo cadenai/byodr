@@ -148,8 +148,8 @@ class EventHandler(threading.Thread):
 
 def main():
     parser = argparse.ArgumentParser(description='Recorder.')
-    parser.add_argument('--sessions', type=str, required=True, help='Sessions directory.')
-    parser.add_argument('--config', type=str, required=True, help='Config file location.')
+    parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
+    parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
     sessions_dir = os.path.expanduser(args.sessions)

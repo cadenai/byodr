@@ -15,4 +15,3 @@ services:
       - ./common:/common
       - ./vehicles/carla09:/app
       - ${DC_CONFIG_DIR}:/config
-    command: python app.py --config=/config

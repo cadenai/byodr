@@ -15,9 +15,6 @@ services:
       - ./common:/common
       - ./teleop:/app
       - ${DC_CONFIG_DIR}:/config
-    environment:
-      TELEOP_HOME: '/app'
-    command: python app.py --port=9100 --config=/config
   pilot:
     user: '1000'
     build:
@@ -29,7 +26,6 @@ services:
       - ./common:/common
       - ./pilot:/app
       - ${DC_CONFIG_DIR}:/config
-    command: python app.py --config=/config
   recorder:
     user: '1000'
     build:
@@ -42,7 +38,6 @@ services:
       - ./recorder:/app
       - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions
-    command: python app.py --sessions=/sessions --config=/config
   inference:
     user: '1000'
     image: centipede2donald/byodr-ce:inference
@@ -51,6 +46,5 @@ services:
       - ./common:/common
       - ./inference:/app
       - ${DC_CONFIG_DIR}:/config
-    command: python app.py --models=/models --config=/config
 
 

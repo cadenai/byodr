@@ -12,3 +12,5 @@ RUN groupadd --gid 1000 --system app \
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
+
+CMD ["python", "app.py"]

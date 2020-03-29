@@ -23,3 +23,5 @@ RUN useradd --uid 1000 --gid 44 --system --create-home --shell /bin/bash app
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 COPY ./build/*optimized.pb /models/
+
+CMD ["python", "app.py"]

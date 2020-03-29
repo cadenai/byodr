@@ -15,3 +15,5 @@ RUN mkdir /byodr && chown -R app:app /byodr
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 EXPOSE 9100
+
+CMD ["python", "app.py", "--port=9100"]

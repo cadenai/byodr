@@ -252,7 +252,7 @@ class TwistHandler(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Exr main.')
-    parser.add_argument('--config', type=str, required=True, help='Config file location.')
+    parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
     parser = SafeConfigParser()

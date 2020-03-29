@@ -103,8 +103,8 @@ class TFRunner(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Inference server.')
-    parser.add_argument('--models', type=str, required=True, help='Directory with the inference models.')
-    parser.add_argument('--config', type=str, required=True, help='Config file location.')
+    parser.add_argument('--models', type=str, default='/models', help='Directory with the inference models.')
+    parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
     parser = SafeConfigParser()

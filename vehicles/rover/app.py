@@ -147,11 +147,11 @@ def _ros_init():
 
 def main():
     parser = argparse.ArgumentParser(description='Rover main.')
-    parser.add_argument('--config', type=str, required=True, help='Config file location.')
+    parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in glob.glob(os.path.join(args.config, '*.ini'))]
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('vehicle'))
     cfg.update(dict(parser.items('platform')))
     for key in sorted(cfg):
