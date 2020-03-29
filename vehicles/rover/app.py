@@ -158,7 +158,7 @@ def main():
         logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience_micro = float(cfg.get('patience.ms')) * 1000
+    _patience_micro = float(cfg.get('patience.ms', 200)) * 1000
     _camera_hwc = cfg.get('camera.shape.hwc')
     _camera_uri = cfg.get('camera.location.uri')
     _camera_shape = [int(x) for x in _camera_hwc.split('x')]

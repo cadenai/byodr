@@ -36,7 +36,7 @@ def main():
         logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience_micro = float(cfg.get('patience.ms')) * 1000
+    _patience_micro = float(cfg.get('patience.ms', 200)) * 1000
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')

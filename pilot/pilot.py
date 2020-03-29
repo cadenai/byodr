@@ -439,6 +439,9 @@ class DriverManager(object):
             self._pilot_state.instruction = turn
             logger.info("Instruction set to '{}'.".format(turn))
 
+    def get_driver_ctl(self):
+        return self._driver_ctl
+
     def switch_ctl(self, control='driver_mode.teleop.direct'):
         with self._lock:
             self._pilot_state.cruise_speed = 0
@@ -525,15 +528,23 @@ class CommandProcessor(object):
         self._driver.quit()
 
     def next_action(self, *args):
-        _ts = timestamp()
-        _patience = self._patience_micro
+        _patience, _ts = self._patience_micro, timestamp()
+        # Any of these can be None, too old or repetitive.
         times = [None if arg is None else _ts - arg.get('time') for arg in args]
         commands = [None if arg is None else arg if (times[i] < _patience) else None for i, arg in enumerate(args)]
-        if None in commands:
-            self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+        # What to do on message timeout depends on which driver is active.
+        _ctl = self._driver.get_driver_ctl()
         teleop, vehicle, inference = commands
-        if teleop is None:
-            return self._driver.noop(), True
-        else:
+        # Everything normal.
+        if None not in commands:
             self._process(teleop)
-            return self._driver.next_action(teleop, vehicle, inference), True
+            return self._driver.next_action(teleop, vehicle, inference)
+        # Autopilot drives without teleop commands.
+        if None not in (vehicle, inference) and _ctl == 'driver_mode.inference.dnn':
+            return self._driver.next_action(dict(), vehicle, inference)
+        # Switch off autopilot on internal errors.
+        if None in (vehicle, inference) and _ctl != 'driver_mode.teleop.direct':
+            self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+            return self._driver.noop()
+        # Ignore old or repetitive teleop commands.
+        return None

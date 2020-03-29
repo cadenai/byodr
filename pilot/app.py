@@ -36,7 +36,7 @@ def main():
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = int(cfg.get('clock.hz'))
-    _patience_ms = float(cfg.get('patience.ms'))
+    _patience_ms = float(cfg.get('patience.ms', 500))
     logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience_ms))
     max_duration = 1. / _process_frequency
 
@@ -57,8 +57,8 @@ def main():
             # Synchronize per clock rate.
             _ts = time.time()
             commands = (teleop.get_latest(), vehicle.get_latest(), inference.get_latest())
-            action, publish = controller.next_action(*commands)
-            if publish:
+            action = controller.next_action(*commands)
+            if action:
                 publisher.publish(action)
             # Allow our threads some cpu.
             _proc_sleep = max_duration - (time.time() - _ts)
