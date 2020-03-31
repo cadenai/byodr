@@ -18,10 +18,12 @@ WORKDIR /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create the user as part of the video group.
-RUN useradd --uid 1000 --gid 44 --system --create-home --shell /bin/bash app
-
-ENV PYTHONPATH "${PYTHONPATH}:/common"
+RUN useradd --uid 1990 --gid 44 --system --create-home --shell /bin/bash byodr
 
 COPY ./build/*optimized.pb /models/
+
+USER byodr
+
+ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 CMD ["python", "app.py"]

@@ -3,7 +3,6 @@ volumes:
   volume_byodr:
 services:
   teleop:
-    user: '1000'
     build:
       context: ./
       dockerfile: teleop/Dockerfile
@@ -16,7 +15,6 @@ services:
       - ./teleop:/app
       - ${DC_CONFIG_DIR}:/config
   pilot:
-    user: '1000'
     build:
       context: ./
       dockerfile: pilot/Dockerfile
@@ -27,7 +25,6 @@ services:
       - ./pilot:/app
       - ${DC_CONFIG_DIR}:/config
   recorder:
-    user: '1000'
     build:
       context: ./
       dockerfile: recorder/Dockerfile
@@ -39,7 +36,6 @@ services:
       - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions
   inference:
-    user: '1000'
     image: centipede2donald/byodr-ce:inference
     volumes:
       - volume_byodr:/byodr

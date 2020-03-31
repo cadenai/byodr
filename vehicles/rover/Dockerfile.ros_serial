@@ -4,7 +4,9 @@ COPY . app/
 WORKDIR /app
 
 # The dialout group is 20.
-RUN useradd --uid 1000 --gid 20 --system --create-home --shell /bin/bash app
+RUN useradd --uid 1990 --gid 20 --system --create-home --shell /bin/bash byodr
+
+USER byodr
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 

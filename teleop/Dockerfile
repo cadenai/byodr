@@ -6,14 +6,16 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-RUN groupadd --gid 1000 --system app \
-  && useradd --uid 1000 --gid 1000 --system --create-home --shell /bin/bash app
-
-# https://github.com/docker/compose/issues/3270. Named volumes are initialized from the first container that uses them.
-RUN mkdir /byodr && chown -R app:app /byodr
-
-ENV PYTHONPATH "${PYTHONPATH}:/common"
+RUN groupadd --gid 1990 --system byodr \
+  && useradd --uid 1990 --gid 1990 --system --create-home --shell /bin/bash byodr
 
 EXPOSE 9100
+
+# https://github.com/docker/compose/issues/3270. Named volumes are initialized from the first container that uses them.
+RUN mkdir /byodr && chown -R byodr:byodr /byodr
+
+USER byodr
+
+ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 CMD ["python", "app.py", "--port=9100"]

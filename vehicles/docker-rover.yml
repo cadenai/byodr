@@ -1,7 +1,6 @@
 version: '2'
 services:
   rosserial:
-    user: '1000'
     build:
       context: ./
       dockerfile: vehicles/rover/Dockerfile.ros_serial
@@ -29,7 +28,6 @@ services:
       - '/dev/nvhost-gpu'
       - '/dev/nvhost-as-gpu'
   vehicle:
-    user: '1000'
     build:
       context: ./
       dockerfile: vehicles/rover/Dockerfile

@@ -5,7 +5,6 @@ services:
       context: ./
       dockerfile: inference/Dockerfile.x86
   vehicle:
-    user: '1000'
     build:
       context: ./
       dockerfile: vehicles/carla09/Dockerfile
