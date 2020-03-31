@@ -1,0 +1,17 @@
+[Unit]
+Description=${SD_APP_DESCRIPTION}
+Requires=docker.service
+After=docker.service
+
+[Service]
+TimeoutStartSec=0
+Restart=on-failure
+ExecStart=/usr/bin/docker run --rm --user=${SD_USER_NAME} --name ${SD_CONTAINER_NAME} \
+  -v volume_byodr:/byodr \
+  -v ${SD_CONFIG_DIR}:/config \
+  -p 9100:9100 \
+  ${SD_IMAGE_NAME}
+ExecStop=/usr/bin/docker stop ${SD_CONTAINER_NAME}
+
+[Install]
+WantedBy=multi-user.target

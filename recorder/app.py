@@ -78,7 +78,7 @@ class ImageEventLog(object):
                 self._events.append(to_event(img_ts, copy.deepcopy(pilot), copy.deepcopy(vehicle), np.copy(image)))
             else:
                 d_vehicle = abs(img_ts - get_ts(vehicle))
-                logger.warn("Data window violation of pilot {} ms and vehicle {} ms - skipping image {}.".format(
+                logger.info("Data window violation of pilot {} ms and vehicle {} ms - skipping image {}.".format(
                     d_pilot * 1e-3, d_vehicle * 1e-3, img_ts)
                 )
 
