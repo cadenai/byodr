@@ -7,6 +7,7 @@ import subprocess
 _f_tegra_release = '/etc/nv_tegra_release'
 _f_cuda_version = '/usr/local/cuda/version.txt'
 
+_supported_tegra_releases = ('32.3.1')
 _supported_tegra_releases = ('28.2.1', '32.3.1')
 
 _platform = dict()
@@ -31,7 +32,7 @@ def _run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newline
 
 
 def determine_platform_state():
-    # The terminal user regardless of nested sudo.
+    # Find the terminal user regardless of nested sudo.
     _user = _run(['who', 'am', 'i']).stdout.split(' ')[0]
     _platform['user.name'] = _user
     _platform['user.group'] = _run(['id', '-gn', _user]).stdout.strip()
@@ -64,7 +65,7 @@ def do_app_user(logfile):
     if '{}:'.format(_app_user_name) not in _passwd_line:
         _run(['groupadd', '--gid', _app_group_id, '--system', _app_group_name])
         _run(['useradd', '--uid', _app_user_id, '--gid', _app_group_id, '--system', _app_user_name])
-        # Make sure the regular user has access.
+        # Make sure the regular user has access as well.
         _run(['usermod', '-aG', _app_group_name, _user])
         logfile.write("Created user {}:{} and group {}:{}.\n".format(
             _app_user_name,
@@ -92,12 +93,13 @@ def do_application_directory(_answer, _app_dir, logfile):
 
     _user = _platform['user.name']
     logfile.write("Using application directory {}.\n".format(_app_dir))
-    if not os.path.exists(_app_dir):
-        _umask = os.umask(000)
-        os.makedirs(_app_dir, mode=0o775)
-        os.umask(_umask)
-    _run(['chown', '{}:{}'.format(_user, _app_group_name), _app_dir])
-    _run(['chmod', 'g+s', _app_dir])
+    _umask = os.umask(000)
+    os.makedirs(_app_dir, mode=0o775)
+    os.makedirs(os.path.join(_app_dir, 'etc'), mode=0o775)
+    os.makedirs(os.path.join(_app_dir, 'sessions'), mode=0o775)
+    os.umask(_umask)
+    _run(['chmod', '-R', 'g+s', _app_dir])
+    _run(['chown', '-R', '{}:{}'.format(_user, _app_group_name), _app_dir])
     return _app_dir
 
 
@@ -106,7 +108,9 @@ def do_docker_images(_answer, logfile):
         for tag_name in _docker_application_tags:
             print("Pulling {}{}".format(_docker_image_prefix, tag_name))
             _run(['docker', 'pull', _docker_image_prefix + tag_name])
-    logfile.write(_run(['docker', 'images']).stdout + "\n")
+        logfile.write(_run(['docker', 'images']).stdout + "\n")
+    else:
+        logfile.write("Skipped docker images pull.\n")
 
 
 def main():
@@ -124,7 +128,7 @@ def main():
     # Check platform support.
     print("Checking platform support.")
     if _platform['tegra.release'] not in _supported_tegra_releases:
-        print("This tegra release is not part of the supported platforms ({}), do you want to continue?".format(_supported_tegra_releases))
+        print("This tegra release is not part of the supported platforms ({}), continue anyway?".format(_supported_tegra_releases))
         print("Type y or no then <ENTER>")
         print("> ", end='')
         _answer = input()
@@ -141,27 +145,29 @@ def main():
     # Proceed to setup the application user and group.
     _user = _platform['user.name']
     _home = _platform['user.home']
-    print("Checking application user and group.")
     with open(_f_log_file, mode='a') as logfile:
         logfile.write("\n--- {} ---\n".format(datetime.datetime.today().strftime("%a %b %d %H:%M:%S %Y")))
         logfile.write(str(_platform) + "\n")
 
         # Setup the application user and group.
+        print("Checking application user and group.")
         do_app_user(logfile)
 
         # The application requires a working directory.
         # Read previous work if any.
+        print("Checking application directory.")
         _work_state = read_work_state(_f_work_file, logfile)
         _app_dir = _work_state.get('application.directory', os.path.join(_home, 'byodr-ce'))
-        print("Which directory do you want to use to store data in?")
-        print("Type the full path or <ENTER> to use {}.".format(_app_dir))
-        print("> ", end='')
-        _answer = input()
-        _app_dir = do_application_directory(_answer, _app_dir, logfile)
-        print("The application directory is {}.".format(_app_dir))
-        with open(_f_work_file, mode='w') as workfile:
-            _work_state['application.directory'] = _app_dir
-            json.dump(_work_state, workfile)
+        if not os.path.exists(_app_dir):
+            print("Which directory do you want to use to store data in?")
+            print("Type the full path or <ENTER> to use {} or ^C to quit.".format(_app_dir))
+            print("> ", end='')
+            _answer = input()
+            _app_dir = do_application_directory(_answer, _app_dir, logfile)
+            print("The application directory is {}.".format(_app_dir))
+            with open(_f_work_file, mode='w') as workfile:
+                _work_state['application.directory'] = _app_dir
+                json.dump(_work_state, workfile)
 
         # Proceed with the docker images.
         print("This step requires downloading large binary files which takes time and bandwidth, do you want to do this now?")
@@ -178,4 +184,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("")
