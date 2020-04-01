@@ -8,7 +8,7 @@ services:
     build:
       context: ./
       dockerfile: vehicles/carla09/Dockerfile
-    image: centipede2donald/byodr-ce:vehicle-carla
+    image: centipede2donald/byodr-ce:carla096
     volumes:
       - volume_byodr:/byodr
       - ./common:/common

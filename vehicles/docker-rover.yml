@@ -4,7 +4,7 @@ services:
     build:
       context: ./
       dockerfile: vehicles/rover/Dockerfile.ros_serial
-    image: centipede2donald/byodr-ce:ros-serial
+    image: centipede2donald/byodr-ce:rosserial
     container_name: byodr_ros_serial
     volumes:
       - ./vehicles/rover:/app
@@ -31,7 +31,7 @@ services:
     build:
       context: ./
       dockerfile: vehicles/rover/Dockerfile
-    image: centipede2donald/byodr-ce:vehicle-rover
+    image: centipede2donald/byodr-ce:rover
     volumes:
       - volume_byodr:/byodr
       - ./common:/common
