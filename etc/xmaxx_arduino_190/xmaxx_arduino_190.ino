@@ -13,7 +13,7 @@
 #define THROTTLE_OUT_PIN 4
 
 // For odometry.
-#define H_RPS_MOMENT 0.10
+#define H_RPS_MOMENT 0.50
 
 volatile byte h_up;
 volatile float h_val, h_rps;
