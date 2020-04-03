@@ -1,5 +1,5 @@
-# docker build -f Dockerfile.ubuntu_opencv -t centipede2donald/ubuntu-bionic:python27-opencv32 .
-# docker buildx build --platform linux/arm64,linux/amd64 --push -f Dockerfile.ubuntu_opencv -t centipede2donald/ubuntu-bionic:python27-opencv32 .
+# docker build -f docker/Dockerfile.ubuntu_opencv -t centipede2donald/ubuntu-bionic:python27-opencv32 .
+# docker buildx build --platform linux/arm64,linux/amd64 --push -f docker/Dockerfile.ubuntu_opencv -t centipede2donald/ubuntu-bionic:python27-opencv32 .
 FROM ubuntu:bionic
 
 ENV TZ=Europe/Amsterdam

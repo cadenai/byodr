@@ -1,4 +1,4 @@
-# docker build -f Dockerfile.tf_jp33 -t centipede2donald/nvidia-jetson:jp33-python27-tensorflow114 .
+# docker build -f docker/Dockerfile.tf_jp33 -t centipede2donald/nvidia-jetson:jp33-python27-tensorflow114 .
 FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

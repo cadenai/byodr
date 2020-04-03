@@ -1,4 +1,4 @@
-FROM centipede2donald/nvidia-jetson:jp43-python27-tensorflow113
+FROM centipede2donald/nvidia-jetson:jp42-python27-opencv32-tensorflow113
 
 COPY ./common common/
 COPY ./inference app/

@@ -1,4 +1,4 @@
-# docker build -f Dockerfile.ros_gstreamer -t centipede2donald/ros-melodic:python27-opencv32-gstreamer10 .
+# docker build -f docker/Dockerfile.ros_gstreamer -t centipede2donald/ros-melodic:python27-opencv32-gstreamer10 .
 FROM ros:melodic
 
 ENV TZ=Europe/Amsterdam
