@@ -1,4 +1,4 @@
-# docker build -f docker/Dockerfile.tf_jp421 -t centipede2donald/nvidia-jetson:jp42-python27-opencv32-tensorflow113 .
+# docker build -f docker/Dockerfile.tf_jp42 -t centipede2donald/nvidia-jetson:jp42-python27-opencv32-tensorflow113 .
 FROM jetsistant/cuda-jetpack:4.2.1-runtime
 
 ENV TZ=Europe/Amsterdam
