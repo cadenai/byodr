@@ -16,12 +16,17 @@ APP_USER_ID = 1990
 APP_GROUP_ID = 1990
 APP_USER_NAME = 'byodr'
 APP_GROUP_NAME = 'byodr'
+DEV_GROUP_NAME = 'plugdev'
+
+_udev_arduino_rules_file = '/etc/udev/rules.d/99-arduino.rules'
+_udev_arduino_rules_contents = '''
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0043", GROUP="{group}", MODE="0660", SYMLINK+="arduino", TAG+="systemd"
+'''.format(**{'idVendor': '{idVendor}', 'idProduct': '{idProduct}', 'group': DEV_GROUP_NAME})
 
 _docker_image_prefix = 'centipede2donald/byodr-ce:'
 
 # Keeping the service file prefix constant enables removing the services in the future even when the tagnames change.
 _systemd_service_file_prefix = 'byodr-ce-'
-
 _systemd_system_directory = '/etc/systemd/system'
 _systemd_service_container_prefix = 'byodr_ce_'
 _systemd_service_description_prefix = 'Byodr CE '
@@ -30,19 +35,19 @@ _sd_app_main_service_tag = 'teleop'
 _sd_app_service_name = _systemd_service_container_prefix + _sd_app_main_service_tag + '.service'
 
 _docker_component_tags = [
-    (_sd_app_main_service_tag, 'Requires', 'docker.service', 'runc', '9100:9100', None),
-    ('rosserial', 'PartOf', _sd_app_service_name, 'runc', '11311:11311', '/dev/ttyACM0'),
-    ('pilot', 'PartOf', _sd_app_service_name, 'runc', None, None),
-    ('rover', 'PartOf', _sd_app_service_name, 'runc', None, None),
-    ('recorder', 'PartOf', _sd_app_service_name, 'runc', None, None),
-    ('inference', 'PartOf', _sd_app_service_name, 'nvidia', None, None)
+    (_sd_app_main_service_tag, 'Requires=docker.service', 'After=docker.service', 'runc', '9100:9100', None),
+    ('rosserial', 'Wants=dev-arduino.device', 'After=dev-arduino.device', 'runc', '11311:11311', '/dev/arduino'),
+    ('pilot', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None),
+    ('rover', 'PartOf=' + _sd_app_service_name, 'After=' + _systemd_service_container_prefix + 'rosserial.service', 'runc', None, None),
+    ('recorder', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None),
+    ('inference', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'nvidia', None, None)
 ]
 
 _systemd_service_template = '''
 [Unit]
 Description={sd_description}
-{sd_requires_key}={sd_parent_service}
-After={sd_parent_service}
+{sd_unit_line0}
+{sd_unit_line1}
 
 [Service]
 User={sd_service_user}
@@ -139,7 +144,7 @@ class StateManager(object):
 
 def do_build_directory(user, group, build_dirname):
     if os.path.exists(build_dirname):
-        return "The build directory exists."
+        return "The build directory already exists."
     _umask = os.umask(000)
     os.mkdir('build', mode=0o775)
     os.umask(_umask)
@@ -148,13 +153,24 @@ def do_build_directory(user, group, build_dirname):
     return "The build directory was created."
 
 
+def do_udev_rules():
+    if os.path.exists(_udev_arduino_rules_file):
+        return "File {} exists.".format(_udev_arduino_rules_file)
+    with open(_udev_arduino_rules_file, mode='w') as f:
+        f.write(_udev_arduino_rules_contents)
+        _run(['/etc/init.d/udev', 'reload'])
+        return "Created {}.".format(_udev_arduino_rules_file)
+
+
 def do_application_user(user):
     _passwd_line = _run(['grep', APP_USER_NAME, '/etc/passwd']).stdout.strip()
     if '{}:'.format(APP_USER_NAME) in _passwd_line:
         return _passwd_line
-        # Make sure the regular user has access as well.
-    _run(['groupadd', '--gid', APP_GROUP_ID, '--system', APP_GROUP_NAME])
-    _run(['useradd', '--uid', APP_USER_ID, '--gid', APP_GROUP_ID, '--system', APP_USER_NAME])
+    _run(['groupadd', '--gid', str(APP_GROUP_ID), '--system', APP_GROUP_NAME])
+    _run(['useradd', '--uid', str(APP_USER_ID), '--gid', str(APP_GROUP_ID), '--system', APP_USER_NAME])
+    # Setup group membership used for access to the arduino serial device.
+    _run(['usermod', '-aG', DEV_GROUP_NAME, str(APP_USER_ID)])
+    # Make sure the regular user has group access as well.
     _run(['usermod', '-aG', APP_GROUP_NAME, user])
     return "Created user {}:{} and group {}:{}.".format(APP_USER_NAME, APP_USER_ID, APP_GROUP_NAME, APP_GROUP_ID)
 
@@ -167,7 +183,7 @@ def do_application_directory(user, application_dir, config_dir, sessions_dir):
     os.umask(_umask)
     _run(['chmod', '-R', 'g+s', application_dir])
     _run(['chown', '-R', '{}:{}'.format(user, APP_GROUP_NAME), application_dir])
-    return "Created application directory {}.".format(application_dir)
+    return "The application directory is {}.".format(application_dir)
 
 
 def do_docker_images(_answer):
@@ -184,7 +200,7 @@ def list_service_files():
     return glob.glob(os.path.join(_systemd_system_directory, _systemd_service_file_prefix + '*.service'))
 
 
-def remove_services():
+def stop_and_remove_services():
     # Stop the services and remove any existing service definitions.
     file_list = list_service_files()
     for f_path in file_list:
@@ -197,13 +213,13 @@ def remove_services():
 
 def create_services(user, group, config_dir, sessions_dir):
     for component in _docker_component_tags:
-        name, requires, parent, runtime, ports, device = component
+        name, line0, line1, runtime, ports, device = component
         _file = os.path.join(_systemd_system_directory, _systemd_service_file_prefix + name + '.service')
         with open(_file, mode='w') as f:
             _m = {
                 'sd_description': _systemd_service_description_prefix + name,
-                'sd_requires_key': requires,
-                'sd_parent_service': parent,
+                'sd_unit_line0': line0,
+                'sd_unit_line1': line1,
                 'sd_service_user': user,
                 'sd_service_group': group,
                 'sd_container_name': _systemd_service_container_prefix + name,
@@ -221,8 +237,15 @@ def create_services(user, group, config_dir, sessions_dir):
     for f_path in file_list:
         f_name = os.path.basename(f_path)
         _run(['systemctl', 'enable', f_name])
+    return _run(['systemctl', 'list-unit-files', _systemd_service_file_prefix + '*']).stdout
+
+
+def start_services():
+    file_list = list_service_files()
+    for f_path in file_list:
+        f_name = os.path.basename(f_path)
         _run(['systemctl', 'start', f_name])
-    return "Enabled and started services {}.".format(file_list)
+    return _run(['systemctl', 'list-units', _systemd_service_file_prefix + '*']).stdout
 
 
 def main():
@@ -236,7 +259,8 @@ def main():
     state = manager.state
     user, group = state['user.name'], state['user.group']
     print("Checking build directory.")
-    do_build_directory(user, group, manager.build_dirname)
+    _result = do_build_directory(user, group, manager.build_dirname)
+    print(_result)
 
     with manager:
         manager.log("\n--- {} ---".format(datetime.datetime.today().strftime("%a %b %d %H:%M:%S %Y")))
@@ -248,7 +272,7 @@ def main():
         print("{} \t\t{}".format('cuda', state['cuda.version']))
 
         # Check platform support.
-        print("Checking platform support.")
+        print("\nChecking platform support.")
         if state['tegra.release'] not in _supported_tegra_releases:
             print("This tegra release is not part of the supported platforms ({}), continue anyway?".format(_supported_tegra_releases))
             print("Type y or no then <ENTER>")
@@ -257,17 +281,27 @@ def main():
             if _answer != 'y':
                 exit(-1)
 
+        print("Ok.")
+        print("\nChecking udev rules.")
+        _result = do_udev_rules()
+        manager.log(_result)
+        print(_result)
+
         # Proceed to setup the application user and group.
-        print("Checking application user and group.")
-        manager.log(do_application_user(user))
+        print("\nChecking application user and group.")
+        _result = do_application_user(user)
+        manager.log(_result)
+        print(_result)
 
         # The application requires a working directory.
         # Read previous work if any.
-        print("Checking application directory.")
+        print("\nChecking application directory.")
         _app_dir = manager.get_application_directory()
         _config_dir = manager.get_config_directory()
         _sessions_dir = manager.get_sessions_directory()
-        if not os.path.exists(_app_dir):
+        if os.path.exists(_app_dir):
+            print("Ok.")
+        else:
             print("Which directory do you want to use to store data in?")
             print("Type the full path or <ENTER> to use {} or ^C to quit.".format(_app_dir))
             print("> ", end='')
@@ -277,26 +311,44 @@ def main():
                 manager.set_application_directory(_app_dir)
                 _config_dir = manager.get_config_directory()
                 _sessions_dir = manager.get_sessions_directory()
-            manager.log(do_application_directory(user, _app_dir, _config_dir, _sessions_dir))
-        print("The application directory is {}.".format(_app_dir))
+            _result = do_application_directory(user, _app_dir, _config_dir, _sessions_dir)
+            manager.log(_result)
+            print(_result)
+
         # Proceed with the docker images.
-        print("This step requires downloading large binary files which takes time and bandwidth, do you want to do this now?")
+        print("\nThis step requires downloading large binary files which takes time and bandwidth, do you want to do this now?")
         print("Type y or no then <ENTER>")
         print("> ", end='')
         _answer = input()
-        manager.log(do_docker_images(_answer))
+        _result = do_docker_images(_answer)
+        manager.log(_result)
+        print(_result)
 
         # Proceed with the systemd services.
-        print("Removing systemd services.")
-        manager.log(remove_services())
+        print("\nRemoving systemd services.")
+        _result = stop_and_remove_services()
+        manager.log(_result)
+        print(_result)
 
-        print("Recreating systemd services.")
-        manager.log(create_services(user, group, _config_dir, _sessions_dir))
+        print("\nRecreating systemd services.")
+        _result = create_services(user, group, _config_dir, _sessions_dir)
+        manager.log(_result)
+        print(_result)
 
-        # Done - script end.
-        manager.log(_run(['docker', 'ps']).stdout)
-        print("The installer finished and a log file can be found in the {} directory.".format(manager.build_dirname))
-        print("")
+        print("\nDo you want to start the services now? The arduino must be connected for this to work.")
+        print("Otherwise reboot after having connected the arduino.")
+        print("Type y or no then <ENTER>")
+        print("> ", end='')
+        _answer = input()
+        if _answer == 'y':
+            _result = start_services()
+            manager.log(_result)
+            print(_result)
+
+    # Done - script end.
+    print("")
+    print("The installer finished and a log file can be found in the {} directory.".format(manager.build_dirname))
+    print("")
 
 
 if __name__ == "__main__":
