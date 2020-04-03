@@ -1,10 +1,10 @@
 FROM centipede2donald/ros-melodic:rosserial
 
-COPY . app/
+COPY ./vehicles/rover app/
 WORKDIR /app
 
-# The dialout group is 20.
-RUN useradd --uid 1990 --gid 20 --system --create-home --shell /bin/bash byodr
+# Use the plugdev group.
+RUN useradd --uid 1990 --gid 46 --system --create-home --shell /bin/bash byodr
 
 USER byodr
 
