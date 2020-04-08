@@ -8,8 +8,7 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-_supported_tegra_releases = ('32.3.1')
-# _supported_tegra_releases = ('28.2.1', '32.3.1')
+_supported_tegra_releases = ('32.1.0', '32.2.0', '32.2.1', '32.3.1')
 
 # The constants are the same as those used in the application docker builds.
 APP_USER_ID = 1990
@@ -35,12 +34,17 @@ _sd_app_main_service_tag = 'teleop'
 _sd_app_service_name = _systemd_service_container_prefix + _sd_app_main_service_tag + '.service'
 
 _docker_component_tags = [
-    (_sd_app_main_service_tag, 'Requires=docker.service', 'After=docker.service', 'runc', '9100:9100', None),
-    ('rosserial', 'Wants=dev-arduino.device', 'After=dev-arduino.device', 'runc', '11311:11311', '/dev/arduino'),
-    ('pilot', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None),
-    ('rover', 'PartOf=' + _sd_app_service_name, 'After=' + _systemd_service_container_prefix + 'rosserial.service', 'runc', None, None),
-    ('recorder', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None),
-    ('inference', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'nvidia', None, None)
+    (_sd_app_main_service_tag, 'Requires=docker.service', 'After=docker.service', 'runc', '9100:9100', None, None),
+    ('rosserial', 'Wants=dev-arduino.device', 'After=dev-arduino.device', 'runc', '11311:11311', '/dev/arduino', None),
+    ('pilot', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None, None),
+    ('rover', 'PartOf=' + _sd_app_service_name,
+     'After=' + _systemd_service_container_prefix + 'rosserial.service',
+     'runc',
+     None,
+     None,
+     'ROS_MASTER_URI=http://{}rosserial:11311'.format(_systemd_service_container_prefix)),
+    ('recorder', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None, None),
+    ('inference', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'nvidia', None, None, None)
 ]
 
 _systemd_service_template = '''
@@ -52,6 +56,7 @@ Description={sd_description}
 [Service]
 User={sd_service_user}
 Group={sd_service_group}
+{sd_environment}
 TimeoutStartSec=0
 Restart=on-failure
 ExecStart=/usr/bin/docker run --rm \
@@ -213,7 +218,8 @@ def stop_and_remove_services():
 
 def create_services(user, group, config_dir, sessions_dir):
     for component in _docker_component_tags:
-        name, line0, line1, runtime, ports, device = component
+        name, line0, line1, runtime, ports, device, env = component
+        _devices = None if device is None else [device]
         _file = os.path.join(_systemd_system_directory, _systemd_service_file_prefix + name + '.service')
         with open(_file, mode='w') as f:
             _m = {
@@ -222,12 +228,12 @@ def create_services(user, group, config_dir, sessions_dir):
                 'sd_unit_line1': line1,
                 'sd_service_user': user,
                 'sd_service_group': group,
+                'sd_environment': '' if env is None else 'Environment={}'.format(env),
                 'sd_container_name': _systemd_service_container_prefix + name,
-                'sd_runtime_name': runtime,
                 'sd_config_dir': config_dir,
                 'sd_sessions_dir': sessions_dir,
                 'sd_ports_list': '' if ports is None else '-p {}'.format(ports),
-                'sd_devices_list': '' if device is None else '--device {}'.format(device),
+                'sd_devices_list': '' if _devices is None else ' '.join(['--device {}'] * len(_devices)).format(*_devices),
                 'sd_image_name': _docker_image_prefix + name
             }
             f.write(_systemd_service_template.format(**_m))
