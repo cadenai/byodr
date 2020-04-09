@@ -18,6 +18,8 @@ services:
       dockerfile: inference/Dockerfile.jp
     volumes:
       - './inference:/app'
+      - '/usr/local/cuda:/usr/local/cuda'
+      - '/usr/lib/aarch64-linux-gnu:/usr-extra'
     devices:
       - '/dev/nvhost-ctrl'
       - '/dev/nvhost-ctrl-gpu'
@@ -31,10 +33,11 @@ services:
       dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:rover
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./vehicles/rover:/app
       - ${DC_CONFIG_DIR}:/config
+    volumes_from:
+      - teleop:rw
     environment:
       ROS_MASTER_URI: 'http://byodr_ros_serial:11311'
 

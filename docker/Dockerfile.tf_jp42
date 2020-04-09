@@ -1,11 +1,10 @@
 # docker build -f docker/Dockerfile.tf_jp42 -t centipede2donald/nvidia-jetson:jp42-python27-opencv32-tensorflow113 .
-FROM jetsistant/cuda-jetpack:4.2.1-runtime
+FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
 ENV TZ=Europe/Amsterdam
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN rm /etc/apt/sources.list.d/cuda.list && apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libhdf5-serial-dev \
     hdf5-tools \
     libhdf5-dev \
@@ -14,17 +13,8 @@ RUN rm /etc/apt/sources.list.d/cuda.list && apt-get update && apt-get install -y
     liblapack-dev \
     libblas-dev \
     gfortran \
-    python-dev \
-    python-opencv \
-    python-pip \
-    python-setuptools \
-    python-wheel \
     wget \
  && rm -rf /var/lib/apt/lists/*
-
-# Included here to avoid the long build times on arm64 child images when missing wheels.
-RUN pip install "pyzmq >=18.1, <19.0" \
-  && pip install "pandas >=0.22, <1.0"
 
 # Origin https://developer.download.nvidia.com/compute/redist/jp/v411/tensorflow-gpu
 COPY /tensorflow_gpu-1.13.0* /

@@ -1,6 +1,4 @@
 version: '2'
-volumes:
-  volume_byodr:
 services:
   teleop:
     build:
@@ -10,7 +8,6 @@ services:
     ports:
       - "9100-9105:9100-9105"
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./teleop:/app
       - ${DC_CONFIG_DIR}:/config
@@ -20,27 +17,30 @@ services:
       dockerfile: pilot/Dockerfile
     image: centipede2donald/byodr-ce:pilot
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./pilot:/app
       - ${DC_CONFIG_DIR}:/config
+    volumes_from:
+      - teleop:rw
   recorder:
     build:
       context: ./
       dockerfile: recorder/Dockerfile
     image: centipede2donald/byodr-ce:recorder
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./recorder:/app
       - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions
+    volumes_from:
+      - teleop:rw
   inference:
     image: centipede2donald/byodr-ce:inference
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./inference:/app
       - ${DC_CONFIG_DIR}:/config
+    volumes_from:
+      - teleop:rw
 
 

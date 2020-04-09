@@ -8,7 +8,7 @@ import subprocess
 
 logger = logging.getLogger(__name__)
 
-_supported_tegra_releases = ('32.1.0', '32.2.0', '32.2.1', '32.3.1')
+_supported_tegra_releases = ('32.2.0', '32.2.1', '32.3.1')
 
 # The constants are the same as those used in the application docker builds.
 APP_USER_ID = 1990
@@ -31,20 +31,22 @@ _systemd_service_container_prefix = 'byodr_ce_'
 _systemd_service_description_prefix = 'Byodr CE '
 
 _sd_app_main_service_tag = 'teleop'
-_sd_app_service_name = _systemd_service_container_prefix + _sd_app_main_service_tag + '.service'
+_sd_app_main_service_name = _systemd_service_container_prefix + _sd_app_main_service_tag
+_sd_app_service_name = _sd_app_main_service_name + '.service'
 
 _docker_component_tags = [
-    (_sd_app_main_service_tag, 'Requires=docker.service', 'After=docker.service', 'runc', '9100:9100', None, None),
-    ('rosserial', 'Wants=dev-arduino.device', 'After=dev-arduino.device', 'runc', '11311:11311', '/dev/arduino', None),
-    ('pilot', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None, None),
+    (_sd_app_main_service_tag, 'Requires=docker.service', 'After=docker.service', 'runc', None, '9100:9100', None, None),
+    ('rosserial', 'Wants=dev-arduino.device', 'After=dev-arduino.device', 'runc', None, '11311:11311', '/dev/arduino', None),
+    ('pilot', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', _sd_app_main_service_name, None, None, None),
     ('rover', 'PartOf=' + _sd_app_service_name,
      'After=' + _systemd_service_container_prefix + 'rosserial.service',
      'runc',
+     _sd_app_main_service_name,
      None,
      None,
      'ROS_MASTER_URI=http://{}rosserial:11311'.format(_systemd_service_container_prefix)),
-    ('recorder', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', None, None, None),
-    ('inference', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'nvidia', None, None, None)
+    ('recorder', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', _sd_app_main_service_name, None, None, None),
+    ('inference', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'nvidia', _sd_app_main_service_name, None, None, None)
 ]
 
 _systemd_service_template = '''
@@ -62,9 +64,8 @@ Restart=on-failure
 ExecStart=/usr/bin/docker run --rm \
     --name {sd_container_name} \
     --runtime {sd_runtime_name} \
-    -v volume_byodr:/byodr \
-    -v {sd_config_dir}:/config \
-    -v {sd_sessions_dir}:/sessions \
+    {sd_volumes_from}  \
+    {sd_volumes_list} \
     {sd_ports_list} \
     {sd_devices_list} \
     {sd_image_name}
@@ -174,7 +175,7 @@ def do_application_user(user):
     _run(['groupadd', '--gid', str(APP_GROUP_ID), '--system', APP_GROUP_NAME])
     _run(['useradd', '--uid', str(APP_USER_ID), '--gid', str(APP_GROUP_ID), '--system', APP_USER_NAME])
     # Setup group membership used for access to the arduino serial device.
-    _run(['usermod', '-aG', DEV_GROUP_NAME, str(APP_USER_ID)])
+    _run(['usermod', '-aG', DEV_GROUP_NAME, APP_USER_NAME])
     # Make sure the regular user has group access as well.
     _run(['usermod', '-aG', APP_GROUP_NAME, user])
     return "Created user {}:{} and group {}:{}.".format(APP_USER_NAME, APP_USER_ID, APP_GROUP_NAME, APP_GROUP_ID)
@@ -218,8 +219,11 @@ def stop_and_remove_services():
 
 def create_services(user, group, config_dir, sessions_dir):
     for component in _docker_component_tags:
-        name, line0, line1, runtime, ports, device, env = component
+        name, line0, line1, runtime, volume_from, ports, device, env = component
         _devices = None if device is None else [device]
+        _volumes = ['{}:/config'.format(config_dir), '{}:/sessions'.format(sessions_dir)]
+        if runtime == 'nvidia':
+            _volumes = _volumes + ['/usr/local/cuda:/usr/local/cuda', '/usr/lib/aarch64-linux-gnu:/usr-extra']
         _file = os.path.join(_systemd_system_directory, _systemd_service_file_prefix + name + '.service')
         with open(_file, mode='w') as f:
             _m = {
@@ -228,10 +232,11 @@ def create_services(user, group, config_dir, sessions_dir):
                 'sd_unit_line1': line1,
                 'sd_service_user': user,
                 'sd_service_group': group,
+                'sd_runtime_name': runtime,
                 'sd_environment': '' if env is None else 'Environment={}'.format(env),
+                'sd_volumes_from': '' if volume_from is None else '--volumes-from {}:rw'.format(volume_from),
                 'sd_container_name': _systemd_service_container_prefix + name,
-                'sd_config_dir': config_dir,
-                'sd_sessions_dir': sessions_dir,
+                'sd_volumes_list': ' '.join(['-v {}'] * len(_volumes)).format(*_volumes),
                 'sd_ports_list': '' if ports is None else '-p {}'.format(ports),
                 'sd_devices_list': '' if _devices is None else ' '.join(['--device {}'] * len(_devices)).format(*_devices),
                 'sd_image_name': _docker_image_prefix + name

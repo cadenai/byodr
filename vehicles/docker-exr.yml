@@ -21,7 +21,6 @@ services:
       dockerfile: vehicles/exr/Dockerfile
     image: centipede2donald/byodr-ce:vehicle-exr
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./docker/deps:/deps
       - ./vehicles/exr:/app
@@ -30,5 +29,7 @@ services:
       - /dev/pcan-usb:/dev/pcan-usb
       - /dev/pcanusb32:/dev/pcanusb32
       - ${DC_CONFIG_DIR}:/config
+    volumes_from:
+      - teleop:rw
 
 

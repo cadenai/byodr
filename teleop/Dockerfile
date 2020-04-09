@@ -11,8 +11,9 @@ RUN groupadd --gid 1990 --system byodr \
 
 EXPOSE 9100
 
-# https://github.com/docker/compose/issues/3270. Named volumes are initialized from the first container that uses them.
 RUN mkdir /byodr && chown -R byodr:byodr /byodr
+
+VOLUME /byodr
 
 USER byodr
 

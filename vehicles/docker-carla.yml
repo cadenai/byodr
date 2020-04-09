@@ -10,7 +10,8 @@ services:
       dockerfile: vehicles/carla09/Dockerfile
     image: centipede2donald/byodr-ce:carla096
     volumes:
-      - volume_byodr:/byodr
       - ./common:/common
       - ./vehicles/carla09:/app
       - ${DC_CONFIG_DIR}:/config
+    volumes_from:
+      - teleop:rw
