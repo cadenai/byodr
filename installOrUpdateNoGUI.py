@@ -157,18 +157,25 @@ def do_application_user(user):
 
 def do_application_directory(user, application_dir, config_dir, sessions_dir):
     _umask = os.umask(000)
-    os.makedirs(application_dir, mode=0o775)
-    os.makedirs(config_dir, mode=0o775)
-    os.makedirs(sessions_dir, mode=0o775)
+    os.makedirs(application_dir, mode=0o775, exist_ok=True)
+    os.makedirs(config_dir, mode=0o775, exist_ok=True)
+    os.makedirs(sessions_dir, mode=0o775, exist_ok=True)
     os.umask(_umask)
     _run(['chmod', '-R', 'g+s', application_dir])
     _run(['chown', '-R', '{}:{}'.format(user, APP_GROUP_NAME), application_dir])
     return "The application directory is {}.".format(application_dir)
 
 
-def do_docker_images(_answer):
+def do_docker_images(_answer, fn_callback):
     if _answer == 'y':
-        _run(['docker-compose', '-f', _docker_compose_file1, '-f', _docker_compose_file2, 'pull'])
+        _command = ['docker-compose', '-f', _docker_compose_file1, '-f', _docker_compose_file2, 'pull']
+        process = subprocess.Popen(_command, env={'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}, stdout=subprocess.PIPE)
+        while True:
+            if process.poll() is not None:
+                break
+            output = process.stdout.readline()
+            if output:
+                fn_callback(output.strip())
         return _run(['docker', 'images']).stdout
     else:
         return "Skipped docker images pull."
@@ -253,28 +260,29 @@ def main():
         _app_dir = manager.get_application_directory()
         _config_dir = manager.get_config_directory()
         _sessions_dir = manager.get_sessions_directory()
-        if os.path.exists(_app_dir):
-            print("Ok.")
-        else:
-            print("Which directory do you want to use to store data in?")
-            print("Type the full path or <ENTER> to use {} or ^C to quit.".format(_app_dir))
-            print("> ", end='')
-            _answer = input()
-            if _answer.startswith('/'):
-                _app_dir = _answer
-                manager.set_application_directory(_app_dir)
-                _config_dir = manager.get_config_directory()
-                _sessions_dir = manager.get_sessions_directory()
-            _result = do_application_directory(user, _app_dir, _config_dir, _sessions_dir)
-            manager.log(_result)
-            print(_result)
+        print("Which directory do you want to use to store data in?")
+        print("Type the full path or <ENTER> to use {} or ^C to quit.".format(_app_dir))
+        print("> ", end='')
+        _answer = input()
+        if _answer.startswith('/'):
+            _app_dir = _answer
+            manager.set_application_directory(_app_dir)
+            _config_dir = manager.get_config_directory()
+            _sessions_dir = manager.get_sessions_directory()
+        _result = do_application_directory(user, _app_dir, _config_dir, _sessions_dir)
+        manager.log(_result)
+        print(_result)
 
         # Proceed with the docker images.
         print("\nThis step requires downloading large binary files which takes time and bandwidth, do you want to do this now?")
         print("Type y or no then <ENTER>")
         print("> ", end='')
+
+        def _fn_output(s):
+            print(s)
+
         _answer = input()
-        _result = do_docker_images(_answer)
+        _result = do_docker_images(_answer, _fn_output)
         manager.log(_result)
         print(_result)
 
