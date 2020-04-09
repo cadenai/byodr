@@ -2,43 +2,43 @@ version: '2'
 services:
   teleop:
     build:
-      context: ./
+      context: .
       dockerfile: teleop/Dockerfile
     image: centipede2donald/byodr-ce:teleop
     ports:
-      - "9100-9105:9100-9105"
+      - "9100:9100"
     volumes:
-      - ./common:/common
-      - ./teleop:/app
       - ${DC_CONFIG_DIR}:/config
   pilot:
     build:
-      context: ./
+      context: .
       dockerfile: pilot/Dockerfile
     image: centipede2donald/byodr-ce:pilot
     volumes:
-      - ./common:/common
-      - ./pilot:/app
       - ${DC_CONFIG_DIR}:/config
     volumes_from:
       - teleop:rw
   recorder:
     build:
-      context: ./
+      context: .
       dockerfile: recorder/Dockerfile
     image: centipede2donald/byodr-ce:recorder
     volumes:
-      - ./common:/common
-      - ./recorder:/app
       - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions
     volumes_from:
       - teleop:rw
-  inference:
-    image: centipede2donald/byodr-ce:inference
+  rosserial:
+    image: rwgrim/docker-noop:latest
+  vehicle:
+    image: rwgrim/docker-noop:latest
     volumes:
-      - ./common:/common
-      - ./inference:/app
+      - ${DC_CONFIG_DIR}:/config
+    volumes_from:
+      - teleop:rw
+  inference:
+    image: rwgrim/docker-noop:latest
+    volumes:
       - ${DC_CONFIG_DIR}:/config
     volumes_from:
       - teleop:rw

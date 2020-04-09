@@ -1,0 +1,32 @@
+version: '2'
+services:
+  teleop:
+    volumes:
+      - ./common:/common
+      - ./teleop:/app
+  pilot:
+    volumes:
+      - ./common:/common
+      - ./pilot:/app
+  recorder:
+    volumes:
+      - ./common:/common
+      - ./recorder:/app
+  vehicle:
+    build:
+      context: .
+      dockerfile: vehicles/carla09/Dockerfile
+    image: centipede2donald/byodr-ce:carla-096
+    volumes:
+      - ./common:/common
+      - ./vehicles/carla09:/app
+  inference:
+    build:
+      context: .
+      dockerfile: inference/Dockerfile.x86
+    image: centipede2donald/byodr-ce:inference-carla
+    volumes:
+      - ./common:/common
+      - ./inference:/app
+
+

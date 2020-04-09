@@ -1,8 +1,20 @@
 version: '2'
 services:
+  teleop:
+    volumes:
+      - ./common:/common
+      - ./teleop:/app
+  pilot:
+    volumes:
+      - ./common:/common
+      - ./pilot:/app
+  recorder:
+    volumes:
+      - ./common:/common
+      - ./recorder:/app
   rosserial:
     build:
-      context: ./
+      context: .
       dockerfile: vehicles/rover/Dockerfile.ros_serial
     image: centipede2donald/byodr-ce:rosserial
     container_name: byodr_ros_serial
@@ -12,10 +24,21 @@ services:
       - /dev/arduino
     ports:
       - "11311:11311"
+  vehicle:
+    build:
+      context: .
+      dockerfile: vehicles/rover/Dockerfile
+    image: centipede2donald/byodr-ce:rover
+    environment:
+      ROS_MASTER_URI: 'http://byodr_ros_serial:11311'
+    volumes:
+      - ./common:/common
+      - ./vehicles/rover:/app
   inference:
     build:
       context: ./
       dockerfile: inference/Dockerfile.jp
+    image: centipede2donald/byodr-ce:inference
     volumes:
       - './inference:/app'
       - '/usr/local/cuda:/usr/local/cuda'
@@ -27,18 +50,5 @@ services:
       - '/dev/nvmap'
       - '/dev/nvhost-gpu'
       - '/dev/nvhost-as-gpu'
-  vehicle:
-    build:
-      context: ./
-      dockerfile: vehicles/rover/Dockerfile
-    image: centipede2donald/byodr-ce:rover
-    volumes:
-      - ./common:/common
-      - ./vehicles/rover:/app
-      - ${DC_CONFIG_DIR}:/config
-    volumes_from:
-      - teleop:rw
-    environment:
-      ROS_MASTER_URI: 'http://byodr_ros_serial:11311'
 
 

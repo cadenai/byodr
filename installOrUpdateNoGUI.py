@@ -1,12 +1,13 @@
 #!/usr/bin/python3
 import datetime
-import glob
 import json
 import logging
 import os
 import subprocess
 
 logger = logging.getLogger(__name__)
+
+_source_home = os.path.join(os.getcwd(), os.path.dirname(__file__))
 
 _supported_tegra_releases = ('32.2.0', '32.2.1', '32.3.1')
 
@@ -22,54 +23,27 @@ _udev_arduino_rules_contents = '''
 SUBSYSTEM=="tty", ATTRS{idVendor}=="2341", ATTRS{idProduct}=="0043", GROUP="{group}", MODE="0660", SYMLINK+="arduino", TAG+="systemd"
 '''.format(**{'idVendor': '{idVendor}', 'idProduct': '{idProduct}', 'group': DEV_GROUP_NAME})
 
-_docker_image_prefix = 'centipede2donald/byodr-ce:'
+_docker_compose_file1 = os.path.join(_source_home, 'docker-compose.yml')
+_docker_compose_file2 = os.path.join(_source_home, 'docker-compose.tegra.yml')
 
-# Keeping the service file prefix constant enables removing the services in the future even when the tagnames change.
-_systemd_service_file_prefix = 'byodr-ce-'
 _systemd_system_directory = '/etc/systemd/system'
-_systemd_service_container_prefix = 'byodr_ce_'
-_systemd_service_description_prefix = 'Byodr CE '
-
-_sd_app_main_service_tag = 'teleop'
-_sd_app_main_service_name = _systemd_service_container_prefix + _sd_app_main_service_tag
-_sd_app_service_name = _sd_app_main_service_name + '.service'
-
-_docker_component_tags = [
-    (_sd_app_main_service_tag, 'Requires=docker.service', 'After=docker.service', 'runc', None, '9100:9100', None, None),
-    ('rosserial', 'Wants=dev-arduino.device', 'After=dev-arduino.device', 'runc', None, '11311:11311', '/dev/arduino', None),
-    ('pilot', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', _sd_app_main_service_name, None, None, None),
-    ('rover', 'PartOf=' + _sd_app_service_name,
-     'After=' + _systemd_service_container_prefix + 'rosserial.service',
-     'runc',
-     _sd_app_main_service_name,
-     None,
-     None,
-     'ROS_MASTER_URI=http://{}rosserial:11311'.format(_systemd_service_container_prefix)),
-    ('recorder', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'runc', _sd_app_main_service_name, None, None, None),
-    ('inference', 'PartOf=' + _sd_app_service_name, 'After=' + _sd_app_service_name, 'nvidia', _sd_app_main_service_name, None, None, None)
-]
-
+_systemd_service_name = 'byodr-ce.service'
 _systemd_service_template = '''
 [Unit]
-Description={sd_description}
-{sd_unit_line0}
-{sd_unit_line1}
+Description=Byodr CE Onboard Processes
+Requires=docker.service
+After=docker.service
+Wants=dev-arduino.device
 
 [Service]
 User={sd_service_user}
 Group={sd_service_group}
-{sd_environment}
+Environment=DC_CONFIG_DIR={sd_config_dir}
+Environment=DC_RECORDER_SESSIONS={sd_sessions_dir}
 TimeoutStartSec=0
 Restart=on-failure
-ExecStart=/usr/bin/docker run --rm \
-    --name {sd_container_name} \
-    --runtime {sd_runtime_name} \
-    {sd_volumes_from}  \
-    {sd_volumes_list} \
-    {sd_ports_list} \
-    {sd_devices_list} \
-    {sd_image_name}
-ExecStop=/usr/bin/docker stop {sd_container_name}
+ExecStart=/usr/bin/docker-compose {sd_compose_files} up 
+ExecStop=/usr/bin/docker-compose {sd_compose_files} down -v
 
 [Install]
 WantedBy=multi-user.target
@@ -125,7 +99,7 @@ class StateManager(object):
         return self.state['application.directory']
 
     def get_config_directory(self):
-        return os.path.join(self.get_application_directory(), 'etc')
+        return os.path.join(self.get_application_directory(), 'config')
 
     def get_sessions_directory(self):
         return os.path.join(self.get_application_directory(), 'sessions')
@@ -194,69 +168,38 @@ def do_application_directory(user, application_dir, config_dir, sessions_dir):
 
 def do_docker_images(_answer):
     if _answer == 'y':
-        for tag_name in [t[0] for t in _docker_component_tags]:
-            print("Pulling {}{}".format(_docker_image_prefix, tag_name))
-            _run(['docker', 'pull', _docker_image_prefix + tag_name])
+        _run(['docker-compose', '-f', _docker_compose_file1, '-f', _docker_compose_file2, 'pull'])
         return _run(['docker', 'images']).stdout
     else:
         return "Skipped docker images pull."
 
 
-def list_service_files():
-    return glob.glob(os.path.join(_systemd_system_directory, _systemd_service_file_prefix + '*.service'))
-
-
 def stop_and_remove_services():
     # Stop the services and remove any existing service definitions.
-    file_list = list_service_files()
-    for f_path in file_list:
-        f_name = os.path.basename(f_path)
-        _run(['systemctl', 'stop', f_name])
-        _run(['systemctl', 'disable', f_name])
-        _run(['rm', f_path])
-    return "Stopped and removed services {}.".format(file_list)
+    _run(['systemctl', 'stop', _systemd_service_name])
+    _run(['systemctl', 'disable', _systemd_service_name])
+    _run(['rm', os.path.join(_systemd_system_directory, _systemd_service_name)])
+    return "Stopped and removed {}.".format(_systemd_service_name)
 
 
 def create_services(user, group, config_dir, sessions_dir):
-    for component in _docker_component_tags:
-        name, line0, line1, runtime, volume_from, ports, device, env = component
-        _devices = None if device is None else [device]
-        _volumes = ['{}:/config'.format(config_dir), '{}:/sessions'.format(sessions_dir)]
-        if runtime == 'nvidia':
-            _volumes = _volumes + ['/usr/local/cuda:/usr/local/cuda', '/usr/lib/aarch64-linux-gnu:/usr-extra']
-        _file = os.path.join(_systemd_system_directory, _systemd_service_file_prefix + name + '.service')
-        with open(_file, mode='w') as f:
-            _m = {
-                'sd_description': _systemd_service_description_prefix + name,
-                'sd_unit_line0': line0,
-                'sd_unit_line1': line1,
-                'sd_service_user': user,
-                'sd_service_group': group,
-                'sd_runtime_name': runtime,
-                'sd_environment': '' if env is None else 'Environment={}'.format(env),
-                'sd_volumes_from': '' if volume_from is None else '--volumes-from {}:rw'.format(volume_from),
-                'sd_container_name': _systemd_service_container_prefix + name,
-                'sd_volumes_list': ' '.join(['-v {}'] * len(_volumes)).format(*_volumes),
-                'sd_ports_list': '' if ports is None else '-p {}'.format(ports),
-                'sd_devices_list': '' if _devices is None else ' '.join(['--device {}'] * len(_devices)).format(*_devices),
-                'sd_image_name': _docker_image_prefix + name
-            }
-            f.write(_systemd_service_template.format(**_m))
-
+    with open(os.path.join(_systemd_system_directory, _systemd_service_name), mode='w') as f:
+        _m = {
+            'sd_service_user': user,
+            'sd_service_group': group,
+            'sd_config_dir': config_dir,
+            'sd_sessions_dir': sessions_dir,
+            'sd_compose_files': ' '.join('-f {}'.format(name) for name in [_docker_compose_file1, _docker_compose_file2])
+        }
+        f.write(_systemd_service_template.format(**_m))
     _run(['systemctl', 'daemon-reload'])
-    file_list = list_service_files()
-    for f_path in file_list:
-        f_name = os.path.basename(f_path)
-        _run(['systemctl', 'enable', f_name])
-    return _run(['systemctl', 'list-unit-files', _systemd_service_file_prefix + '*']).stdout
+    _run(['systemctl', 'enable', _systemd_service_name])
+    return _run(['systemctl', 'list-unit-files', _systemd_service_name]).stdout
 
 
 def start_services():
-    file_list = list_service_files()
-    for f_path in file_list:
-        f_name = os.path.basename(f_path)
-        _run(['systemctl', 'start', f_name])
-    return _run(['systemctl', 'list-units', _systemd_service_file_prefix + '*']).stdout
+    _run(['systemctl', 'start', _systemd_service_name])
+    return _run(['systemctl', 'list-units', _systemd_service_name]).stdout
 
 
 def main():
