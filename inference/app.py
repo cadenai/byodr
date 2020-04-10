@@ -101,6 +101,10 @@ class TFRunner(object):
                     )
 
 
+def _glob(directory, pattern):
+    return glob.glob(os.path.join(directory, pattern))
+
+
 def main():
     parser = argparse.ArgumentParser(description='Inference server.')
     parser.add_argument('--models', type=str, default='/models', help='Directory with the inference models.')
@@ -108,7 +112,8 @@ def main():
     args = parser.parse_args()
 
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
+    # The end-user config overrides come last so all settings are modifiable.
+    [parser.read(_f) for _f in ['config.ini'] + _glob(args.models, '*.ini') + _glob(args.config, '*.ini')]
     cfg = dict(parser.items('inference'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))

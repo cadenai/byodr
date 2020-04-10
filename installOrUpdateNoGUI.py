@@ -49,6 +49,17 @@ ExecStop=/usr/bin/docker-compose {sd_compose_files} down -v
 WantedBy=multi-user.target
 '''
 
+_application_config_template = '''
+[platform]
+camera.shape.hwc = 480x640x3
+camera.location.uri = rtsp://username:password@192.168.50.64:554/Streaming/Channels/102 
+calibrate.steer.shift = 0.0
+calibrate.throttle.shift = 0.30
+throttle.forward.shift = 0.375
+throttle.forward.scale = 0.13
+throttle.backward.scale = 0.30
+'''
+
 
 def _run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True):
     return subprocess.run(args, stdout=stdout, stderr=stderr, universal_newlines=universal_newlines)
@@ -98,11 +109,14 @@ class StateManager(object):
     def get_application_directory(self):
         return self.state['application.directory']
 
+    def get_sessions_directory(self):
+        return os.path.join(self.get_application_directory(), 'sessions')
+
     def get_config_directory(self):
         return os.path.join(self.get_application_directory(), 'config')
 
-    def get_sessions_directory(self):
-        return os.path.join(self.get_application_directory(), 'sessions')
+    def get_config_filepath(self):
+        return os.path.join(self.get_config_directory(), 'config.ini')
 
     def set_application_directory(self, dirname):
         self.state['application.directory'] = dirname
@@ -164,6 +178,13 @@ def do_application_directory(user, application_dir, config_dir, sessions_dir):
     _run(['chmod', '-R', 'g+s', application_dir])
     _run(['chown', '-R', '{}:{}'.format(user, APP_GROUP_NAME), application_dir])
     return "The application directory is {}.".format(application_dir)
+
+
+def do_application_config_file(config_file):
+    if not os.path.exists(config_file):
+        with open(config_file, mode='w') as f:
+            f.write(_application_config_template)
+    return _run(['cat', config_file]).stdout
 
 
 def do_docker_images(_answer, fn_callback):
@@ -273,12 +294,19 @@ def main():
         manager.log(_result)
         print(_result)
 
+        # Make sure there is an application config file.
+        print("\nChecking application configuration file.")
+        _result = do_application_config_file(manager.get_config_filepath())
+        manager.log(_result)
+        print(_result)
+
         # Proceed with the docker images.
         print("\nThis step requires downloading large binary files which takes time and bandwidth, do you want to do this now?")
         print("Type y or no then <ENTER>")
         print("> ", end='')
 
         def _fn_output(s):
+            manager.log(s)
             print(s)
 
         _answer = input()

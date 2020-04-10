@@ -1,6 +1,6 @@
 FROM centipede2donald/ros-melodic:rosserial
 
-COPY ./vehicles/rover app/
+COPY ./vehicles/rover/*.launch app/
 WORKDIR /app
 
 # Use the plugdev group.

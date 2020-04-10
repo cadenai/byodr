@@ -9,7 +9,9 @@ import sys
 import time
 import traceback
 from ConfigParser import SafeConfigParser
+from functools import partial
 
+import cv2
 import numpy as np
 import rospy
 from geometry_msgs.msg import Twist, TwistStamped
@@ -162,8 +164,9 @@ def main():
     _camera_hwc = cfg.get('camera.shape.hwc')
     _camera_uri = cfg.get('camera.location.uri')
     _camera_shape = [int(x) for x in _camera_hwc.split('x')]
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
+    _camera_flip = cfg.get('camera.image.flip')
 
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     dry_run = bool(int(cfg.get('dry.run')))
     if dry_run:
         gate = FakeGate()
@@ -175,15 +178,22 @@ def main():
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
-    def _image(_b):
-        image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(_camera_shape))
+    def _image(_b, flipcode=None):
+        # flipcode = 0: flip vertically
+        # flipcode > 0: flip horizontally
+        # flipcode < 0: flip vertically and horizontally
+        _img = np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(_camera_shape)
+        image_publisher.publish(cv2.flip(_img, flipcode) if flipcode else _img)
 
     _url = "rtspsrc " \
            "location={} " \
            "latency=0 drop-on-latency=true ! queue ! " \
            "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
            "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_uri)
-    gst_source = GstRawSource(fn_callback=_image, command=_url)
+    _flipcode = None
+    if _camera_flip in ('both', 'vertical', 'horizontal'):
+        _flipcode = 0 if _camera_flip == 'vertical' else 1 if _camera_flip == 'horizontal' else -1
+    gst_source = GstRawSource(fn_callback=partial(_image, flipcode=_flipcode), command=_url)
     gst_source.open()
 
     vehicle = TwistHandler(ros_gate=gate, **cfg)
@@ -203,7 +213,11 @@ def main():
         else:
             vehicle.noop()
         state_publisher.publish(vehicle.state())
-        time.sleep(_period)
+        if gst_source.is_closed():
+            gst_source.open()
+            time.sleep(2)
+        else:
+            time.sleep(_period)
 
     logger.info("Waiting on stream source to close.")
     gst_source.close()

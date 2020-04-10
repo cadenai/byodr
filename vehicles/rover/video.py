@@ -14,7 +14,11 @@ class GstRawSource(object):
         Gst.init(None)
         if 'sink' in command:
             raise AssertionError("Command cannot contain a sink yet, must be added here.")
-        self.video_pipe = Gst.parse_launch(command + " ! appsink name=sink emit-signals=true sync=false max-buffers=2 drop=true")
+        self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=2 drop=true"
+        self.closed = True
+
+    def _setup(self):
+        self.video_pipe = Gst.parse_launch(self.command)
         self.closed = True
 
     def _eos(self, bus, msg):
@@ -26,6 +30,7 @@ class GstRawSource(object):
         self.close()
 
     def open(self):
+        self._setup()
         self.video_pipe.set_state(Gst.State.PLAYING)
         video_sink = self.video_pipe.get_by_name('sink')
         video_sink.connect('new-sample', self._callback)

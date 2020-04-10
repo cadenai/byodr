@@ -15,6 +15,7 @@ ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr-extra
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr-extra/tegra
 
 COPY ./build/*optimized.pb /models/
+COPY ./build/*.ini /models/
 
 USER byodr
 
