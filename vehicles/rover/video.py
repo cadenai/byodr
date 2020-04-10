@@ -1,4 +1,5 @@
 import logging
+import time
 
 import gi
 
@@ -9,13 +10,15 @@ logger = logging.getLogger(__name__)
 
 
 class GstRawSource(object):
-    def __init__(self, fn_callback=None, command="videotestsrc ! decodebin ! videoconvert"):
+    def __init__(self, boot_time_seconds=20, fn_callback=None, command="videotestsrc ! decodebin ! videoconvert"):
+        self.boot_time_seconds = boot_time_seconds
         self.fn_callback = fn_callback
         Gst.init(None)
         if 'sink' in command:
             raise AssertionError("Command cannot contain a sink yet, must be added here.")
         self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=2 drop=true"
         self.closed = True
+        self._callback_time = None
 
     def _setup(self):
         self.video_pipe = Gst.parse_launch(self.command)
@@ -39,6 +42,7 @@ class GstRawSource(object):
         bus.connect('message::eos', self._eos)
         bus.connect('message::error', self._error)
         self.closed = False
+        self._callback_time = time.time() + self.boot_time_seconds
         logger.info("Source opened.")
 
     def _callback(self, sink):
@@ -47,10 +51,17 @@ class GstRawSource(object):
         # caps = sample.get_caps()
         if self.fn_callback is not None:
             self.fn_callback(buf)
+        self._callback_time = time.time()
         return Gst.FlowReturn.OK
+
+    def is_healthy(self, patience):
+        return self._callback_time and time.time() - self._callback_time < patience
 
     def is_closed(self):
         return self.closed
+
+    def is_open(self):
+        return not self.is_closed()
 
     def close(self):
         self.video_pipe.set_state(Gst.State.NULL)

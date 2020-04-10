@@ -164,7 +164,7 @@ def main():
     _camera_hwc = cfg.get('camera.shape.hwc')
     _camera_uri = cfg.get('camera.location.uri')
     _camera_shape = [int(x) for x in _camera_hwc.split('x')]
-    _camera_flip = cfg.get('camera.image.flip')
+    _camera_flip = str(cfg.get('camera.image.flip'))
 
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     dry_run = bool(int(cfg.get('dry.run')))
@@ -193,6 +193,7 @@ def main():
     _flipcode = None
     if _camera_flip in ('both', 'vertical', 'horizontal'):
         _flipcode = 0 if _camera_flip == 'vertical' else 1 if _camera_flip == 'horizontal' else -1
+    logger.info("Using camera flipcode={}".format(_flipcode))
     gst_source = GstRawSource(fn_callback=partial(_image, flipcode=_flipcode), command=_url)
     gst_source.open()
 
@@ -213,11 +214,13 @@ def main():
         else:
             vehicle.noop()
         state_publisher.publish(vehicle.state())
+        if gst_source.is_open():
+            if gst_source.is_healthy(patience=0.50):
+                time.sleep(_period)
+            else:
+                gst_source.close()
         if gst_source.is_closed():
             gst_source.open()
-            time.sleep(2)
-        else:
-            time.sleep(_period)
 
     logger.info("Waiting on stream source to close.")
     gst_source.close()
