@@ -1,10 +1,10 @@
 
 var camera_controller = {
     actual_fps: 0,
-    target_fps: 15,
+    target_fps: 16,
     display_resolution: 'default',
-    jpeg_quality: 40,
-    min_jpeg_quality: 20,
+    jpeg_quality: 50,
+    min_jpeg_quality: 25,
     max_jpeg_quality: 95,
     request_start: performance.now(),
     request_time: 0,
