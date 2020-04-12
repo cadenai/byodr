@@ -51,8 +51,17 @@ WantedBy=multi-user.target
 
 _application_config_template = '''
 [platform]
-camera.shape.hwc = 480x640x3
-camera.location.uri = rtsp://username:password@192.168.50.64:554/Streaming/Channels/102 
+camera.ip = 192.168.1.64
+camera.user = user
+camera.password = pass
+camera.rtsp.port = 554
+camera.rtsp.path = /Streaming/Channels/102
+camera.image.shape = 640x480
+camera.image.flip = both
+camera.ptz.path = /ISAPI/PTZCtrl/channels/1/continuous
+camera.ptz.flip = pan
+
+[vehicle] 
 calibrate.steer.shift = 0.0
 calibrate.throttle.shift = 0.30
 throttle.forward.shift = 0.375
