@@ -165,5 +165,5 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(format='%(levelname)s: %(filename)s %(funcName)s %(message)s')
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     main()
