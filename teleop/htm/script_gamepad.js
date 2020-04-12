@@ -3,6 +3,8 @@ var NoneController = {
     gamepad_index: 0,
     steering: 0,
     throttle: 0,
+    pan: 0,
+    tilt: 0,
     button_y: 0,
     button_b: 0,
     button_x: 0,
@@ -48,6 +50,8 @@ var Xbox360StandardController = extend(NoneController, {
         pad = this.gamepad();
         this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
         this.steering = this.collapse(pad.axes[2], this.threshold);
+        this.pan = this.collapse(pad.axes[0], this.threshold);
+        this.tilt = this.collapse(pad.axes[1], this.threshold);
         this.button_y = pad.buttons[3].value;
         this.button_b = pad.buttons[1].value;
         this.button_x = pad.buttons[2].value;
@@ -68,6 +72,8 @@ var PS4StandardController = extend(NoneController, {
         pad = this.gamepad();
         this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
         this.steering = this.collapse(pad.axes[2], this.threshold);
+        this.pan = this.collapse(pad.axes[0], this.threshold);
+        this.tilt = this.collapse(pad.axes[1], this.threshold);
         this.button_y = pad.buttons[3].value;
         this.button_b = pad.buttons[1].value;
         this.button_x = pad.buttons[2].value;

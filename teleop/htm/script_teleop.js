@@ -10,6 +10,8 @@ gamepad_controller.capture = function() {
         // Skip buttons when not pressed to save bandwidth.
         msg.steering = ct.steering;
         msg.throttle = ct.throttle;
+        msg.pan = ct.pan;
+        msg.tilt = ct.tilt;
         if (ct.button_center) {
             msg.button_back = ct.button_center;
         }
