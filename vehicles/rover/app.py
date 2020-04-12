@@ -1,3 +1,4 @@
+import Queue
 import argparse
 import glob
 import logging
@@ -6,6 +7,7 @@ import multiprocessing
 import os
 import signal
 import sys
+import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
@@ -13,8 +15,10 @@ from functools import partial
 
 import cv2
 import numpy as np
+import requests
 import rospy
 from geometry_msgs.msg import Twist, TwistStamped
+from requests.auth import HTTPDigestAuth
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
@@ -137,6 +141,48 @@ class TwistHandler(object):
             self._drive(steering=cmd.get('steering'), throttle=cmd.get('throttle'))
 
 
+class CameraPtzThread(threading.Thread):
+    def __init__(self, event, server, user, password,
+                 protocol='http', port=80, path='/ISAPI/PTZCtrl/channels/1/continuous', scale=100, speed=1., flip=(1, 1)):
+        super(CameraPtzThread, self).__init__()
+        self._quit_event = event
+        self._scale = scale
+        self._speed = speed
+        self._flip = flip
+        self._auth = HTTPDigestAuth(user, password)
+        self._url = '{protocol}://{server}:{port}{path}'.format(**dict(protocol=protocol, server=server, port=port, path=path))
+        self._xml = """
+        <PTZData version='2.0' xmlns='http://www.isapi.org/ver20/XMLSchema'>
+            <pan>{pan}</pan>
+            <tilt>{tilt}</tilt>
+            <zoom>0</zoom>
+        </PTZData>
+        """
+        self._queue = Queue.Queue(maxsize=1)
+
+    def _norm(self, value):
+        return max(-self._scale, min(self._scale, int(self._scale * value * self._speed)))
+
+    def add(self, **kwargs):
+        if 'pan' in kwargs and 'tilt' in kwargs:
+            try:
+                self._queue.put_nowait((kwargs['pan'], kwargs['tilt']))
+            except Queue.Full:
+                pass
+
+    def run(self):
+        while not self._quit_event.is_set():
+            try:
+                pan, tilt = self._queue.get(block=True, timeout=0.050)
+                pan = self._norm(pan) * self._flip[0]
+                tilt = self._norm(tilt) * self._flip[1]
+                r = requests.put(self._url, data=self._xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
+                if r.status_code != 200:
+                    logger.warn("Got status {} on camera ptz put.".format(r.status_code))
+            except Queue.Empty:
+                pass
+
+
 def _ros_init():
     # Ros replaces the root logger - add a new handler after ros initialisation.
     rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
@@ -164,7 +210,9 @@ def main():
     _camera_hwc = cfg.get('camera.shape.hwc')
     _camera_uri = cfg.get('camera.location.uri')
     _camera_shape = [int(x) for x in _camera_hwc.split('x')]
-    _camera_flip = str(cfg.get('camera.image.flip'))
+    _camera_image_flip_str = str(cfg.get('camera.image.flip'))
+    _camera_ptz_flip_str = str(cfg.get('camera.ptz.flip'))
+    _camera_ptz_speed = float(cfg.get('camera.ptz.speed.scale'))
 
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     dry_run = bool(int(cfg.get('dry.run')))
@@ -191,16 +239,30 @@ def main():
            "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
            "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_uri)
     _flipcode = None
-    if _camera_flip in ('both', 'vertical', 'horizontal'):
-        _flipcode = 0 if _camera_flip == 'vertical' else 1 if _camera_flip == 'horizontal' else -1
+    if _camera_image_flip_str in ('both', 'vertical', 'horizontal'):
+        _flipcode = 0 if _camera_image_flip_str == 'vertical' else 1 if _camera_image_flip_str == 'horizontal' else -1
     logger.info("Using camera flipcode={}".format(_flipcode))
     gst_source = GstRawSource(fn_callback=partial(_image, flipcode=_flipcode), command=_url)
     gst_source.open()
 
+    _camera_ptz_flip = [1, 1]
+    if _camera_ptz_flip_str in ('pan', 'tilt', 'both'):
+        _camera_ptz_flip[0] = -1 if _camera_ptz_flip_str in ('pan', 'both') else 1
+        _camera_ptz_flip[1] = -1 if _camera_ptz_flip_str in ('tilt', 'both') else 1
+
     vehicle = TwistHandler(ros_gate=gate, **cfg)
     threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    camera_ptz = CameraPtzThread(event=quit_event,
+                                 server='192.168.1.64',
+                                 user='admin',
+                                 password='SteamGlamour4',
+                                 speed=_camera_ptz_speed,
+                                 flip=_camera_ptz_flip)
     threads.append(pilot)
+    threads.append(teleop)
+    threads.append(camera_ptz)
     [t.start() for t in threads]
 
     _period = 1. / _process_frequency
@@ -221,6 +283,9 @@ def main():
                 gst_source.close()
         if gst_source.is_closed():
             gst_source.open()
+        c_teleop = teleop.get_latest()
+        if c_teleop:
+            camera_ptz.add(**c_teleop)
 
     logger.info("Waiting on stream source to close.")
     gst_source.close()
@@ -231,5 +296,5 @@ def main():
 
 if __name__ == "__main__":
     logging.basicConfig(format=log_format)
-    logging.getLogger().setLevel(logging.DEBUG)
+    logging.getLogger().setLevel(logging.INFO)
     main()
