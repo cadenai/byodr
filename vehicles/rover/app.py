@@ -143,13 +143,15 @@ class TwistHandler(object):
 
 class CameraPtzThread(threading.Thread):
     def __init__(self, event, server, user, password,
-                 protocol='http', port=80, path='/ISAPI/PTZCtrl/channels/1/continuous', scale=100, speed=1., flip=(1, 1)):
+                 protocol='http', path='/ISAPI/PTZCtrl/channels/1/continuous',
+                 scale=100, speed=1., flip=(1, 1)):
         super(CameraPtzThread, self).__init__()
         self._quit_event = event
         self._scale = scale
         self._speed = speed
         self._flip = flip
         self._auth = HTTPDigestAuth(user, password)
+        port = 80 if protocol == 'http' else 443
         self._url = '{protocol}://{server}:{port}{path}'.format(**dict(protocol=protocol, server=server, port=port, path=path))
         self._xml = """
         <PTZData version='2.0' xmlns='http://www.isapi.org/ver20/XMLSchema'>
@@ -159,6 +161,7 @@ class CameraPtzThread(threading.Thread):
         </PTZData>
         """
         self._queue = Queue.Queue(maxsize=1)
+        self._previous = (0, 0)
 
     def _norm(self, value):
         return max(-self._scale, min(self._scale, int(self._scale * value * self._speed)))
@@ -176,9 +179,11 @@ class CameraPtzThread(threading.Thread):
                 pan, tilt = self._queue.get(block=True, timeout=0.050)
                 pan = self._norm(pan) * self._flip[0]
                 tilt = self._norm(tilt) * self._flip[1]
-                r = requests.put(self._url, data=self._xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
-                if r.status_code != 200:
-                    logger.warn("Got status {} on camera ptz put.".format(r.status_code))
+                if self._previous != (pan, tilt):
+                    r = requests.put(self._url, data=self._xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
+                    self._previous = (pan, tilt)
+                    if r.status_code != 200:
+                        logger.warn("Got status {} on camera ptz put.".format(r.status_code))
             except Queue.Empty:
                 pass
 
@@ -207,12 +212,23 @@ def main():
 
     _process_frequency = int(cfg.get('clock.hz'))
     _patience_micro = float(cfg.get('patience.ms', 200)) * 1000
-    _camera_hwc = cfg.get('camera.shape.hwc')
-    _camera_uri = cfg.get('camera.location.uri')
-    _camera_shape = [int(x) for x in _camera_hwc.split('x')]
-    _camera_image_flip_str = str(cfg.get('camera.image.flip'))
-    _camera_ptz_flip_str = str(cfg.get('camera.ptz.flip'))
-    _camera_ptz_speed = float(cfg.get('camera.ptz.speed.scale'))
+    _camera_ip = str(cfg.get('camera.ip'))
+    _camera_user = str(cfg.get('camera.user'))
+    _camera_pass = str(cfg.get('camera.password'))
+    _camera_rtsp_port = int(cfg.get('camera.rtsp.port'))
+    _camera_rtsp_path = str(cfg.get('camera.rtsp.path'))
+    _camera_img_wh = str(cfg.get('camera.image.shape'))
+    _camera_img_flip = str(cfg.get('camera.image.flip'))
+    _camera_ptz_protocol = str(cfg.get('camera.ptz.protocol'))
+    _camera_ptz_path = str(cfg.get('camera.ptz.path'))
+    _camera_ptz_flip = str(cfg.get('camera.ptz.flip'))
+    _camera_ptz_speed = float(cfg.get('camera.ptz.speed'))
+
+    _camera_shape = [int(x) for x in _camera_img_wh.split('x')]
+    _camera_shape = (_camera_shape[1], _camera_shape[0], 3)
+    _camera_rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
+        **dict(user=_camera_user, password=_camera_pass, ip=_camera_ip, port=_camera_rtsp_port, path=_camera_rtsp_path)
+    )
 
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     dry_run = bool(int(cfg.get('dry.run')))
@@ -237,29 +253,31 @@ def main():
            "location={} " \
            "latency=0 drop-on-latency=true ! queue ! " \
            "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-           "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_uri)
+           "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_rtsp_url)
     _flipcode = None
-    if _camera_image_flip_str in ('both', 'vertical', 'horizontal'):
-        _flipcode = 0 if _camera_image_flip_str == 'vertical' else 1 if _camera_image_flip_str == 'horizontal' else -1
+    if _camera_img_flip in ('both', 'vertical', 'horizontal'):
+        _flipcode = 0 if _camera_img_flip == 'vertical' else 1 if _camera_img_flip == 'horizontal' else -1
     logger.info("Using camera flipcode={}".format(_flipcode))
     gst_source = GstRawSource(fn_callback=partial(_image, flipcode=_flipcode), command=_url)
     gst_source.open()
 
-    _camera_ptz_flip = [1, 1]
-    if _camera_ptz_flip_str in ('pan', 'tilt', 'both'):
-        _camera_ptz_flip[0] = -1 if _camera_ptz_flip_str in ('pan', 'both') else 1
-        _camera_ptz_flip[1] = -1 if _camera_ptz_flip_str in ('tilt', 'both') else 1
+    _flipcode = [1, 1]
+    if _camera_ptz_flip in ('pan', 'tilt', 'both'):
+        _flipcode[0] = -1 if _camera_ptz_flip in ('pan', 'both') else 1
+        _flipcode[1] = -1 if _camera_ptz_flip in ('tilt', 'both') else 1
 
     vehicle = TwistHandler(ros_gate=gate, **cfg)
     threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     camera_ptz = CameraPtzThread(event=quit_event,
-                                 server='192.168.1.64',
-                                 user='admin',
-                                 password='SteamGlamour4',
+                                 server=_camera_ip,
+                                 user=_camera_user,
+                                 password=_camera_pass,
+                                 protocol=_camera_ptz_protocol,
+                                 path=_camera_ptz_path,
                                  speed=_camera_ptz_speed,
-                                 flip=_camera_ptz_flip)
+                                 flip=_flipcode)
     threads.append(pilot)
     threads.append(teleop)
     threads.append(camera_ptz)
