@@ -140,6 +140,7 @@ class CameraServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._capture = kwargs.get('fn_capture')
+        self._black_img = np.zeros(shape=(240, 320, 3), dtype=np.uint8)
 
     def check_origin(self, origin):
         return True
@@ -159,13 +160,15 @@ class CameraServerSocket(websocket.WebSocketHandler):
             quality = request.get('quality', 90)
             display = request.get('display', 'HVGA').strip().upper()
             img = self._capture()
-            if img is not None:
-                resolutions = CameraServerSocket._display_resolutions
-                if display in resolutions.keys():
-                    _width, _height = resolutions[display]
-                    if np.prod(img.shape[:2]) > (_width * _height):
-                        img = cv2.resize(img, (_width, _height))
-                self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
+            if img is None:
+                # Always send something to the client is able to resume polling.
+                img = self._black_img
+            resolutions = CameraServerSocket._display_resolutions
+            if display in resolutions.keys():
+                _width, _height = resolutions[display]
+                if np.prod(img.shape[:2]) > (_width * _height):
+                    img = cv2.resize(img, (_width, _height))
+            self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
             logger.error("JSON message:---\n{}\n---".format(message))
