@@ -230,6 +230,7 @@ def main():
         **dict(user=_camera_user, password=_camera_pass, ip=_camera_ip, port=_camera_rtsp_port, path=_camera_rtsp_path)
     )
 
+    logger.info("Camera rtsp url = {}.".format(_camera_rtsp_url))
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     dry_run = bool(int(cfg.get('dry.run')))
     if dry_run:
