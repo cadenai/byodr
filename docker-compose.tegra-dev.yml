@@ -12,25 +12,31 @@ services:
     volumes:
       - ./common:/common
       - ./recorder:/app
+  ros:
+    image: centipede2donald/byodr-ce:rosserial
+    container_name: byodr_ros
+    command: roscore
+    ports:
+      - "11311:11311"
   rosserial:
     build:
       context: .
-      dockerfile: vehicles/rover/Dockerfile.ros_serial
+      dockerfile: vehicles/rover/Dockerfile.ros
     image: centipede2donald/byodr-ce:rosserial
-    container_name: byodr_ros_serial
+    command: python rosserial.py --port=/dev/arduino
+    environment:
+      ROS_MASTER_URI: 'http://byodr_ros:11311'
     volumes:
       - ./vehicles/rover:/app
     devices:
       - /dev/arduino
-    ports:
-      - "11311:11311"
   vehicle:
     build:
       context: .
       dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:rover
     environment:
-      ROS_MASTER_URI: 'http://byodr_ros_serial:11311'
+      ROS_MASTER_URI: 'http://byodr_ros:11311'
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app

@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: teleop/Dockerfile
     image: centipede2donald/byodr-ce:teleop
+    restart: unless-stopped
     ports:
       - "9100:9100"
     volumes:
@@ -14,6 +15,7 @@ services:
       context: .
       dockerfile: pilot/Dockerfile
     image: centipede2donald/byodr-ce:pilot
+    restart: unless-stopped
     volumes:
       - ${DC_CONFIG_DIR}:/config
     volumes_from:
@@ -23,11 +25,14 @@ services:
       context: .
       dockerfile: recorder/Dockerfile
     image: centipede2donald/byodr-ce:recorder
+    restart: unless-stopped
     volumes:
       - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions
     volumes_from:
       - teleop:rw
+  ros:
+    image: rwgrim/docker-noop:latest
   rosserial:
     image: rwgrim/docker-noop:latest
   vehicle:
