@@ -535,16 +535,16 @@ class CommandProcessor(object):
         # What to do on message timeout depends on which driver is active.
         _ctl = self._driver.get_driver_ctl()
         teleop, vehicle, inference = commands
-        # Everything normal.
-        if None not in commands:
+        # Switch off autopilot on internal errors.
+        if None in (vehicle, inference) and _ctl != 'driver_mode.teleop.direct':
+            self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+            return self._driver.noop()
+        # Everything normal or there is no autopilot process but teleop should function normally.
+        if None not in commands or (None not in (teleop, vehicle) and _ctl == 'driver_mode.teleop.direct'):
             self._process(teleop)
             return self._driver.next_action(teleop, vehicle, inference)
         # Autopilot drives without teleop commands.
         if None not in (vehicle, inference) and _ctl == 'driver_mode.inference.dnn':
             return self._driver.next_action(dict(), vehicle, inference)
-        # Switch off autopilot on internal errors.
-        if None in (vehicle, inference) and _ctl != 'driver_mode.teleop.direct':
-            self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
-            return self._driver.noop()
         # Ignore old or repetitive teleop commands.
         return None
