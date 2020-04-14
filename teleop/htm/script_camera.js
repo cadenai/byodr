@@ -10,7 +10,7 @@ var camera_controller = {
     request_time: 0,
     request_timeout: 0,
     // larger = more smoothing
-    request_time_smoothing: 0.8,
+    request_time_smoothing: 0.5,
     request_target_timeout: 100,
 
     init: function(doc_location) {
