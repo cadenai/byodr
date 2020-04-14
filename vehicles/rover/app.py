@@ -188,14 +188,83 @@ class CameraPtzThread(threading.Thread):
                 pass
 
 
-def _ros_init():
-    # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
-    console_handler = logging.StreamHandler(stream=sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.INFO)
-    rospy.on_shutdown(lambda: quit_event.set())
+def _gate_init(cfg):
+    dry_run = bool(int(cfg.get('dry.run')))
+    if dry_run:
+        return FakeGate()
+    else:
+        # Ros replaces the root logger - add a new handler after ros initialisation.
+        rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
+        console_handler = logging.StreamHandler(stream=sys.stdout)
+        console_handler.setFormatter(logging.Formatter(log_format))
+        logging.getLogger().addHandler(console_handler)
+        logging.getLogger().setLevel(logging.INFO)
+        rospy.on_shutdown(lambda: quit_event.set())
+        logger.info("Starting ROS gate.")
+        return RosGate()
+
+
+def _gst_init(image_publisher, cfg):
+    _camera_ip = str(cfg.get('camera.ip'))
+    _camera_user = str(cfg.get('camera.user'))
+    _camera_pass = str(cfg.get('camera.password'))
+    _camera_rtsp_port = int(cfg.get('camera.rtsp.port'))
+    _camera_rtsp_path = str(cfg.get('camera.rtsp.path'))
+    _camera_img_wh = str(cfg.get('camera.image.shape'))
+    _camera_img_flip = str(cfg.get('camera.image.flip'))
+    _camera_shape = [int(x) for x in _camera_img_wh.split('x')]
+    _camera_shape = (_camera_shape[1], _camera_shape[0], 3)
+    _camera_rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
+        **dict(user=_camera_user, password=_camera_pass, ip=_camera_ip, port=_camera_rtsp_port, path=_camera_rtsp_path)
+    )
+
+    def _image(_b, flipcode=None):
+        _img = np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(_camera_shape)
+        image_publisher.publish(cv2.flip(_img, flipcode) if flipcode else _img)
+
+    _url = "rtspsrc " \
+           "location={} " \
+           "latency=0 drop-on-latency=true ! queue ! " \
+           "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
+           "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_rtsp_url)
+
+    # flipcode = 0: flip vertically
+    # flipcode > 0: flip horizontally
+    # flipcode < 0: flip vertically and horizontally
+    _flipcode = None
+    if _camera_img_flip in ('both', 'vertical', 'horizontal'):
+        _flipcode = 0 if _camera_img_flip == 'vertical' else 1 if _camera_img_flip == 'horizontal' else -1
+
+    logger.info("Camera rtsp url = {}.".format(_camera_rtsp_url))
+    logger.info("Using image flipcode={}".format(_flipcode))
+    return GstRawSource(fn_callback=partial(_image, flipcode=_flipcode), command=_url)
+
+
+def _ptz_init(cfg):
+    _camera_ptz_enabled = bool(int(cfg.get('camera.ptz.enabled')))
+    if not _camera_ptz_enabled:
+        return None
+    else:
+        _camera_ip = str(cfg.get('camera.ip'))
+        _camera_user = str(cfg.get('camera.user'))
+        _camera_pass = str(cfg.get('camera.password'))
+        _camera_ptz_protocol = str(cfg.get('camera.ptz.protocol'))
+        _camera_ptz_path = str(cfg.get('camera.ptz.path'))
+        _camera_ptz_flip = str(cfg.get('camera.ptz.flip'))
+        _camera_ptz_speed = float(cfg.get('camera.ptz.speed'))
+        _flipcode = [1, 1]
+        if _camera_ptz_flip in ('pan', 'tilt', 'both'):
+            _flipcode[0] = -1 if _camera_ptz_flip in ('pan', 'both') else 1
+            _flipcode[1] = -1 if _camera_ptz_flip in ('tilt', 'both') else 1
+        logger.info("Create PTZ thread for camera {}.".format(_camera_ip))
+        return CameraPtzThread(event=quit_event,
+                               server=_camera_ip,
+                               user=_camera_user,
+                               password=_camera_pass,
+                               protocol=_camera_ptz_protocol,
+                               path=_camera_ptz_path,
+                               speed=_camera_ptz_speed,
+                               flip=_flipcode)
 
 
 def main():
@@ -212,78 +281,38 @@ def main():
 
     _process_frequency = int(cfg.get('clock.hz'))
     _patience_micro = float(cfg.get('patience.ms', 200)) * 1000
-    _camera_ip = str(cfg.get('camera.ip'))
-    _camera_user = str(cfg.get('camera.user'))
-    _camera_pass = str(cfg.get('camera.password'))
-    _camera_rtsp_port = int(cfg.get('camera.rtsp.port'))
-    _camera_rtsp_path = str(cfg.get('camera.rtsp.path'))
-    _camera_img_wh = str(cfg.get('camera.image.shape'))
-    _camera_img_flip = str(cfg.get('camera.image.flip'))
-    _camera_ptz_protocol = str(cfg.get('camera.ptz.protocol'))
-    _camera_ptz_path = str(cfg.get('camera.ptz.path'))
-    _camera_ptz_flip = str(cfg.get('camera.ptz.flip'))
-    _camera_ptz_speed = float(cfg.get('camera.ptz.speed'))
-
-    _camera_shape = [int(x) for x in _camera_img_wh.split('x')]
-    _camera_shape = (_camera_shape[1], _camera_shape[0], 3)
-    _camera_rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
-        **dict(user=_camera_user, password=_camera_pass, ip=_camera_ip, port=_camera_rtsp_port, path=_camera_rtsp_path)
-    )
-
-    logger.info("Camera rtsp url = {}.".format(_camera_rtsp_url))
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
-    dry_run = bool(int(cfg.get('dry.run')))
-    if dry_run:
-        gate = FakeGate()
-    else:
-        _ros_init()
-        gate = RosGate()
-        logger.info("ROS gate started.")
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
-    def _image(_b, flipcode=None):
-        # flipcode = 0: flip vertically
-        # flipcode > 0: flip horizontally
-        # flipcode < 0: flip vertically and horizontally
-        _img = np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(_camera_shape)
-        image_publisher.publish(cv2.flip(_img, flipcode) if flipcode else _img)
-
-    _url = "rtspsrc " \
-           "location={} " \
-           "latency=0 drop-on-latency=true ! queue ! " \
-           "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-           "videoscale ! video/x-raw,format=BGR ! queue".format(_camera_rtsp_url)
-    _flipcode = None
-    if _camera_img_flip in ('both', 'vertical', 'horizontal'):
-        _flipcode = 0 if _camera_img_flip == 'vertical' else 1 if _camera_img_flip == 'horizontal' else -1
-    logger.info("Using camera flipcode={}".format(_flipcode))
-    gst_source = GstRawSource(fn_callback=partial(_image, flipcode=_flipcode), command=_url)
+    gst_source = _gst_init(image_publisher, cfg)
     gst_source.open()
 
-    _flipcode = [1, 1]
-    if _camera_ptz_flip in ('pan', 'tilt', 'both'):
-        _flipcode[0] = -1 if _camera_ptz_flip in ('pan', 'both') else 1
-        _flipcode[1] = -1 if _camera_ptz_flip in ('tilt', 'both') else 1
+    vehicle = TwistHandler(ros_gate=(_gate_init(cfg)), **cfg)
+    camera_ptz = _ptz_init(cfg)
 
-    vehicle = TwistHandler(ros_gate=gate, **cfg)
     threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    camera_ptz = CameraPtzThread(event=quit_event,
-                                 server=_camera_ip,
-                                 user=_camera_user,
-                                 password=_camera_pass,
-                                 protocol=_camera_ptz_protocol,
-                                 path=_camera_ptz_path,
-                                 speed=_camera_ptz_speed,
-                                 flip=_flipcode)
     threads.append(pilot)
     threads.append(teleop)
-    threads.append(camera_ptz)
+    if camera_ptz:
+        threads.append(camera_ptz)
     [t.start() for t in threads]
 
+    def _handle_ptz():
+        if camera_ptz:
+            c_teleop = teleop.get_latest()
+            if c_teleop:
+                camera_ptz.add(**c_teleop)
+
+    def _check_gst():
+        if gst_source.is_open() and not gst_source.is_healthy(patience=0.50):
+            gst_source.close()
+        if gst_source.is_closed():
+            gst_source.open()
+
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     _period = 1. / _process_frequency
     while not quit_event.is_set():
         command = pilot.get_latest()
@@ -295,16 +324,9 @@ def main():
         else:
             vehicle.noop()
         state_publisher.publish(vehicle.state())
-        if gst_source.is_open():
-            if gst_source.is_healthy(patience=0.50):
-                time.sleep(_period)
-            else:
-                gst_source.close()
-        if gst_source.is_closed():
-            gst_source.open()
-        c_teleop = teleop.get_latest()
-        if c_teleop:
-            camera_ptz.add(**c_teleop)
+        _handle_ptz()
+        _check_gst()
+        time.sleep(_period)
 
     logger.info("Waiting on stream source to close.")
     gst_source.close()
