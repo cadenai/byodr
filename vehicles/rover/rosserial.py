@@ -5,6 +5,7 @@ import traceback
 
 import rospy
 from rosserial_python import SerialClient
+from serial import Serial
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -34,9 +35,13 @@ if __name__ == "__main__":
     while not rospy.is_shutdown():
         rospy.loginfo("Connecting to %s at %d baud" % (port_name, baud))
         try:
+            # We have to setup the serial port here in order to receive any serial exceptions.
+            port = Serial(port_name, baud, timeout=5.0, write_timeout=10)
             client = SerialClient(port_name, baud, fix_pyserial_for_test=False)
             client.run()
         except KeyboardInterrupt:
             break
         except Exception as e:
+            # Break the loop so the process manager can restart when the device has become available again.
             logger.warn(traceback.format_exc(e))
+            exit(1)
