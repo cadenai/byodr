@@ -2,11 +2,34 @@
 window.addEventListener("gamepadconnected", function(e) { gamepad_controller.connect(e, true); }, false);
 window.addEventListener("gamepaddisconnected", function(e) { gamepad_controller.connect(e, false); }, false);
 
+var teleop_screen = {
+    is_connection_ok: 0,
+    is_console_ok: 0,
+
+    update: function() {
+        is_connection_ok = teleop_screen.is_connection_ok;
+        is_console_ok = teleop_screen.is_console_ok;
+        var connection_error = $('div#connection_error');
+        var console_warning = $('div#console_warning');
+        if (is_connection_ok) {
+            connection_error.hide();
+        } else {
+            connection_error.show();
+        }
+        if (is_console_ok) {
+            console_warning.hide();
+        } else {
+            console_warning.show();
+        }
+    }
+}
+
 gamepad_controller.capture = function() {
     gc = gamepad_controller;
     ct = gc.controller;
     msg = {};
-    if (ct.poll()) {
+    gc_active = ct.poll();
+    if (gc_active) {
         // Skip buttons when not pressed to save bandwidth.
         msg.steering = ct.steering;
         msg.throttle = ct.throttle;
@@ -41,14 +64,26 @@ gamepad_controller.capture = function() {
         }
     }
     gc.socket.send(JSON.stringify(msg));
+    teleop_screen.is_console_ok = gc_active;
+    teleop_screen.update();
 }
 socket_utils.create_socket("/ws/ctl", false, 1000, function(ws) {
     gamepad_controller.socket = ws;
     ws.onopen = function() {
         console.log("The gamepad socket connection was established.");
+        teleop_screen.is_connection_ok = 1;
         gamepad_controller.capture();
     };
-    ws.onmessage = function(evt) {
+    ws.onclose = function() {
+        teleop_screen.is_connection_ok = 0;
+        teleop_screen.update();
+    };
+    ws.onerror = function() {
+        teleop_screen.is_console_ok = gamepad_controller.controller.poll();
+        teleop_screen.is_connection_ok = 0;
+        teleop_screen.update();
+    };
+    ws.onmessage = function() {
         setTimeout(gamepad_controller.capture, 0);
     };
 });

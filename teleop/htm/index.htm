@@ -32,6 +32,24 @@
           float: left;
         }
 
+        .message {
+          color: #000;
+          font-family: Verdana;
+          font-size; 13px;
+          border: 1px solid #ccc;
+          margin-top: 16px;
+          margin-bottom: 16px;
+          padding: 10px;
+        }
+
+        div#console_warning {
+          background-color: #ffffcc;
+        }
+
+        div#connection_error {
+          background-color: #9c2b2e;
+        }
+
         div#bar {
           text-align: center;
           color: white;
@@ -118,6 +136,8 @@
 <body>
 <div id="container" class="centered">
     <div id="column">
+        <div id="connection_error" class="message">Connection lost - please wait or refresh the page.</div>
+        <div id="console_warning" class="message">Console asleep or not detected - please check the connection and press button 'B'.</div>
         <div id="bar">
             <img id="arrow" class="left"/>
             <div id="desired_speed">

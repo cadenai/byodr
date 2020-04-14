@@ -15,10 +15,14 @@ var socket_utils = {
         if (binary) {
             ws.binaryType = 'arraybuffer';
         }
+        assign(ws);
+        var on_close = ws.onclose;
         ws.onclose = function() {
             setTimeout(function() {socket_utils.create_socket(path, binary, reconnect, assign);}, reconnect);
+            if (typeof on_close === "function") {
+                on_close();
+            }
         };
-        assign(ws);
     }
 }
 
