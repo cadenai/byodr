@@ -58,7 +58,7 @@ camera.rtsp.port = 554
 camera.rtsp.path = /Streaming/Channels/102
 camera.image.shape = 640x480
 camera.image.flip = both
-camera.ptz.path = /ISAPI/PTZCtrl/channels/1/continuous
+camera.ptz.path = /ISAPI/PTZCtrl/channels/1
 camera.ptz.flip = pan
 
 [vehicle] 

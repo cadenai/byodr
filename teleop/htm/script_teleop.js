@@ -13,7 +13,7 @@ gamepad_controller.capture = function() {
         msg.pan = ct.pan;
         msg.tilt = ct.tilt;
         if (ct.button_center) {
-            msg.button_back = ct.button_center;
+            msg.button_center = ct.button_center;
         }
         if (ct.button_left) {
             msg.button_left = ct.button_left;

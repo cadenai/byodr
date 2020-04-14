@@ -143,17 +143,18 @@ class TwistHandler(object):
 
 class CameraPtzThread(threading.Thread):
     def __init__(self, event, server, user, password,
-                 protocol='http', path='/ISAPI/PTZCtrl/channels/1/continuous',
-                 scale=100, speed=1., flip=(1, 1)):
+                 protocol='http', path='/ISAPI/PTZCtrl/channels/1',
+                 preset_duration_sec=5.0, scale=100, speed=1., flip=(1, 1)):
         super(CameraPtzThread, self).__init__()
         self._quit_event = event
+        self._preset_duration = preset_duration_sec
         self._scale = scale
         self._speed = speed
         self._flip = flip
         self._auth = HTTPDigestAuth(user, password)
         port = 80 if protocol == 'http' else 443
         self._url = '{protocol}://{server}:{port}{path}'.format(**dict(protocol=protocol, server=server, port=port, path=path))
-        self._xml = """
+        self._ptz_xml = """
         <PTZData version='2.0' xmlns='http://www.isapi.org/ver20/XMLSchema'>
             <pan>{pan}</pan>
             <tilt>{tilt}</tilt>
@@ -166,24 +167,46 @@ class CameraPtzThread(threading.Thread):
     def _norm(self, value):
         return max(-self._scale, min(self._scale, int(self._scale * value * self._speed)))
 
-    def add(self, **kwargs):
-        if 'pan' in kwargs and 'tilt' in kwargs:
-            try:
-                self._queue.put_nowait((kwargs['pan'], kwargs['tilt']))
-            except Queue.Full:
-                pass
+    def _perform(self, operation):
+        # Goto a preset position takes time.
+        prev = self._previous
+        if type(prev) == tuple and prev[0] == 'goto_home' and time.time() - prev[1] < self._preset_duration:
+            pass
+        elif operation != prev:
+            if operation == 'set_home':
+                logger.info("Saving ptz home position.")
+                self._previous = operation
+                r = requests.put(self._url + '/homeposition', auth=self._auth)
+            elif operation == 'goto_home':
+                logger.info("Activating ptz home position.")
+                self._previous = ('goto_home', time.time())
+                r = requests.put(self._url + '/homeposition/goto', auth=self._auth)
+            else:
+                pan, tilt = operation
+                self._previous = operation
+                r = requests.put(self._url + '/continuous', data=self._ptz_xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
+            if r.status_code != 200:
+                logger.warn("Got status {} on operation {}.".format(r.status_code, operation))
+
+    def add(self, pilot, teleop):
+        try:
+            if pilot and pilot.get('driver') == 'driver_mode.teleop.direct' and teleop:
+                self._queue.put_nowait(teleop)
+        except Queue.Full:
+            pass
 
     def run(self):
         while not self._quit_event.is_set():
             try:
-                pan, tilt = self._queue.get(block=True, timeout=0.050)
-                pan = self._norm(pan) * self._flip[0]
-                tilt = self._norm(tilt) * self._flip[1]
-                if self._previous != (pan, tilt):
-                    r = requests.put(self._url, data=self._xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
-                    self._previous = (pan, tilt)
-                    if r.status_code != 200:
-                        logger.warn("Got status {} on camera ptz put.".format(r.status_code))
+                cmd = self._queue.get(block=True, timeout=0.050)
+                operation = (0, 0)
+                if all([cmd.get(k, 0) for k in ('button_left', 'button_right', 'button_center', 'button_b')]):
+                    operation = 'set_home'
+                elif any([cmd.get(k, 0) for k in ('button_y', 'button_center', 'button_a', 'button_x')]):
+                    operation = 'goto_home'
+                elif 'pan' in cmd and 'tilt' in cmd:
+                    operation = (self._norm(cmd.get('pan')) * self._flip[0], self._norm(cmd.get('tilt')) * self._flip[1])
+                self._perform(operation)
             except Queue.Empty:
                 pass
 
@@ -300,12 +323,6 @@ def main():
         threads.append(camera_ptz)
     [t.start() for t in threads]
 
-    def _handle_ptz():
-        if camera_ptz:
-            c_teleop = teleop.get_latest()
-            if c_teleop:
-                camera_ptz.add(**c_teleop)
-
     def _check_gst():
         if gst_source.is_open() and not gst_source.is_healthy(patience=0.50):
             gst_source.close()
@@ -324,8 +341,9 @@ def main():
         else:
             vehicle.noop()
         state_publisher.publish(vehicle.state())
-        _handle_ptz()
         _check_gst()
+        if camera_ptz:
+            camera_ptz.add(command, teleop.get_latest())
         time.sleep(_period)
 
     logger.info("Waiting on stream source to close.")

@@ -519,7 +519,7 @@ class CommandProcessor(object):
             self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
         elif command.get('button_left', 0) == 1:
             self._cache_safe('turn left', lambda: self._driver.turn_instruction('intersection.left'))
-        elif command.get('button_back', 0) == 1:
+        elif command.get('button_center', 0) == 1:
             self._cache_safe('turn ahead', lambda: self._driver.turn_instruction('intersection.ahead'))
         elif command.get('button_right', 0) == 1:
             self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
