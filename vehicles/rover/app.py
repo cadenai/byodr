@@ -198,7 +198,7 @@ class CameraPtzThread(threading.Thread):
             try:
                 cmd = self._queue.get(block=True, timeout=0.050)
                 operation = (0, 0)
-                if all([cmd.get(k, 0) for k in ('button_left', 'button_right', 'button_center', 'button_b')]):
+                if all([cmd.get(k, 0) for k in ('button_left', 'button_right', 'button_b')]):
                     operation = 'set_home'
                 elif any([cmd.get(k, 0) for k in ('button_y', 'button_center', 'button_a', 'button_x')]):
                     operation = 'goto_home'
