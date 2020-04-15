@@ -48,12 +48,10 @@ class RosGate(object):
          average rate: 81.741
     """
 
-    def __init__(self, connect=True):
-        """
-        """
-        _radius_m = .10  # Wheel radius in meters.
-        self._circum_m = 2 * math.pi * _radius_m  # Convert to circumference.
-        self._gear_ratio = 8  # Sensor tick to wheel turn ratio.
+    def __init__(self, connect=True, wheel_radius_m=0.10, sensor_ticks_per_wheel_rotation=8):
+
+        self._circum_m = 2 * math.pi * wheel_radius_m  # Convert to circumference.
+        self._gear_ratio = sensor_ticks_per_wheel_rotation
         self._rps = 0  # Hall sensor revolutions per second.
 
         if connect:
@@ -223,8 +221,10 @@ def _gate_init(cfg):
         logging.getLogger().addHandler(console_handler)
         logging.getLogger().setLevel(logging.INFO)
         rospy.on_shutdown(lambda: quit_event.set())
-        logger.info("Starting ROS gate.")
-        return RosGate()
+        _wheel_radius = float(cfg.get('chassis.wheel.radius.meter'))
+        _sensor_tick_ratio = int(cfg.get('chassis.hall.ticks.per.rotation'))
+        logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(_wheel_radius, _sensor_tick_ratio))
+        return RosGate(wheel_radius_m=_wheel_radius, sensor_ticks_per_wheel_rotation=_sensor_tick_ratio)
 
 
 def _gst_init(image_publisher, cfg):
