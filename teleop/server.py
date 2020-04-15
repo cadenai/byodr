@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class ControlServerSocket(websocket.WebSocketHandler):
-    """ Routes received commands directly to their respective topics. """
+    # There can be only one client in control at any time.
+    connections = set()
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
@@ -31,16 +32,23 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        logger.info("Client connected.")
+        logger.info("Control client connected.")
+        self.connections.add(self)
+        if len(self.connections) > 1:
+            [c.close() for c in self.connections]
 
     def on_close(self):
-        logger.info("Client disconnected.")
+        logger.info("Control client disconnected.")
+        self.connections.remove(self)
 
     def on_message(self, json_message):
         msg = json.loads(json_message)
         msg['time'] = timestamp()
         self._fn_control(msg)
-        self.write_message('{}')
+        try:
+            self.write_message('{}')
+        except websocket.WebSocketClosedError:
+            pass
 
 
 class MessageServerSocket(websocket.WebSocketHandler):
