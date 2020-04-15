@@ -4,6 +4,7 @@ import io
 import logging
 import multiprocessing
 import os
+import uuid
 import zipfile
 from abc import ABCMeta, abstractmethod
 
@@ -73,6 +74,12 @@ class AbstractDataSource(object):
 
 
 class ZipDataSource(AbstractDataSource):
+    MF_TEMPLATE = """zip-datasource-version: 0.5
+zip-num-entries: {num_entries}
+platform-uuid-node: "{uuid_node}"
+image-shape-hwc: "{image_shape}"
+"""
+
     def __init__(self, directory=os.getcwd()):
         assert os.path.exists(directory), "The directory '{}' does not exist.".format(directory)
         self._directory = directory
@@ -81,6 +88,7 @@ class ZipDataSource(AbstractDataSource):
         self._read_only = True
         self._session = None
         self._data = None
+        self._image_shape = None
 
     def open(self, session=None):
         # Existing sessions can not be reopened.
@@ -121,6 +129,10 @@ class ZipDataSource(AbstractDataSource):
                     buf = io.BytesIO()
                     self._data.to_csv(buf, index=False)
                     archive.writestr('{}.csv'.format(self._session), buf.getvalue())
+                    _image_shape_str = 'null' if self._image_shape is None else 'x'.join(map(str, self._image_shape))
+                    archive.writestr('meta-inf/manifest.mf', ZipDataSource.MF_TEMPLATE.format(
+                        **dict(num_entries=len(self._data), uuid_node=hex(uuid.getnode()), image_shape=_image_shape_str)
+                    ))
             # Reset anyway.
             self._running = False
             self._read_only = True
@@ -133,6 +145,8 @@ class ZipDataSource(AbstractDataSource):
             # The store may have been closed while waiting on the lock.
             if self._running:
                 assert not self._read_only, "This is a read-only data source."
+                assert self._image_shape is None or self._image_shape == event.image.shape, "The image shape should be consistent."
+                self._image_shape = event.image.shape
                 timestamp = event.timestamp
                 steering = float(event.steering)
                 desired_speed = float(event.desired_speed)
