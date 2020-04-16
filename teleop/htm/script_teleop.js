@@ -67,7 +67,7 @@ gamepad_controller.capture = function() {
     teleop_screen.is_console_ok = gc_active;
     teleop_screen.update();
 }
-socket_utils.create_socket("/ws/ctl", false, 1000, function(ws) {
+socket_utils.create_socket("/ws/ctl", false, 100, function(ws) {
     gamepad_controller.socket = ws;
     ws.onopen = function() {
         console.log("The gamepad socket connection was established.");
@@ -106,7 +106,7 @@ var log_controller = {
 log_controller.capture = function() {
     log_controller.socket.send('{}');
 }
-socket_utils.create_socket("/ws/log", false, 1000, function(ws) {
+socket_utils.create_socket("/ws/log", false, 100, function(ws) {
     log_controller.socket = ws;
     ws.onopen = function() {
         console.log("The logger socket connection was established.");
