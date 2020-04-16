@@ -12,6 +12,7 @@ var camera_controller = {
     // larger = more smoothing
     request_time_smoothing: 0.5,
     request_target_timeout: 100,
+    socket_close_timer_id: null,
 
     init: function(doc_location) {
         var url_params = new URL(doc_location).searchParams;
@@ -47,21 +48,31 @@ var camera_controller = {
 }
 
 camera_controller.init(document.location);
+
+camera_controller.socket_close = function() {
+    camera_controller.socket.close(4001, "Done waiting for the server to respond.");
+    camera_controller.update_framerate();
+}
 camera_controller.capture = function() {
     cc = camera_controller;
+    // Half a second corresponds to 2 fps.
+    cc.socket_close_timer_id = setTimeout(camera_controller.socket_close, 500);
     // E.g. '{"quality": 50, "display": "vga"}'
     cc.socket.send(JSON.stringify({
         quality: cc.jpeg_quality,
         display: cc.display_resolution
     }));
 };
-socket_utils.create_socket("/ws/cam", true, 1000, function(ws) {
+socket_utils.create_socket("/ws/cam", true, 100, function(ws) {
     camera_controller.socket = ws;
     ws.onopen = function() {
         console.log("The camera socket connection was established.");
         camera_controller.capture();
     };
     ws.onmessage = function(evt) {
+        if (camera_controller.socket_close_timer_id != undefined) {
+            clearTimeout(camera_controller.socket_close_timer_id);
+        }
         camera_controller.update_framerate();
         camera_controller.update_quality();
         $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));
