@@ -31,6 +31,12 @@ var camera_controller = {
         this.request_start = performance.now();
     },
 
+    clear_socket_timeout: function () {
+        if (this.socket_close_timer_id != undefined) {
+            clearTimeout(this.socket_close_timer_id);
+        }
+    },
+
     update_framerate: function() {
         var end_time = performance.now();
         var duration = end_time - this.request_start;
@@ -48,36 +54,43 @@ var camera_controller = {
 }
 
 camera_controller.init(document.location);
-
-camera_controller.socket_close = function() {
-    camera_controller.socket.close(4001, "Done waiting for the server to respond.");
+camera_controller.socket_close = function(socket) {
+    socket.close(4001, "Done waiting for the server to respond.");
     camera_controller.update_framerate();
 }
-camera_controller.capture = function() {
-    cc = camera_controller;
+camera_controller.capture = function(socket) {
     // Half a second corresponds to 2 fps.
-    cc.socket_close_timer_id = setTimeout(camera_controller.socket_close, 500);
+    camera_controller.clear_socket_timeout();
+    camera_controller.socket_close_timer_id = setTimeout(function() {camera_controller.socket_close(socket);}, 500);
     // E.g. '{"quality": 50, "display": "vga"}'
-    cc.socket.send(JSON.stringify({
-        quality: cc.jpeg_quality,
-        display: cc.display_resolution
+    socket.send(JSON.stringify({
+        quality: camera_controller.jpeg_quality,
+        display: camera_controller.display_resolution
     }));
 };
 socket_utils.create_socket("/ws/cam", true, 100, function(ws) {
-    camera_controller.socket = ws;
     ws.onopen = function() {
-        console.log("The camera socket connection was established.");
-        camera_controller.capture();
+        console.log("Camera socket connection established.");
+        camera_controller.capture(ws);
     };
     ws.onmessage = function(evt) {
-        if (camera_controller.socket_close_timer_id != undefined) {
-            clearTimeout(camera_controller.socket_close_timer_id);
-        }
+        camera_controller.clear_socket_timeout();
         camera_controller.update_framerate();
         camera_controller.update_quality();
         $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));
         $('span#frame_fps').text(camera_controller.actual_fps);
         $('span#frame_quality').text(camera_controller.jpeg_quality);
-        setTimeout(camera_controller.capture, camera_controller.request_timeout);
+        setTimeout(function() {camera_controller.capture(ws);}, camera_controller.request_timeout);
     };
 });
+//socket_utils.create_socket("/ws/cam", true, 100, function(ws) {
+//    ws.onopen = function() {
+//        console.log("Camera socket connection two established.");
+//        camera_controller.capture(ws);
+//    };
+//    ws.onmessage = function(evt) {
+//        camera_controller.clear_socket_timeout();
+//        $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));
+//        setTimeout(function() {camera_controller.capture(ws);}, camera_controller.request_timeout);
+//    };
+//});
