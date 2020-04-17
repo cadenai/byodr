@@ -59,9 +59,8 @@ camera_controller.socket_close = function(socket) {
     camera_controller.update_framerate();
 }
 camera_controller.capture = function(socket) {
-    // Half a second corresponds to 2 fps.
     camera_controller.clear_socket_timeout();
-    camera_controller.socket_close_timer_id = setTimeout(function() {camera_controller.socket_close(socket);}, 500);
+    camera_controller.socket_close_timer_id = setTimeout(function() {camera_controller.socket_close(socket);}, 1000);
     // E.g. '{"quality": 50, "display": "vga"}'
     socket.send(JSON.stringify({
         quality: camera_controller.jpeg_quality,

@@ -83,7 +83,8 @@ class ImageEventLog(object):
                 )
 
     def pop(self):
-        return self._events.pop() if self._events else None
+        # Maintain fifo ordering.
+        return self._events.popleft() if self._events else None
 
 
 class EventHandler(threading.Thread):

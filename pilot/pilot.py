@@ -436,8 +436,8 @@ class DriverManager(object):
 
     def turn_instruction(self, turn):
         with self._lock:
-            self._pilot_state.instruction = turn
-            logger.info("Instruction set to '{}'.".format(turn))
+            if self.get_driver_ctl() != 'driver_mode.teleop.direct':
+                self._pilot_state.instruction = turn
 
     def get_driver_ctl(self):
         return self._driver_ctl
