@@ -32,6 +32,9 @@ quit_event = multiprocessing.Event()
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
 
+# Safety - cap the range that is availble through user configuration.
+VEHICLE_THROTTLE_SCALE = 0.133
+
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
 signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 
@@ -98,23 +101,23 @@ class TwistHandler(object):
             self._throttle_calibration_shift = _throttle_shift
             self._throttle_forward_scale = float(cfg.get('throttle.forward.scale'))
             self._throttle_forward_shift = float(cfg.get('throttle.forward.shift'))
+            self._throttle_backward_shift = float(cfg.get('throttle.backward.shift'))
             self._throttle_backward_scale = float(cfg.get('throttle.backward.scale'))
             logger.info("Calibration steer, throttle is {:2.2f}, {:2.2f}.".format(_steer_shift, _throttle_shift))
         except TypeError as e:
             logger.error(traceback.format_exc(e))
             raise e
 
-    def _scale(self, _throttle, _steering):
-        # First shift.
-        _steering += self._steer_calibration_shift
-        _throttle += self._throttle_calibration_shift
-        # Then scale and handle the dead-zone when forwards.
-        _throttle = _throttle if _throttle < 0 else (_throttle + self._throttle_forward_shift)
-        _throttle = (_throttle * self._throttle_backward_scale) if _throttle < 0 else (_throttle * self._throttle_forward_scale)
-        # Protect boundaries.
-        _steering = int(max(-1, min(1, _steering)) * 180 / 2 + 90)
-        _throttle = int(max(-1, min(1, _throttle)) * 180 / 2 + 90)
-        return _throttle, _steering
+    def _scale(self, user_throttle, user_steering):
+        # Separate capping the throttle range from calibration.
+        _throttle = 0
+        if user_throttle > 0:
+            _throttle = user_throttle + self._throttle_forward_shift + (user_throttle * self._throttle_forward_scale)
+        elif user_throttle < 0:
+            _throttle = user_throttle + self._throttle_backward_shift + (user_throttle * self._throttle_backward_scale)
+        servo_throttle = int(max(-1, min(1, (_throttle + self._throttle_calibration_shift) * VEHICLE_THROTTLE_SCALE)) * 90) + 90
+        servo_steering = int(max(-1, min(1, user_steering + self._steer_calibration_shift)) * 90) + 90
+        return servo_throttle, servo_steering
 
     def _drive(self, steering, throttle):
         try:

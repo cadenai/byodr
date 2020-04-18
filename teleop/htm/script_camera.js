@@ -4,13 +4,13 @@ var camera_controller = {
     target_fps: 16,
     display_resolution: 'default',
     jpeg_quality: 50,
-    min_jpeg_quality: 25,
+    min_jpeg_quality: 10,
     max_jpeg_quality: 95,
     request_start: performance.now(),
     request_time: 0,
     request_timeout: 0,
     // larger = more smoothing
-    request_time_smoothing: 0.5,
+    request_time_smoothing: 0.10,
     request_target_timeout: 100,
     socket_close_timer_id: null,
 
