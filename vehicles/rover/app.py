@@ -179,7 +179,6 @@ class CameraPtzThread(threading.Thread):
                 self._previous = operation
                 r = requests.put(self._url + '/homeposition', auth=self._auth)
             elif operation == 'goto_home':
-                logger.info("Activating ptz home position.")
                 self._previous = ('goto_home', time.time())
                 r = requests.put(self._url + '/homeposition/goto', auth=self._auth)
             else:
