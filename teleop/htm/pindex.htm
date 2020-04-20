@@ -131,7 +131,7 @@
 	<script src="script_utils.js"></script>
 	<script src="script_gamepad.js"></script>
 	<script src="script_teleop.js"></script>
-	<script src="http-live-player.js"></script>
+	<script src="script_camera.js"></script>
 </head>
 <body>
 <div id="container" class="centered">
@@ -150,7 +150,7 @@
             </div>
             <img id="steeringWheel" class="right"/>
         </div>
-        <div id="camera1"></div>
+        <img id="liveImg"/>
     </div>
     <div id="navigation">
     </div>
@@ -161,26 +161,9 @@
         <div id="debug_corridor">cor: <span id="inference_corridor">0</span></div>
         <div id="debug_obstacle">obs: <span id="inference_obstacle">0</span></div>
         <div id="debug_recorder">rec: <span id="state_recorder">n/a</span></div>
+        <div id="debug_fps">fps: <span id="frame_fps">0</span></div>
+        <div id="debug_quality">qua: <span id="frame_quality">0</span></div>
     </div>
 </div>
-<script type="text/javascript">
-var canvas = document.createElement("canvas");
-$('div#camera1').append(canvas);
-var uri = "ws://" + document.location.hostname + ':9101';
-
-var WsCallback = {
-    onopen: function(player) {
-        player.playStream();
-    },
-
-    onclose: function(player) {
-        setTimeout(function() {player.connect(uri);}, 100);
-    }
-}
-
-var wsavc = new WSAvcPlayer(canvas, "webgl", WsCallback);
-wsavc.connect(uri);
-window.wsavc = wsavc;
-</script>
 </body>
 </html>

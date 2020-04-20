@@ -82,14 +82,3 @@ socket_utils.create_socket("/ws/cam", true, 100, function(ws) {
         setTimeout(function() {camera_controller.capture(ws);}, camera_controller.request_timeout);
     };
 });
-//socket_utils.create_socket("/ws/cam", true, 100, function(ws) {
-//    ws.onopen = function() {
-//        console.log("Camera socket connection two established.");
-//        camera_controller.capture(ws);
-//    };
-//    ws.onmessage = function(evt) {
-//        camera_controller.clear_socket_timeout();
-//        $('img#liveImg').attr("src", window.URL.createObjectURL(new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"})));
-//        setTimeout(function() {camera_controller.capture(ws);}, camera_controller.request_timeout);
-//    };
-//});
