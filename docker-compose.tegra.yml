@@ -3,7 +3,6 @@ services:
   ros:
     image: centipede2donald/byodr-ce:rosserial
     restart: on-failure
-    container_name: byodr_ros
     command: roscore
     ports:
       - "11311:11311"

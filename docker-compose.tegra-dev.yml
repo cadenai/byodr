@@ -5,7 +5,6 @@ services:
       context: .
       dockerfile: vehicles/rover/Dockerfile.gst
     image: centipede2donald/byodr-ce:gstcam
-    container_name: byodr_cam1
     volumes:
       - ./vehicles/rover:/app
     command: ./stream1.sh
@@ -29,7 +28,6 @@ services:
       - ./recorder:/app
   ros:
     image: centipede2donald/byodr-ce:rosserial
-    container_name: byodr_ros
     command: roscore
     ports:
       - "11311:11311"
