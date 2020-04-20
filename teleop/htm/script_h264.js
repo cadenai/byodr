@@ -1,26 +1,32 @@
 
+class CameraSocketResumer {
+    constructor(uri, reconnect_ms) {
+        this.uri = uri;
+        this.reconnect_ms = reconnect_ms;
+    }
+
+    onopen(player) {
+        player.playStream();
+    }
+
+    onclose(player) {
+        setTimeout(function() {
+            player.connect(this.uri);
+        }, this.reconnect_ms);
+    }
+}
+
 var camera_player = {
-    uri: null,
     el_canvas: null,
     wsavc: null,
-
-    callback: {
-        onopen: function(player) {
-            player.playStream();
-        },
-
-        onclose: function(player) {
-            setTimeout(function() {player.connect(this.uri);}, 100);
-        }
-    },
 
     init: function(parent, port) {
         this.el_canvas = document.createElement("canvas");
         parent.appendChild(this.el_canvas);
-        this.uri = "ws://" + document.location.hostname + ':' + port;
-        this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", this.callback);
-        this.wsavc.connect(this.uri);
-        window.wsavc = this.wsavc;
+        uri = "ws://" + document.location.hostname + ':' + port;
+        this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", new CameraSocketResumer(uri, 100));
+        this.wsavc.connect(uri);
+        // window.wsavc = this.wsavc;
     }
 }
 
