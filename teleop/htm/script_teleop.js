@@ -120,8 +120,6 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         var el_inference_corridor = $('span#inference_corridor');
         var el_inference_obstacle = $('span#inference_obstacle');
         var el_state_recorder = $('span#state_recorder');
-        var el_frame_fps = $('span#frame_fps');
-        var el_frame_quality = $('span#frame_quality');
         var el_current_speed = $('div#current_speed_value');
         var el_max_speed = $('div#desired_speed_value');
         var el_steering_wheel = $('img#steeringWheel');

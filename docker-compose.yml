@@ -1,5 +1,18 @@
 version: '2'
 services:
+  cam1:
+    image: rwgrim/docker-noop:latest
+  nodews:
+    build:
+      context: .
+      dockerfile: teleop/nodews/Dockerfile
+    image: centipede2donald/byodr-ce:nodews
+    restart: on-failure
+    depends_on:
+      - "cam1"
+    ports:
+      - "9101:9101"
+    stop_signal: SIGKILL
   teleop:
     build:
       context: .
@@ -35,6 +48,8 @@ services:
     image: rwgrim/docker-noop:latest
   rosserial:
     image: rwgrim/docker-noop:latest
+    depends_on:
+      - "ros"
   vehicle:
     image: rwgrim/docker-noop:latest
     volumes:

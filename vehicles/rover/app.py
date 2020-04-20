@@ -145,7 +145,7 @@ class TwistHandler(object):
 class CameraPtzThread(threading.Thread):
     def __init__(self, event, server, user, password,
                  protocol='http', path='/ISAPI/PTZCtrl/channels/1',
-                 preset_duration_sec=5.0, scale=100, speed=1., flip=(1, 1)):
+                 preset_duration_sec=3.8, scale=100, speed=1., flip=(1, 1)):
         super(CameraPtzThread, self).__init__()
         self._quit_event = event
         self._preset_duration = preset_duration_sec

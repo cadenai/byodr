@@ -1,5 +1,20 @@
 version: '2'
 services:
+  cam1:
+    build:
+      context: .
+      dockerfile: vehicles/rover/Dockerfile.gst
+    image: centipede2donald/byodr-ce:gstcam
+    container_name: byodr_cam1
+    volumes:
+      - ./vehicles/rover:/app
+    command: ./stream1.sh
+    stop_signal: SIGKILL
+  nodews:
+    environment:
+      FEED_IP: 'byodr_cam1'
+    #volumes:  not compatible with npm local install
+    #  - ./teleop/xyz:/app
   teleop:
     volumes:
       - ./common:/common

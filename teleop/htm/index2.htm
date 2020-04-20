@@ -1,0 +1,186 @@
+<html>
+<!-- Adapted from https://github.com/Bronkoknorb/PyImageStream -->
+<head>
+    <meta charset="UTF-8">
+    <title>Teleop</title>
+    <style type="text/css">
+        html {
+          height: 100%;
+          background-image: linear-gradient(to top, white, black);
+        }
+
+        body {
+          /* background-color: black; */
+          /* color: white; */
+        }
+
+        .centered {
+          position: fixed;
+          top: 0;
+          left: 10%;
+        }
+
+        .right {
+          float: right;
+        }
+
+        .left {
+          float: left;
+        }
+
+        div#column {
+          float: left;
+        }
+
+        .message {
+          color: #000;
+          font-family: Verdana;
+          font-size; 13px;
+          border: 1px solid #ccc;
+          margin-top: 16px;
+          margin-bottom: 16px;
+          padding: 10px;
+        }
+
+        div#console_warning {
+          background-color: #ffffcc;
+        }
+
+        div#connection_error {
+          background-color: #9c2b2e;
+        }
+
+        div#bar {
+          text-align: center;
+          color: white;
+          font-family: Verdana;
+          margin-top: 2%;
+        }
+
+        img#arrow {
+          padding-top: 10px;
+        }
+
+        div#desired_speed {
+          display: inline-block;
+          font-size: 15px;
+          padding-right: 50px;
+          padding-bottom: 10px;
+        }
+
+        div#current_speed {
+          display: inline-block;
+          padding-left: 20px;
+          padding-top: 10px;
+          padding-right: 40px;
+        }
+
+        div#desired_speed_value {
+          font-size: 50px;
+        }
+
+        div#current_speed_value {
+          font-size: 40px;
+        }
+
+        div#current_speed_units {
+          font-size: 10px;
+        }
+
+        img#steeringWheel {
+          padding-right: 20px;
+        }
+
+        div#navigation {
+          float: right;
+          margin: 117px 0 0 20px;
+        }
+
+        img#liveImg {
+          width: 1024px;
+          height: 600px;
+          border: 1px solid white;
+          border-radius: 5px;
+        }
+
+        div#navigation img {
+          position: absolute;
+          left: 1220;
+          -webkit-transition: opacity 1s ease-in-out;
+          -moz-transition: opacity 1s ease-in-out;
+          -o-transition: opacity 1s ease-in-out;
+          transition: opacity 1s ease-in-out;
+          border: 1px solid lightyellow;
+          border-radius: 5px;
+        }
+
+        div#navigation img.transparent {
+          opacity:0;
+        }
+
+        div#debug_values {
+          color: white;
+          font-family: "Lucida Console";
+          font-size: 12px;
+          float: right;
+          margin: 110px 0 0 20px;
+        }
+    </style>
+    <script src="jquery-3.4.1.min.js"></script>
+    <script type="text/javascript" src="performance-polyfill.js"></script>
+	<script src="script_utils.js"></script>
+	<script src="script_gamepad.js"></script>
+	<script src="script_teleop.js"></script>
+	<script src="http-live-player.js"></script>
+</head>
+<body>
+<div id="container" class="centered">
+    <div id="column">
+        <div id="connection_error" class="message">Connection lost - please wait or refresh the page.</div>
+        <div id="console_warning" class="message">Console asleep or not detected - please check the connection and press button 'B'.</div>
+        <div id="bar">
+            <img id="arrow" class="left"/>
+            <div id="desired_speed">
+                <div id="desired_speed_value">0</div>
+                <div id="desired_speed_text">MAX</div>
+            </div>
+            <div id="current_speed">
+                <div id="current_speed_value">0</div>
+                <div id="current_speed_units">km/h</div>
+            </div>
+            <img id="steeringWheel" class="right"/>
+        </div>
+        <div id="camera1"></div>
+    </div>
+    <div id="navigation">
+    </div>
+    <div id="debug_values">
+        <div id="debug_steering">ste: <span id="pilot_steering">0</span></div>
+        <div id="debug_throttle">thr: <span id="pilot_throttle">0</span></div>
+        <div id="debug_penalty">pen: <span id="inference_penalty">0</span></div>
+        <div id="debug_corridor">cor: <span id="inference_corridor">0</span></div>
+        <div id="debug_obstacle">obs: <span id="inference_obstacle">0</span></div>
+        <div id="debug_recorder">rec: <span id="state_recorder">n/a</span></div>
+    </div>
+</div>
+<script type="text/javascript">
+var canvas = document.createElement("canvas");
+$('div#camera1').append(canvas);
+var uri = "ws://" + document.location.hostname + ':9101';
+
+var WsCallback = {
+    onopen: function(player) {
+        player.playStream();
+    },
+
+    onclose: function(player) {
+        setTimeout(function() {player.connect(uri);}, 100);
+    }
+}
+
+var wsavc = new WSAvcPlayer(canvas, "webgl", WsCallback);
+wsavc.connect(uri);
+window.wsavc = wsavc;
+</script>
+</body>
+</html>

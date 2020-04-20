@@ -54,19 +54,9 @@ _application_config_template = '''
 camera.ip = 192.168.1.64
 camera.user = user
 camera.password = pass
-camera.rtsp.port = 554
-camera.rtsp.path = /Streaming/Channels/102
-camera.image.shape = 640x480
-camera.image.flip = both
-camera.ptz.path = /ISAPI/PTZCtrl/channels/1
-camera.ptz.flip = pan
 
 [vehicle] 
 calibrate.steer.shift = 0.0
-calibrate.throttle.shift = 0.30
-throttle.forward.shift = 0.375
-throttle.forward.scale = 0.13
-throttle.backward.scale = 0.30
 '''
 
 
