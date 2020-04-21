@@ -9,7 +9,6 @@ import signal
 import sys
 import threading
 import time
-import traceback
 from ConfigParser import SafeConfigParser
 from functools import partial
 
@@ -32,19 +31,15 @@ quit_event = multiprocessing.Event()
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
 
-
 # Safety - cap the range that is availble through user configuration.
-# Ranges are from the servo domain, i.e. 1/90.
-def _scale_servo(x):
-    return x / 90.
-
-
-# Profile name, shift, range.
+# Ranges are from the servo domain, i.e. 1/90 - the pair is for forwards and reverse.
+# The ranges do not have to be symmetrical - backwards may seem faster here but not in practice (depends on the esc settings).
 D_SPEED_PROFILES = {
-    'economy': 2,
-    'normal': 4,
-    'sport': 6,
-    'performance': 9
+    'economy': (2, 4),
+    'normal': (3, 4),
+    'sport': (5, 5),
+    'performance': (8, 7)
+    # Yep, what's next?
 }
 
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
@@ -65,14 +60,29 @@ class RosGate(object):
 
     def __init__(self, **kwargs):
         connect = kwargs.get('connect')
-        self._steer_shift = kwargs.get('steer_shift')
-        self._throttle_zero = kwargs.get('throttle_zero_shift')
-        self._throttle_reverse = kwargs.get('throttle_reverse_shift')
-        self._circum_m = 2 * math.pi * kwargs.get('wheel_radius_m')
-        self._gear_ratio = kwargs.get('sensor_ticks_per_wheel_rotation')
-        self._rps = 0  # Hall sensor revolutions per second.
+        self._steer_shift = int(kwargs.get('calibrate.steer.shift'))
+        self._throttle_zero = int(kwargs.get('calibrate.throttle.zero.position'))
+        self._throttle_reverse = int(kwargs.get('calibrate.throttle.reverse.position'))
+        self._wheel_radius = float(kwargs.get('chassis.wheel.radius.meter'))
+        self._circum_m = 2 * math.pi * self._wheel_radius
+        self._gear_ratio = int(kwargs.get('chassis.hall.ticks.per.rotation'))
+        _profile_name = str(kwargs.get('throttle.speed.profile'))
+        self._forward_shift = int(kwargs.get('throttle.forward.shift'))
+        self._backward_shift = int(kwargs.get('throttle.backward.shift'))
+        self._forward_range = 0
+        self._backward_range = 0
+        if _profile_name in D_SPEED_PROFILES:
+            # Scale by servo values.
+            self._forward_range = (D_SPEED_PROFILES[_profile_name][0]) / 90.
+            self._backward_range = (D_SPEED_PROFILES[_profile_name][1]) / 90.
+        # Hall sensor revolutions per second.
+        self._rps = 0
+        self._monitor = 0
 
         if connect:
+            logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(
+                self._wheel_radius, self._gear_ratio)
+            )
             rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
             self._pub = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
 
@@ -80,14 +90,27 @@ class RosGate(object):
         # The odometer publishes revolutions per second.
         self._rps = float(message.twist.linear.y)
 
-    def publish(self, throttle=0., steering=0., gear_shift=None):
+    def publish(self, throttle=0., steering=0.):
         # The microcontroller must know the shifts for true zero positions and therefor adds the shift to the value itself.
+        # The esc can only be set into reverse using the correct servo value.
+        # The negative reverse servo throttle may not be issued when the esc is already in reverse.
         if not quit_event.is_set():
+            throttle = max(-1., min(1., throttle))
+            steering = max(-1., min(1., steering))
+            servo_steering = int(90 * steering)
+            servo_throttle = 0
+            if throttle < -.99:
+                servo_throttle = self._throttle_reverse
+            elif throttle > 0:
+                servo_throttle = self._forward_shift + int(90 * throttle * self._forward_range)
+            elif throttle < 0:
+                servo_throttle = self._backward_shift + int(90 * throttle * self._backward_range)
+                # Fill and send.
             twist = Twist()
             twist.angular.x = self._steer_shift
-            twist.angular.y = 90 + int(90 * steering)
+            twist.angular.y = 90 + servo_steering
             twist.linear.x = self._throttle_zero
-            twist.linear.y = 90 + (self._throttle_reverse if gear_shift == 'reverse' else int(90 * throttle))
+            twist.linear.y = 90 + servo_throttle
             self._pub.publish(twist)
 
     def get_odometer_value(self):
@@ -97,10 +120,8 @@ class RosGate(object):
 
 class FakeGate(object):
     @staticmethod
-    def publish(throttle=0., steering=0., gear_shift=None):
-        logger.info("Gate got throttle, steering and gear: {} {} {}.".format(
-            int(90 * throttle), int(90 * steering), gear_shift)
-        )
+    def publish(throttle=0., steering=0.):
+        logger.info("Gate got throttle, steering and gear: {} {}.".format(int(90 * throttle), int(90 * steering)))
 
     @staticmethod
     def get_odometer_value():
@@ -108,33 +129,13 @@ class FakeGate(object):
 
 
 class TwistHandler(object):
-    def __init__(self, ros_gate, **kwargs):
+    def __init__(self, ros_gate):
         super(TwistHandler, self).__init__()
         self._gate = ros_gate
-        self._throttle_range = 0
 
-        cfg = kwargs
+    def _drive(self, steering=0, throttle=0):
         try:
-            self._throttle_forward_shift = _scale_servo(int(cfg.get('throttle.forward.shift')))
-            self._throttle_backward_shift = _scale_servo(int(cfg.get('throttle.backward.shift')))
-            _name = str(cfg.get('throttle.speed.profile'))
-            if _name in D_SPEED_PROFILES:
-                self._throttle_range = _scale_servo(D_SPEED_PROFILES[_name])
-        except Exception as e:
-            logger.error(traceback.format_exc(e))
-            raise e
-
-    def _scale(self, user_throttle, user_steering):
-        _throttle = max(-1., min(1., user_throttle))
-        servo_throttle = self._throttle_forward_shift if _throttle > 0 else self._throttle_backward_shift if _throttle < 0 else 0
-        servo_throttle += _throttle * self._throttle_range
-        servo_steering = max(-1., min(1., user_steering))
-        return servo_throttle, servo_steering
-
-    def _drive(self, steering=0, throttle=0, gear_shift=None):
-        try:
-            throttle, steering = self._scale(throttle, steering)
-            self._gate.publish(steering=steering, throttle=throttle, gear_shift=gear_shift)
+            self._gate.publish(steering=steering, throttle=throttle)
         except Exception as e:
             logger.error("{}".format(e))
 
@@ -149,11 +150,9 @@ class TwistHandler(object):
     def noop(self):
         self._drive(steering=0, throttle=0)
 
-    def drive(self, pilot, teleop):
+    def drive(self, pilot):
         if pilot is None:
             self.noop()
-        elif teleop and pilot.get('driver') == 'driver_mode.teleop.direct' and teleop.get('button_right', 0) == 1:
-            self._drive(gear_shift='reverse')
         else:
             self._drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'))
 
@@ -239,18 +238,7 @@ def _gate_init(cfg):
         logging.getLogger().addHandler(console_handler)
         logging.getLogger().setLevel(logging.INFO)
         rospy.on_shutdown(lambda: quit_event.set())
-        _steer_shift = int(cfg.get('calibrate.steer.shift'))
-        _throttle_zero = int(cfg.get('calibrate.throttle.zero.position'))
-        _throttle_reverse = int(cfg.get('calibrate.throttle.reverse.position'))
-        _wheel_radius = float(cfg.get('chassis.wheel.radius.meter'))
-        _sensor_tick_ratio = int(cfg.get('chassis.hall.ticks.per.rotation'))
-        logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(_wheel_radius, _sensor_tick_ratio))
-        return RosGate(**dict(connect=True,
-                              steer_shift=_steer_shift,
-                              throttle_zero_shift=_throttle_zero,
-                              throttle_reverse_shift=_throttle_reverse,
-                              wheel_radius_m=_wheel_radius,
-                              sensor_ticks_per_wheel_rotation=_sensor_tick_ratio))
+        return RosGate(connect=True, **cfg)
 
 
 def _gst_init(image_publisher, cfg):
@@ -344,7 +332,7 @@ def main():
     gst_source = _gst_init(image_publisher, cfg)
     gst_source.open()
 
-    vehicle = TwistHandler(ros_gate=(_gate_init(cfg)), **cfg)
+    vehicle = TwistHandler(ros_gate=(_gate_init(cfg)))
     camera_ptz = _ptz_init(cfg)
 
     threads = []
@@ -367,7 +355,7 @@ def main():
     while not quit_event.is_set():
         c_pilot = _latest_or_none(pilot, patience=_patience_micro)
         c_teleop = _latest_or_none(teleop, patience=_patience_micro)
-        vehicle.drive(c_pilot, c_teleop)
+        vehicle.drive(c_pilot)
         state_publisher.publish(vehicle.state())
         _check_gst()
         if camera_ptz:
