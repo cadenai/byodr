@@ -426,13 +426,15 @@ class DriverManager(object):
 
     def increase_cruise_speed(self):
         with self._lock:
-            self._pilot_state.cruise_speed += self._cruise_speed_step
-            logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
+            if self.get_driver_ctl() != 'driver_mode.teleop.direct':
+                self._pilot_state.cruise_speed += self._cruise_speed_step
+                logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
     def decrease_cruise_speed(self):
         with self._lock:
-            self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
-            logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
+            if self.get_driver_ctl() != 'driver_mode.teleop.direct':
+                self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
+                logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
     def turn_instruction(self, turn):
         with self._lock:

@@ -32,8 +32,20 @@ quit_event = multiprocessing.Event()
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
 
+
 # Safety - cap the range that is availble through user configuration.
-VEHICLE_THROTTLE_SCALE = 0.133
+# Ranges are from the servo domain, i.e. 1/90.
+def _scale_servo(x):
+    return x / 90.
+
+
+# Profile name, shift, range.
+D_SPEED_PROFILES = {
+    'economy': 2,
+    'normal': 4,
+    'sport': 6,
+    'performance': 9
+}
 
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
 signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
@@ -51,10 +63,13 @@ class RosGate(object):
          average rate: 81.741
     """
 
-    def __init__(self, connect=True, wheel_radius_m=0.10, sensor_ticks_per_wheel_rotation=8):
-
-        self._circum_m = 2 * math.pi * wheel_radius_m  # Convert to circumference.
-        self._gear_ratio = sensor_ticks_per_wheel_rotation
+    def __init__(self, **kwargs):
+        connect = kwargs.get('connect')
+        self._steer_shift = kwargs.get('steer_shift')
+        self._throttle_zero = kwargs.get('throttle_zero_shift')
+        self._throttle_reverse = kwargs.get('throttle_reverse_shift')
+        self._circum_m = 2 * math.pi * kwargs.get('wheel_radius_m')
+        self._gear_ratio = kwargs.get('sensor_ticks_per_wheel_rotation')
         self._rps = 0  # Hall sensor revolutions per second.
 
         if connect:
@@ -65,13 +80,14 @@ class RosGate(object):
         # The odometer publishes revolutions per second.
         self._rps = float(message.twist.linear.y)
 
-    def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
+    def publish(self, throttle=0., steering=0., gear_shift=None):
+        # The microcontroller must know the shifts for true zero positions and therefor adds the shift to the value itself.
         if not quit_event.is_set():
-            # The button state does not need to go to ros but currently there is no separate state holder (server side)
-            # for the button state per timestamp.
             twist = Twist()
-            twist.angular.x, twist.angular.z, twist.linear.x, twist.linear.z = (channel, steering, control, throttle)
-            twist.linear.y = button
+            twist.angular.x = self._steer_shift
+            twist.angular.y = 90 + int(90 * steering)
+            twist.linear.x = self._throttle_zero
+            twist.linear.y = 90 + (self._throttle_reverse if gear_shift == 'reverse' else int(90 * throttle))
             self._pub.publish(twist)
 
     def get_odometer_value(self):
@@ -79,50 +95,46 @@ class RosGate(object):
         return (self._rps / self._gear_ratio) * self._circum_m
 
 
-class FakeGate(RosGate):
-    def __init__(self):
-        super(FakeGate, self).__init__(connect=False)
+class FakeGate(object):
+    @staticmethod
+    def publish(throttle=0., steering=0., gear_shift=None):
+        logger.info("Gate got throttle, steering and gear: {} {} {}.".format(
+            int(90 * throttle), int(90 * steering), gear_shift)
+        )
 
-    def publish(self, channel=CH_NONE, throttle=0., steering=0., control=CTL_LAST, button=0):
-        pass
+    @staticmethod
+    def get_odometer_value():
+        return 0
 
 
 class TwistHandler(object):
     def __init__(self, ros_gate, **kwargs):
         super(TwistHandler, self).__init__()
         self._gate = ros_gate
-        self._steer_calibration_shift = None
-        self._throttle_calibration_shift = None
+        self._throttle_range = 0
+
         cfg = kwargs
         try:
-            _steer_shift = float(cfg.get('calibrate.steer.shift'))
-            _throttle_shift = float(cfg.get('calibrate.throttle.shift'))
-            self._steer_calibration_shift = _steer_shift
-            self._throttle_calibration_shift = _throttle_shift
-            self._throttle_forward_scale = float(cfg.get('throttle.forward.scale'))
-            self._throttle_forward_shift = float(cfg.get('throttle.forward.shift'))
-            self._throttle_backward_shift = float(cfg.get('throttle.backward.shift'))
-            self._throttle_backward_scale = float(cfg.get('throttle.backward.scale'))
-            logger.info("Calibration steer, throttle is {:2.2f}, {:2.2f}.".format(_steer_shift, _throttle_shift))
-        except TypeError as e:
+            self._throttle_forward_shift = _scale_servo(int(cfg.get('throttle.forward.shift')))
+            self._throttle_backward_shift = _scale_servo(int(cfg.get('throttle.backward.shift')))
+            _name = str(cfg.get('throttle.speed.profile'))
+            if _name in D_SPEED_PROFILES:
+                self._throttle_range = _scale_servo(D_SPEED_PROFILES[_name])
+        except Exception as e:
             logger.error(traceback.format_exc(e))
             raise e
 
     def _scale(self, user_throttle, user_steering):
-        # Separate capping the throttle range from calibration.
-        _throttle = 0
-        if user_throttle > 0:
-            _throttle = user_throttle + self._throttle_forward_shift + (user_throttle * self._throttle_forward_scale)
-        elif user_throttle < 0:
-            _throttle = user_throttle + self._throttle_backward_shift + (user_throttle * self._throttle_backward_scale)
-        servo_throttle = int(max(-1, min(1, (_throttle + self._throttle_calibration_shift) * VEHICLE_THROTTLE_SCALE)) * 90) + 90
-        servo_steering = int(max(-1, min(1, user_steering + self._steer_calibration_shift)) * 90) + 90
+        _throttle = max(-1., min(1., user_throttle))
+        servo_throttle = self._throttle_forward_shift if _throttle > 0 else self._throttle_backward_shift if _throttle < 0 else 0
+        servo_throttle += _throttle * self._throttle_range
+        servo_steering = max(-1., min(1., user_steering))
         return servo_throttle, servo_steering
 
-    def _drive(self, steering, throttle):
+    def _drive(self, steering=0, throttle=0, gear_shift=None):
         try:
             throttle, steering = self._scale(throttle, steering)
-            self._gate.publish(steering=steering, throttle=throttle)
+            self._gate.publish(steering=steering, throttle=throttle, gear_shift=gear_shift)
         except Exception as e:
             logger.error("{}".format(e))
 
@@ -137,9 +149,13 @@ class TwistHandler(object):
     def noop(self):
         self._drive(steering=0, throttle=0)
 
-    def drive(self, cmd):
-        if cmd is not None:
-            self._drive(steering=cmd.get('steering'), throttle=cmd.get('throttle'))
+    def drive(self, pilot, teleop):
+        if pilot is None:
+            self.noop()
+        elif teleop and pilot.get('driver') == 'driver_mode.teleop.direct' and teleop.get('button_right', 0) == 1:
+            self._drive(gear_shift='reverse')
+        else:
+            self._drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'))
 
 
 class CameraPtzThread(threading.Thread):
@@ -223,10 +239,18 @@ def _gate_init(cfg):
         logging.getLogger().addHandler(console_handler)
         logging.getLogger().setLevel(logging.INFO)
         rospy.on_shutdown(lambda: quit_event.set())
+        _steer_shift = int(cfg.get('calibrate.steer.shift'))
+        _throttle_zero = int(cfg.get('calibrate.throttle.zero.position'))
+        _throttle_reverse = int(cfg.get('calibrate.throttle.reverse.position'))
         _wheel_radius = float(cfg.get('chassis.wheel.radius.meter'))
         _sensor_tick_ratio = int(cfg.get('chassis.hall.ticks.per.rotation'))
         logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(_wheel_radius, _sensor_tick_ratio))
-        return RosGate(wheel_radius_m=_wheel_radius, sensor_ticks_per_wheel_rotation=_sensor_tick_ratio)
+        return RosGate(**dict(connect=True,
+                              steer_shift=_steer_shift,
+                              throttle_zero_shift=_throttle_zero,
+                              throttle_reverse_shift=_throttle_reverse,
+                              wheel_radius_m=_wheel_radius,
+                              sensor_ticks_per_wheel_rotation=_sensor_tick_ratio))
 
 
 def _gst_init(image_publisher, cfg):
@@ -292,6 +316,13 @@ def _ptz_init(cfg):
                                flip=_flipcode)
 
 
+def _latest_or_none(receiver, patience):
+    candidate = receiver.get_latest()
+    _time = 0 if candidate is None else candidate.get('time')
+    _on_time = (timestamp() - _time) < patience
+    return candidate if _on_time else None
+
+
 def main():
     parser = argparse.ArgumentParser(description='Rover main.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
@@ -331,21 +362,16 @@ def main():
         if gst_source.is_closed():
             gst_source.open()
 
-    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     _period = 1. / _process_frequency
+    logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     while not quit_event.is_set():
-        command = pilot.get_latest()
-        _command_time = 0 if command is None else command.get('time')
-        _command_age = timestamp() - _command_time
-        _on_time = _command_age < _patience_micro
-        if _on_time:
-            vehicle.drive(command)
-        else:
-            vehicle.noop()
+        c_pilot = _latest_or_none(pilot, patience=_patience_micro)
+        c_teleop = _latest_or_none(teleop, patience=_patience_micro)
+        vehicle.drive(c_pilot, c_teleop)
         state_publisher.publish(vehicle.state())
         _check_gst()
         if camera_ptz:
-            camera_ptz.add(command, teleop.get_latest())
+            camera_ptz.add(c_pilot, c_teleop)
         time.sleep(_period)
 
     logger.info("Waiting on stream source to close.")

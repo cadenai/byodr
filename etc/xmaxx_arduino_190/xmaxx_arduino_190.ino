@@ -15,6 +15,8 @@
 // For odometry.
 #define H_RPS_MOMENT 0.20
 
+volatile uint16_t throttle_zero_shift;
+
 volatile byte h_up;
 volatile float h_val, h_rps;
 volatile uint32_t h_detect_time, h_publish_time;
@@ -29,19 +31,12 @@ geometry_msgs::TwistStamped message;
 Servo servoThrottle;
 Servo servoSteering;
 
-/*
-   Ros command topic listener drives the servos with the command values.
-    angular.x = channel {0: none, 1: throttle, 2: steering, 3: both}
-    angular.y = _
-    angular.z = steering
-    linear.x = control source 
-    linear.y = _
-    linear.z = throttle
-*/
 void msgDrive(const geometry_msgs::Twist& msg) {
-  uint16_t angle = (uint16_t) msg.angular.z;
-  uint16_t throttle = (uint16_t) msg.linear.z;
+  throttle_zero_shift = (uint16_t) msg.linear.x;
+  uint16_t throttle = throttle_zero_shift + (uint16_t) msg.linear.y;
+  uint16_t angle = (uint16_t) msg.angular.x + (uint16_t) msg.angular.y;
   lastCmdReceivedTime = micros();
+
   // Apply ceilings for forward and reverse throttle as a safety measure.      
   if (throttle > 140) {
     throttle = 140;
@@ -92,7 +87,8 @@ void setup() {
   h_rps = 0;
   h_detect_time = 0;
   h_publish_time = 0;
-  
+
+  throttle_zero_shift = 0;
   lastCmdReceivedTime = 0;
 
   pinMode(HALL_IN_PIN, INPUT_PULLUP);
@@ -110,7 +106,7 @@ void setup() {
 void loop() {
   // Stop the vehicle when command communication slows down or stops functioning.
   if (micros() - lastCmdReceivedTime > 100000) {
-    servoThrottle.write(90);
+    servoThrottle.write(90 + throttle_zero_shift);
   }
 
   // Process the odometer.
