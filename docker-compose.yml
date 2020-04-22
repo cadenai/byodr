@@ -4,17 +4,8 @@ services:
     image: rwgrim/docker-noop:latest
     container_name: byodr_cam1
   nodews:
-    build:
-      context: .
-      dockerfile: teleop/nodews/Dockerfile
-    image: centipede2donald/byodr-ce:nodews
+    image: rwgrim/docker-noop:latest
     container_name: byodr_nodews
-    restart: on-failure
-    depends_on:
-      - "cam1"
-    ports:
-      - "9101:9101"
-    stop_signal: SIGKILL
   teleop:
     build:
       context: .

@@ -10,10 +10,19 @@ services:
     command: ./stream1.sh
     stop_signal: SIGKILL
   nodews:
+    build:
+      context: .
+      dockerfile: teleop/nodews/Dockerfile
+    image: centipede2donald/byodr-ce:nodews
+    restart: on-failure
+    depends_on:
+      - "cam1"
+    ports:
+      - "9101:9101"
     environment:
       FEED_IP: 'byodr_cam1'
-    #volumes:  not compatible with npm local install
-    #  - ./teleop/xyz:/app
+    #volumes:  not compatible with npm local install  - ./teleop/xyz:/app
+    stop_signal: SIGKILL
   teleop:
     volumes:
       - ./common:/common
