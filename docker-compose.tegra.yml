@@ -1,5 +1,20 @@
 version: '2'
 services:
+  cam1:
+    image: centipede2donald/byodr-ce:gstcam
+    restart: on-failure
+    command: ./stream1.sh
+    stop_signal: SIGKILL
+  nodews:
+    image: centipede2donald/byodr-ce:nodews
+    restart: on-failure
+    depends_on:
+      - "cam1"
+    ports:
+      - "9101:9101"
+    environment:
+      FEED_IP: 'byodr_cam1'
+    stop_signal: SIGKILL
   ros:
     image: centipede2donald/byodr-ce:rosserial
     restart: on-failure

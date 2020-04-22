@@ -14,7 +14,6 @@ services:
       context: .
       dockerfile: teleop/nodews/Dockerfile
     image: centipede2donald/byodr-ce:nodews
-    restart: on-failure
     depends_on:
       - "cam1"
     ports:
