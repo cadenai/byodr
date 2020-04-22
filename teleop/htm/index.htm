@@ -91,32 +91,17 @@
           padding-right: 20px;
         }
 
-        div#navigation {
-          float: right;
-          margin: 117px 0 0 20px;
-        }
-
-        div#navigation img {
-          position: absolute;
-          left: 1220;
-          -webkit-transition: opacity 1s ease-in-out;
-          -moz-transition: opacity 1s ease-in-out;
-          -o-transition: opacity 1s ease-in-out;
-          transition: opacity 1s ease-in-out;
-          border: 1px solid lightyellow;
-          border-radius: 5px;
-        }
-
-        div#navigation img.transparent {
-          opacity:0;
-        }
-
         div#debug_values {
           color: white;
           font-family: "Lucida Console";
           font-size: 12px;
           float: right;
-          margin: 110px 0 0 20px;
+          margin: 5px 0 0 50px;
+        }
+        div#debug_values > p {
+          margin-block-start: 0;
+          margin-block-end: 0;
+          text-align: right;
         }
     </style>
     <script src="jquery-3.4.1.min.js"></script>
@@ -132,7 +117,7 @@
 <div id="container" class="centered">
     <div id="column">
         <div id="connection_error" class="message">Connection lost - please wait or refresh the page.</div>
-        <div id="console_warning" class="message">Console asleep or not detected - please check the connection and press button 'B'.</div>
+        <div id="console_warning" class="message">Console asleep or not detected - please check the connection and press 'A'.</div>
         <div id="bar">
             <img id="arrow" class="left"/>
             <div id="desired_speed">
@@ -143,19 +128,17 @@
                 <div id="current_speed_value">0</div>
                 <div id="current_speed_units">km/h</div>
             </div>
+            <div id="debug_values">
+                <p class="debug_line"><span id="pilot_steering">0</span>&nbsp;ste</p>
+                <p class="debug_line"><span id="pilot_throttle">0</span>&nbsp;thr</p>
+                <p class="debug_line"><span id="inference_penalty">0</span>&nbsp;pen</p>
+                <p class="debug_line"><span id="inference_corridor">0</span>&nbsp;cor</p>
+                <p class="debug_line"><span id="inference_obstacle">0</span>&nbsp;obs</p>
+            </div>
             <img id="steeringWheel" class="right"/>
         </div>
         <div id="camera1"></div>
     </div>
-    <div id="navigation">
-    </div>
-    <div id="debug_values">
-        <div id="debug_steering">ste: <span id="pilot_steering">0</span></div>
-        <div id="debug_throttle">thr: <span id="pilot_throttle">0</span></div>
-        <div id="debug_penalty">pen: <span id="inference_penalty">0</span></div>
-        <div id="debug_corridor">cor: <span id="inference_corridor">0</span></div>
-        <div id="debug_obstacle">obs: <span id="inference_obstacle">0</span></div>
-        <div id="debug_recorder">rec: <span id="state_recorder">n/a</span></div>
     </div>
 </div>
 </body>

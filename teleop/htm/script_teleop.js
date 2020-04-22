@@ -119,7 +119,7 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         var el_inference_penalty = $('span#inference_penalty');
         var el_inference_corridor = $('span#inference_corridor');
         var el_inference_obstacle = $('span#inference_obstacle');
-        var el_state_recorder = $('span#state_recorder');
+        //var el_state_recorder = $('span#state_recorder');
         var el_current_speed = $('div#current_speed_value');
         var el_max_speed = $('div#desired_speed_value');
         var el_steering_wheel = $('img#steeringWheel');
@@ -131,7 +131,7 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         el_inference_penalty.text(command.debug3.toFixed(3));
         el_inference_corridor.text(command.debug1.toFixed(3));
         el_inference_obstacle.text(command.debug2.toFixed(3));
-        el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
+        //el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
         // max_speed is the maximum speed
         // speed is the desired speed
         // vel_y is the actual vehicle speed
