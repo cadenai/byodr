@@ -124,10 +124,8 @@ def main():
     max_duration = 1. / _process_frequency
 
     threads = []
-    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    threads.append(teleop)
     threads.append(pilot)
     threads.append(camera)
     [t.start() for t in threads]
@@ -137,10 +135,6 @@ def main():
     try:
         while not quit_event.is_set():
             proc_start = time.time()
-            command = teleop.get_latest()
-            # Leave the value intact unless the control is activated.
-            if command is not None and any([k in command.keys() for k in ('button_y', 'button_b', 'button_a', 'button_x')]):
-                runner.set_dagger(command.get('button_x', 0) == 1)
             blob = pilot.get_latest()
             image = camera.capture()[-1]
             if image is not None:
