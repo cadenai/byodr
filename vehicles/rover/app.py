@@ -72,12 +72,13 @@ class RosGate(object):
         self._forward_range = 0
         self._backward_range = 0
         if _profile_name in D_SPEED_PROFILES:
-            # Scale by servo values.
-            self._forward_range = (D_SPEED_PROFILES[_profile_name][0]) / 90.
-            self._backward_range = (D_SPEED_PROFILES[_profile_name][1]) / 90.
+            # Scale by whats left of the servo domain.
+            _forward_scale = 1. / min(1, (90 - self._throttle_zero - self._forward_shift))
+            _backward_scale = 1. / min(1, (90 - self._throttle_zero - self._backward_shift))
+            self._forward_range = (D_SPEED_PROFILES[_profile_name][0]) * _forward_scale
+            self._backward_range = (D_SPEED_PROFILES[_profile_name][1]) * _backward_scale
         # Hall sensor revolutions per second.
         self._rps = 0
-        self._monitor = 0
 
         if connect:
             logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(
@@ -90,25 +91,24 @@ class RosGate(object):
         # The odometer publishes revolutions per second.
         self._rps = float(message.twist.linear.y)
 
-    def publish(self, throttle=0., steering=0.):
-        # The microcontroller must know the shifts for true zero positions and therefor adds the shift to the value itself.
+    def publish(self, throttle=0., steering=0., reverse_gear=False):
+        # The microcontroller must know the shifts for true zero positions and thus adds the shift itself.
         # The esc can only be set into reverse using the correct servo value.
-        # The negative reverse servo throttle may not be issued when the esc is already in reverse.
+        # The negative reverse servo throttle should not be issued when the esc is already in reverse.
         if not quit_event.is_set():
             throttle = max(-1., min(1., throttle))
             steering = max(-1., min(1., steering))
-            servo_steering = int(90 * steering)
             servo_throttle = 0
-            if throttle < -.99:
+            if throttle < -.92 and reverse_gear:
                 servo_throttle = self._throttle_reverse
-            elif throttle > 0:
-                servo_throttle = self._forward_shift + int(90 * throttle * self._forward_range)
             elif throttle < 0:
-                servo_throttle = self._backward_shift + int(90 * throttle * self._backward_range)
-                # Fill and send.
+                servo_throttle = self._backward_shift + int(throttle * self._backward_range)
+            elif throttle > 0:
+                servo_throttle = self._forward_shift + int(throttle * self._forward_range)
+            # Fill and send.
             twist = Twist()
             twist.angular.x = self._steer_shift
-            twist.angular.y = 90 + servo_steering
+            twist.angular.y = 90 + steering
             twist.linear.x = self._throttle_zero
             twist.linear.y = 90 + servo_throttle
             self._pub.publish(twist)
@@ -120,8 +120,8 @@ class RosGate(object):
 
 class FakeGate(object):
     @staticmethod
-    def publish(throttle=0., steering=0.):
-        logger.info("Gate got throttle, steering and gear: {} {}.".format(int(90 * throttle), int(90 * steering)))
+    def publish(throttle=0., steering=0., reverse_gear=False):
+        logger.info("Gate got throttle, steering and gear: {} {} {}.".format(int(90 * throttle), int(90 * steering), reverse_gear))
 
     @staticmethod
     def get_odometer_value():
@@ -133,9 +133,9 @@ class TwistHandler(object):
         super(TwistHandler, self).__init__()
         self._gate = ros_gate
 
-    def _drive(self, steering=0, throttle=0):
+    def _drive(self, steering=0, throttle=0, reverse_gear=False):
         try:
-            self._gate.publish(steering=steering, throttle=throttle)
+            self._gate.publish(steering=steering, throttle=throttle, reverse_gear=reverse_gear)
         except Exception as e:
             logger.error("{}".format(e))
 
@@ -150,11 +150,12 @@ class TwistHandler(object):
     def noop(self):
         self._drive(steering=0, throttle=0)
 
-    def drive(self, pilot):
+    def drive(self, pilot, teleop):
         if pilot is None:
             self.noop()
         else:
-            self._drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'))
+            _reverse = teleop and teleop.get('arrow_down', 0)
+            self._drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse)
 
 
 class CameraPtzThread(threading.Thread):
@@ -189,19 +190,29 @@ class CameraPtzThread(threading.Thread):
         if type(prev) == tuple and prev[0] == 'goto_home' and time.time() - prev[1] < self._preset_duration:
             pass
         elif operation != prev:
-            if operation == 'set_home':
+            ret = self._run(operation)
+            if ret and ret.status_code != 200:
+                logger.warn("Got status {} on operation {}.".format(ret.status_code, operation))
+
+    def _run(self, operation):
+        ret = None
+        prev = self._previous
+        if type(operation) == tuple and operation[0] == 'set_home':
+            x_count = prev[1] if type(prev) == tuple and prev[0] == 'set_home' else 0
+            if x_count >= 100 and operation[1]:
                 logger.info("Saving ptz home position.")
-                self._previous = operation
-                r = requests.put(self._url + '/homeposition', auth=self._auth)
-            elif operation == 'goto_home':
-                self._previous = ('goto_home', time.time())
-                r = requests.put(self._url + '/homeposition/goto', auth=self._auth)
+                self._previous = 'ptz_home_set'
+                ret = requests.put(self._url + '/homeposition', auth=self._auth)
             else:
-                pan, tilt = operation
-                self._previous = operation
-                r = requests.put(self._url + '/continuous', data=self._ptz_xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
-            if r.status_code != 200:
-                logger.warn("Got status {} on operation {}.".format(r.status_code, operation))
+                self._previous = ('set_home', x_count + 1)
+        elif operation == 'goto_home':
+            self._previous = ('goto_home', time.time())
+            ret = requests.put(self._url + '/homeposition/goto', auth=self._auth)
+        else:
+            pan, tilt = operation
+            self._previous = operation
+            ret = requests.put(self._url + '/continuous', data=self._ptz_xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
+        return ret
 
     def add(self, pilot, teleop):
         try:
@@ -215,9 +226,9 @@ class CameraPtzThread(threading.Thread):
             try:
                 cmd = self._queue.get(block=True, timeout=0.050)
                 operation = (0, 0)
-                if all([cmd.get(k, 0) for k in ('button_left', 'button_right', 'button_b')]):
-                    operation = 'set_home'
-                elif any([cmd.get(k, 0) for k in ('button_y', 'button_center', 'button_a', 'button_x')]):
+                if cmd.get('button_x', 0):
+                    operation = ('set_home', cmd.get('button_a', 0))
+                elif any([cmd.get(k, 0) for k in ('button_y', 'button_a')]):
                     operation = 'goto_home'
                 elif 'pan' in cmd and 'tilt' in cmd:
                     operation = (self._norm(cmd.get('pan')) * self._flip[0], self._norm(cmd.get('tilt')) * self._flip[1])
@@ -355,7 +366,7 @@ def main():
     while not quit_event.is_set():
         c_pilot = _latest_or_none(pilot, patience=_patience_micro)
         c_teleop = _latest_or_none(teleop, patience=_patience_micro)
-        vehicle.drive(c_pilot)
+        vehicle.drive(c_pilot, c_teleop)
         state_publisher.publish(vehicle.state())
         _check_gst()
         if camera_ptz:
