@@ -35,10 +35,10 @@ CTL_LAST = 0
 # Ranges are from the servo domain, i.e. 1/90 - the pair is for forwards and reverse.
 # The ranges do not have to be symmetrical - backwards may seem faster here but not in practice (depends on the esc settings).
 D_SPEED_PROFILES = {
-    'economy': (2, 4),
-    'normal': (3, 4),
-    'sport': (5, 5),
-    'performance': (8, 7)
+    'economy': (5, 6),
+    'default': (6, 8),
+    'sport': (8, 10),
+    'performance': (10, 10)
     # Yep, what's next?
 }
 
@@ -59,7 +59,7 @@ class RosGate(object):
     """
 
     def __init__(self, **kwargs):
-        connect = kwargs.get('connect')
+        self._dry_run = bool(int(kwargs.get('dry.run')))
         self._steer_shift = int(kwargs.get('calibrate.steer.shift'))
         self._throttle_zero = int(kwargs.get('calibrate.throttle.zero.position'))
         self._throttle_reverse = int(kwargs.get('calibrate.throttle.reverse.position'))
@@ -80,7 +80,7 @@ class RosGate(object):
         # Hall sensor revolutions per second.
         self._rps = 0
 
-        if connect:
+        if not self._dry_run:
             logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(
                 self._wheel_radius, self._gear_ratio)
             )
@@ -108,24 +108,21 @@ class RosGate(object):
             # Fill and send.
             twist = Twist()
             twist.angular.x = self._steer_shift
-            twist.angular.y = 90 + steering
+            twist.angular.y = 90 + int(90 * steering)
             twist.linear.x = self._throttle_zero
             twist.linear.y = 90 + servo_throttle
-            self._pub.publish(twist)
+            if self._dry_run:
+                if abs(throttle) > 1e-2:
+                    logger.info("Twist angular=({}, {}) and linear=({}, {}).".format(
+                        twist.angular.x, twist.angular.y,
+                        twist.linear.x, twist.linear.y
+                    ))
+            else:
+                self._pub.publish(twist)
 
     def get_odometer_value(self):
         # Convert to travel speed in meters per second.
         return (self._rps / self._gear_ratio) * self._circum_m
-
-
-class FakeGate(object):
-    @staticmethod
-    def publish(throttle=0., steering=0., reverse_gear=False):
-        logger.info("Gate got throttle, steering and gear: {} {} {}.".format(int(90 * throttle), int(90 * steering), reverse_gear))
-
-    @staticmethod
-    def get_odometer_value():
-        return 0
 
 
 class TwistHandler(object):
@@ -238,18 +235,14 @@ class CameraPtzThread(threading.Thread):
 
 
 def _gate_init(cfg):
-    dry_run = bool(int(cfg.get('dry.run')))
-    if dry_run:
-        return FakeGate()
-    else:
-        # Ros replaces the root logger - add a new handler after ros initialisation.
-        rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
-        console_handler = logging.StreamHandler(stream=sys.stdout)
-        console_handler.setFormatter(logging.Formatter(log_format))
-        logging.getLogger().addHandler(console_handler)
-        logging.getLogger().setLevel(logging.INFO)
-        rospy.on_shutdown(lambda: quit_event.set())
-        return RosGate(connect=True, **cfg)
+    # Ros replaces the root logger - add a new handler after ros initialisation.
+    rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
+    console_handler = logging.StreamHandler(stream=sys.stdout)
+    console_handler.setFormatter(logging.Formatter(log_format))
+    logging.getLogger().addHandler(console_handler)
+    logging.getLogger().setLevel(logging.INFO)
+    rospy.on_shutdown(lambda: quit_event.set())
+    return RosGate(**cfg)
 
 
 def _gst_init(image_publisher, cfg):
