@@ -103,6 +103,18 @@
           margin-block-end: 0;
           text-align: right;
         }
+        div#stream_links, div#stream_links > a {
+            font-family: "Lucida Console";
+            font-size: 14px;
+            color: lightgrey;
+        }
+        div#stream_links > a:link {
+            text-decoration: none;
+        }
+        div#stream_links > a:hover {
+            text-decoration: underline;
+            color: cyan;
+        }
     </style>
     <script src="jquery-3.4.1.min.js"></script>
     <script src="performance-polyfill.js?v=0.10"></script>
@@ -138,6 +150,9 @@
             <img id="steeringWheel" class="right"/>
         </div>
         <div id="camera1"></div>
+        <div id="stream_links">
+            stream:&nbsp;<a href="/index.htm?stream=h264">h264</a>&nbsp;|&nbsp;<a href="/index.htm?stream=jpeg">mjpeg</a>
+        </div>
     </div>
 </div>
 </body>
