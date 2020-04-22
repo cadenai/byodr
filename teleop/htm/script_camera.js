@@ -19,8 +19,8 @@ if (jpeg_control_params.has('stream') && jpeg_control_params.get('stream') == 'j
 
         init: function(el_parent) {
             el_image = document.createElement("img");
-            el_image.style.width = '1024px';
-            el_image.style.height = '600px';
+            el_image.style.width = '1280px';
+            el_image.style.height = '720px';
             el_image.style.border = '1px solid white';
             el_image.style.borderRadius = '5px';
             el_parent.appendChild(el_image);
