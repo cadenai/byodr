@@ -508,12 +508,6 @@ class CommandProcessor(object):
         # E
         elif command.get('button_b', 0) == 1:
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
-        # S
-        elif command.get('button_a', 0) == 1:
-            self._cache_safe('cruise driver', lambda: self._driver.switch_ctl('driver_mode.teleop.cruise'))
-        # W
-        elif command.get('button_x', 0) == 1:
-            self._cache_safe('dagger driver', lambda: self._driver.switch_ctl('driver_mode.inference.dnn'))
         #
         elif command.get('arrow_up', 0) == 1:
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
