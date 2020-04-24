@@ -10,7 +10,7 @@ from ConfigParser import SafeConfigParser
 from tornado import web, ioloop
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
-from server import CameraServerSocket, ControlServerSocket, MessageServerSocket
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiOptionsListHandler, UserOptions
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +35,20 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
+    # Read the internal configuration first.
     parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
+    parser.read('config.ini')
+    # One user configuration file is optional and can be used to persist settings.
+    _pattern = os.path.join(args.config, '*.ini')
+    _candidates = glob.glob(_pattern)
+    if len(_candidates) == 0:
+        user_file = os.path.join(args.config, 'config.ini')
+    else:
+        user_file = _candidates[0]
+        parser.read(user_file)
+        if len(_candidates) > 1:
+            logger.warning("Found {} files for '{}' but using only one.".format(len(_candidates), _pattern))
+    # Convert for ease of use.
     cfg = dict(parser.items('teleop'))
     for key in sorted(cfg):
         logger.info("{} = {}".format(key, cfg[key]))
@@ -57,6 +69,7 @@ def main():
     threads.append(camera)
     [t.start() for t in threads]
 
+    user_options = UserOptions(user_file)
     try:
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=(lambda x: publisher.publish(x)))),
@@ -65,7 +78,8 @@ def main():
                                                                       vehicle.get_latest(),
                                                                       inference.get_latest(),
                                                                       recorder.get_latest())))),
-            (r"/ws/cam", CameraServerSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
+            (r"/ws/cam", CameraMJPegSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
+            (r"/api/options/list", ApiOptionsListHandler, dict(user_options=user_options)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'

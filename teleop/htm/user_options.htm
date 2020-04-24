@@ -1,0 +1,45 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Settings</title>
+    <style type="text/css">
+        html {
+          height: 100%;
+        }
+        .centered {
+          position: fixed;
+          top: 0;
+          left: 10%;
+        }
+        div#column {
+          float: left;
+        }
+    </style>
+    <script src="jquery-3.4.1.min.js"></script>
+</head>
+<body>
+<div id="container" class="centered">
+    <div id="column"></div>
+</div>
+</body>
+<script type="text/javascript">
+$(function () {
+    $.get("/api/options/list", function(data) {
+        const el_parent = $("div#column");
+        Object.keys(data).forEach(section => {
+            var el_div = $("<div></div>");
+            var el_section = $("<p></p>").text(section);
+            var el_list = $("<ul></ul>");
+            var m_section = data[section];
+            Object.keys(m_section).forEach(name => {
+                var value = m_section[name];
+                el_list.append($("<li></li>").text(name + ': ' + value));
+            });
+            el_div.append(el_section);
+            el_div.append(el_list);
+            el_parent.append(el_div);
+        });
+    });
+});
+</script>
+</html>

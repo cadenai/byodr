@@ -143,13 +143,13 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
             view.command_turn = command.turn;
             switch(command.turn) {
                 case "intersection.left":
-                    el_turn_arrow.attr('src', 'im_arrow_left.png');
+                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.10');
                     break;
                 case "intersection.right":
-                    el_turn_arrow.attr('src', 'im_arrow_right.png');
+                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.10');
                     break;
                 default:
-                    el_turn_arrow.attr('src', 'im_arrow_up.png');
+                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.10');
                     break;
             }
         }
@@ -160,11 +160,11 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         if (view.command_ctl != str_command_ctl) {
             view.command_ctl = str_command_ctl;
             if (can_continue && command.ctl == 5) {
-                el_steering_wheel.attr('src', 'im_wheel_blue.png');
+                el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.10');
             } else if (can_continue) {
-                el_steering_wheel.attr('src', 'im_wheel_black.png');
+                el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.10');
             } else {
-                el_steering_wheel.attr('src', 'im_wheel_red.png');
+                el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.10');
             }
         }
         var display_rotation = Math.floor(command.ste * 90.0)
