@@ -214,10 +214,15 @@ class JSONRequestHandler(web.RequestHandler):
         pass
 
 
-class ApiOptionsListHandler(JSONRequestHandler):
+class ApiUserOptionsHandler(JSONRequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._options = kwargs.get('user_options')
 
     def get(self):
         self.write(json.dumps({s: self._options.get_options(s) for s in (self._options.list_sections())}))
+
+    def post(self):
+        data = json.loads(self.request.body)
+        logger.info(data)
+        self.write(json.dumps(dict(message='ok')))

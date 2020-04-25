@@ -10,7 +10,7 @@ from ConfigParser import SafeConfigParser
 from tornado import web, ioloop
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiOptionsListHandler, UserOptions
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def main():
                                                                       inference.get_latest(),
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraMJPegSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
-            (r"/api/options/list", ApiOptionsListHandler, dict(user_options=user_options)),
+            (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=user_options)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'
