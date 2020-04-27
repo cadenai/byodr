@@ -14,7 +14,7 @@ services:
     container_name: byodr_teleop
     restart: on-failure
     ports:
-      - "9100:9100"
+      - "80:9100"
     volumes:
       - ${DC_CONFIG_DIR}:/config
   pilot:

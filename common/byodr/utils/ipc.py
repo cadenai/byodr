@@ -15,8 +15,9 @@ class JSONPublisher(object):
         self._publisher = publisher
         self._topic = topic
 
-    def publish(self, data):
-        self._publisher.send('{}:{}'.format(self._topic, json.dumps(data)), zmq.NOBLOCK)
+    def publish(self, data, topic=None):
+        _topic = self._topic if topic is None else topic
+        self._publisher.send('{}:{}'.format(_topic, json.dumps(data)), zmq.NOBLOCK)
 
 
 class ImagePublisher(object):

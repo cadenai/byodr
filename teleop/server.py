@@ -224,5 +224,9 @@ class ApiUserOptionsHandler(JSONRequestHandler):
 
     def post(self):
         data = json.loads(self.request.body)
-        logger.info(data)
+        for section in data.keys():
+            for key, value in data.get(section):
+                self._options.set_option(section, key, value)
+        if data:
+            self._options.save()
         self.write(json.dumps(dict(message='ok')))
