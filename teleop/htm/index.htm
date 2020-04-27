@@ -14,9 +14,11 @@
         }
 
         .centered {
-          position: fixed;
+          position: absolute;
           top: 0;
-          left: 10%;
+          left: 50%;
+          margin-right: -50%;
+          transform: translate(-50%, 0);
         }
 
         .right {
@@ -56,6 +58,7 @@
         }
 
         img#arrow {
+          padding-top: 10px;
         }
 
         div#desired_speed {
@@ -119,7 +122,7 @@
 	<script src="http-live-player.js?v=0.10"></script>
 	<script src="index_utils.js?v=0.10"></script>
 	<script src="index_gamepad.js?v=0.10"></script>
-	<script src="index_teleop.js?v=0.10"></script>
+	<script src="index_teleop.js?v=0.11"></script>
 	<script src="index_camera.js?v=0.10"></script>
 	<script src="index_h264.js?v=0.10"></script>
 </head>
