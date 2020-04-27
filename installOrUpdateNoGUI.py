@@ -50,13 +50,13 @@ WantedBy=multi-user.target
 '''
 
 _application_config_template = '''
-[platform]
-camera.ip = 192.168.1.64
+[camera]
 camera.user = user
 camera.password = pass
 
 [vehicle] 
-calibrate.steer.shift = 0.0
+calibrate.steer.shift = 0
+throttle.speed.profile = default
 '''
 
 
