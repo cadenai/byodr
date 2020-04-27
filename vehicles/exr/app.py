@@ -259,8 +259,6 @@ def main():
     [parser.read(_f) for _f in glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('vehicle'))
     cfg.update(dict(parser.items('platform')))
-    for key in sorted(cfg):
-        logger.info("{} = {}".format(key, cfg[key]))
 
     _process_frequency = int(cfg.get('clock.hz'))
     _patience_micro = float(cfg.get('patience.ms', 200)) * 1000

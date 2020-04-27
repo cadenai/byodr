@@ -115,8 +115,6 @@ def main():
     # The end-user config overrides come last so all settings are modifiable.
     [parser.read(_f) for _f in ['config.ini'] + _glob(args.models, '*.ini') + _glob(args.config, '*.ini')]
     cfg = dict(parser.items('inference'))
-    for key in sorted(cfg):
-        logger.info("{} = {}".format(key, cfg[key]))
 
     _gpu_id = int(cfg.get('gpu.id'))
     _process_frequency = int(cfg.get('clock.hz'))

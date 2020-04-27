@@ -31,8 +31,6 @@ def main():
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('pilot'))
-    for key in sorted(cfg):
-        logger.info("{} = {}".format(key, cfg[key]))
 
     # Determine the process frequency - we have no control over the frequency of the teleop inputs.
     _process_frequency = int(cfg.get('clock.hz'))

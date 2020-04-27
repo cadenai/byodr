@@ -50,8 +50,6 @@ def main():
             logger.warning("Found {} files for '{}' but using only one.".format(len(_candidates), _pattern))
     # Convert for ease of use.
     cfg = dict(parser.items('teleop'))
-    for key in sorted(cfg):
-        logger.info("{} = {}".format(key, cfg[key]))
 
     _display_speed_scale = float(cfg.get('display.speed.scale'))
 
