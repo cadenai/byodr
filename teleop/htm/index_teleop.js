@@ -143,13 +143,13 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
             view.command_turn = command.turn;
             switch(command.turn) {
                 case "intersection.left":
-                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.10');
+                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.11');
                     break;
                 case "intersection.right":
-                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.10');
+                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.11');
                     break;
                 default:
-                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.10');
+                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.11');
                     break;
             }
         }
