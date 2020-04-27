@@ -178,6 +178,7 @@ class CameraPtzThread(threading.Thread):
     def __init__(self, url, user, password, preset_duration_sec=3.8, scale=100, speed=1., flip=(1, 1)):
         super(CameraPtzThread, self).__init__()
         self._quit_event = multiprocessing.Event()
+        self._lock = threading.Lock()
         self._preset_duration = preset_duration_sec
         self._scale = scale
         self._speed = speed
@@ -193,7 +194,6 @@ class CameraPtzThread(threading.Thread):
         """
         self.set_auth(user, password)
         self._queue = Queue.Queue(maxsize=1)
-        self._lock = threading.Lock()
         self._previous = (0, 0)
 
     def set_url(self, url):
@@ -377,7 +377,7 @@ class GstSource(object):
                "latency=0 drop-on-latency=true ! queue ! " \
                "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
                "videoscale ! video/x-raw,format=BGR ! queue".format(_rtsp_url)
-
+        self._camera_shape = _shape
         # flipcode = 0: flip vertically
         # flipcode > 0: flip horizontally
         # flipcode < 0: flip vertically and horizontally
@@ -390,9 +390,8 @@ class GstSource(object):
             if self._source:
                 self._source.close()
             logger.info("Camera rtsp url = {}.".format(_rtsp_url))
-            logger.info("Using image flipcode={}".format(self._flipcode))
+            logger.info("Using image={} and flipcode={}".format(self._camera_shape, self._flipcode))
             self._source = GstRawSource(fn_callback=self._publish, command=_url)
-            self._source.open()
 
     def check(self):
         with self._lock:

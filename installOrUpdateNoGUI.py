@@ -179,10 +179,12 @@ def do_application_directory(user, application_dir, config_dir, sessions_dir):
     return "The application directory is {}.".format(application_dir)
 
 
-def do_application_config_file(config_file):
+def do_application_config_file(user, config_file):
     if not os.path.exists(config_file):
         with open(config_file, mode='w') as f:
             f.write(_application_config_template)
+        _run(['chmod', '664', config_file])
+        _run(['chown', '{}:{}'.format(user, APP_GROUP_NAME), config_file])
     return _run(['cat', config_file]).stdout
 
 
@@ -284,18 +286,20 @@ def main():
         print("Type the full path or <ENTER> to use {} or ^C to quit.".format(_app_dir))
         print("> ", end='')
         _answer = input()
-        if _answer.startswith('/'):
-            _app_dir = _answer
+        if _answer.startswith('/') or _answer.startswith('~'):
+            _app_dir = os.path.expanduser(_answer)
             manager.set_application_directory(_app_dir)
             _config_dir = manager.get_config_directory()
             _sessions_dir = manager.get_sessions_directory()
+        else:
+            print("\nYour path did not start with '/' or '~', ignored.")
         _result = do_application_directory(user, _app_dir, _config_dir, _sessions_dir)
         manager.log(_result)
         print(_result)
 
         # Make sure there is an application config file.
         print("\nChecking application configuration file.")
-        _result = do_application_config_file(manager.get_config_filepath())
+        _result = do_application_config_file(user, manager.get_config_filepath())
         manager.log(_result)
         print(_result)
 
