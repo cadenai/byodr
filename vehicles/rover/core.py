@@ -364,7 +364,7 @@ class GstSource(object):
         _user = parse_option('camera.user', str, errors=errors, **kwargs)
         _password = parse_option('camera.password', str, errors=errors, **kwargs)
         _rtsp_port = parse_option('camera.rtsp.port', int, 0, errors=errors, **kwargs)
-        _rtsp_path = parse_option('camera.rtsp.path', str, errors=errors, **kwargs)
+        _rtsp_path = parse_option('camera.image.path', str, errors=errors, **kwargs)
         _img_wh = parse_option('camera.image.shape', str, errors=errors, **kwargs)
         _img_flip = parse_option('camera.image.flip', str, errors=errors, **kwargs)
         _shape = [int(x) for x in _img_wh.split('x')]

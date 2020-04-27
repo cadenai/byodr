@@ -6,8 +6,9 @@ services:
       dockerfile: vehicles/rover/Dockerfile.gst
     image: centipede2donald/byodr-ce:gstcam
     volumes:
+      - ./common:/common
       - ./vehicles/rover:/app
-    command: ./stream1.sh
+    command: python stream.py
     stop_signal: SIGKILL
   nodews:
     build:

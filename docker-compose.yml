@@ -3,6 +3,8 @@ services:
   cam1:
     image: rwgrim/docker-noop:latest
     container_name: byodr_cam1
+    volumes:
+      - ${DC_CONFIG_DIR}:/config
   nodews:
     image: rwgrim/docker-noop:latest
     container_name: byodr_nodews

@@ -3,7 +3,7 @@ services:
   cam1:
     image: centipede2donald/byodr-ce:gstcam
     restart: on-failure
-    command: ./stream1.sh
+    command: python stream.py
     stop_signal: SIGKILL
   nodews:
     image: centipede2donald/byodr-ce:nodews
