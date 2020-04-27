@@ -63,6 +63,12 @@ class GstRawSource(object):
     def is_open(self):
         return not self.is_closed()
 
+    def check(self, patience=0.50):
+        if self.is_open() and not self.is_healthy(patience=patience):
+            self.close()
+        if self.is_closed():
+            self.open()
+
     def close(self):
         self.video_pipe.set_state(Gst.State.NULL)
         self.closed = True
