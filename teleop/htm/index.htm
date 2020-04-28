@@ -61,7 +61,7 @@
           padding-top: 10px;
         }
 
-        div#desired_speed {
+        div#max_speed {
           display: inline-block;
           font-size: 8px;
           padding: 5px 50px 0 0;
@@ -75,7 +75,7 @@
           padding-right: 40px;
         }
 
-        div#desired_speed_value {
+        div#max_speed_value {
           font-size: 40px;
         }
 
@@ -116,13 +116,19 @@
             text-decoration: underline;
             color: cyan;
         }
+        p#autopilot_status {
+            font-family: "Arial";
+            font-size: 20px;
+            font-weight: bold;
+            margin-right: 10px;
+        }
     </style>
     <script src="jquery-3.4.1.min.js"></script>
     <script src="performance-polyfill.js?v=0.10"></script>
 	<script src="http-live-player.js?v=0.10"></script>
 	<script src="index_utils.js?v=0.10"></script>
 	<script src="index_gamepad.js?v=0.10"></script>
-	<script src="index_teleop.js?v=0.11"></script>
+	<script src="index_teleop.js?v=0.12"></script>
 	<script src="index_camera.js?v=0.10"></script>
 	<script src="index_h264.js?v=0.10"></script>
 </head>
@@ -133,9 +139,9 @@
         <div id="console_warning" class="message">Console asleep or not detected - please check the connection and press a button.</div>
         <div id="bar">
             <img id="arrow" class="left"/>
-            <div id="desired_speed">
-                <div id="desired_speed_value">0</div>
-                <div id="desired_speed_text">MAX</div>
+            <div id="max_speed">
+                <div id="max_speed_value">0</div>
+                <div id="max_speed_text">MAX</div>
             </div>
             <div id="current_speed">
                 <div id="current_speed_value">0</div>
@@ -149,6 +155,7 @@
                 <p class="debug_line"><span id="inference_obstacle">0</span>&nbsp;obs</p>
             </div>
             <img id="steeringWheel" class="right"/>
+            <p id="autopilot_status" class="right">AP</p>
         </div>
         <div id="camera1"></div>
         <div id="stream_links">

@@ -119,11 +119,13 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         var el_inference_penalty = $('span#inference_penalty');
         var el_inference_corridor = $('span#inference_corridor');
         var el_inference_obstacle = $('span#inference_obstacle');
-        //var el_state_recorder = $('span#state_recorder');
+        // var el_state_recorder = $('span#state_recorder');
+        var el_max_speed_container = $('div#max_speed');
+        var el_max_speed = $('div#max_speed_value');
         var el_current_speed = $('div#current_speed_value');
-        var el_max_speed = $('div#desired_speed_value');
         var el_steering_wheel = $('img#steeringWheel');
         var el_turn_arrow = $('img#arrow');
+        var el_autopilot_status = $('#autopilot_status');
         //
         var command = JSON.parse(evt.data);
         el_pilot_steering.text(command.ste.toFixed(3));
@@ -131,14 +133,20 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         el_inference_penalty.text(command.debug3.toFixed(3));
         el_inference_corridor.text(command.debug1.toFixed(3));
         el_inference_obstacle.text(command.debug2.toFixed(3));
-        //el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
+        // el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
         // max_speed is the maximum speed
         // speed is the desired speed
         // vel_y is the actual vehicle speed
         // console.log(command);
         // Math.ceil(command.max_speed);
-        el_max_speed.text(command.max_speed.toFixed(1));
-        el_current_speed.text(command.vel_y.toFixed(2));
+        var is_on_autopilot = command.ctl == 5;
+        if (is_on_autopilot) {
+            el_max_speed.text(command.max_speed.toFixed(1));
+            el_current_speed.text(command.speed.toFixed(2));
+        } else {
+            el_current_speed.text(command.vel_y.toFixed(2));
+        }
+        //
         if (view.command_turn != command.turn) {
             view.command_turn = command.turn;
             switch(command.turn) {
@@ -159,12 +167,19 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         var str_command_ctl = command.ctl + '_' + can_continue;
         if (view.command_ctl != str_command_ctl) {
             view.command_ctl = str_command_ctl;
-            if (can_continue && command.ctl == 5) {
+            if (can_continue && is_on_autopilot) {
                 el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.10');
             } else if (can_continue) {
                 el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.10');
             } else {
                 el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.10');
+            }
+            if (is_on_autopilot) {
+                el_max_speed_container.show();
+                el_autopilot_status.show();
+            } else {
+                el_max_speed_container.hide();
+                el_autopilot_status.hide();
             }
         }
         var display_rotation = Math.floor(command.ste * 90.0)
