@@ -1,7 +1,7 @@
 FROM centipede2donald/ros-melodic:python27-opencv32-gstreamer10
 
 COPY ./common common/
-COPY ./vehicles/rover/stream*.* app/
+COPY ./vehicles/rover app/
 WORKDIR /app
 
 RUN groupadd --gid 1990 --system byodr \

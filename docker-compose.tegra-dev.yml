@@ -3,8 +3,8 @@ services:
   cam1:
     build:
       context: .
-      dockerfile: vehicles/rover/Dockerfile.gst
-    image: centipede2donald/byodr-ce:gstcam
+      dockerfile: vehicles/rover/Dockerfile
+    image: centipede2donald/byodr-ce:rover
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app
@@ -53,9 +53,6 @@ services:
     devices:
       - /dev/arduino
   vehicle:
-    build:
-      context: .
-      dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:rover
     environment:
       ROS_MASTER_URI: 'http://byodr_ros:11311'

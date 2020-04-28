@@ -1,7 +1,7 @@
 version: '2'
 services:
   cam1:
-    image: centipede2donald/byodr-ce:gstcam
+    image: centipede2donald/byodr-ce:rover
     restart: on-failure
     command: python stream.py
     stop_signal: SIGKILL
