@@ -224,14 +224,15 @@ class PidThrottleControl(AbstractThrottleControl):
 
 
 class DirectThrottleControl(AbstractThrottleControl):
-    def __init__(self, min_desired_speed, max_desired_speed, throttle_up_momentum, throttle_down_momentum):
+    def __init__(self, min_desired_speed, max_desired_speed, throttle_up_momentum, throttle_down_momentum, throttle_cutoff):
         super(DirectThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
         self._moment = DynamicMomentum(up=throttle_up_momentum, down=throttle_down_momentum)
+        self._throttle_cut = throttle_cutoff
 
     def calculate_throttle(self, desired_speed, current_speed):
         _throttle = desired_speed
         _throttle = self._moment.calculate(_throttle)
-        return _throttle
+        return _throttle if abs(_throttle) > self._throttle_cut else 0
 
 
 class AbstractCruiseControl(AbstractDriverBase):
@@ -264,11 +265,13 @@ class AbstractCruiseControl(AbstractDriverBase):
         else:
             _throttle_up_momentum = float(kwargs['driver.throttle.direct.up.momentum'])
             _throttle_down_momentum = float(kwargs['driver.throttle.direct.down.momentum'])
+            _throttle_cutoff = float(kwargs['driver.throttle.direct.minimum'])
             self._throttle_control = DirectThrottleControl(
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed,
                 throttle_up_momentum=_throttle_up_momentum,
-                throttle_down_momentum=_throttle_down_momentum
+                throttle_down_momentum=_throttle_down_momentum,
+                throttle_cutoff=_throttle_cutoff
             )
 
     def calculate_desired_speed(self, desired_speed, throttle, forced_acceleration, forced_deceleration, maximum=None):
