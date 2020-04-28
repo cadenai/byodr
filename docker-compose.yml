@@ -8,6 +8,9 @@ services:
   nodews:
     image: rwgrim/docker-noop:latest
     container_name: byodr_nodews
+    environment:
+      IMG_WIDTH: 1280
+      IMG_HEIGHT: 720
   teleop:
     build:
       context: .
