@@ -373,10 +373,11 @@ class GstSource(object):
             **dict(user=_user, password=_password, ip=_server, port=_rtsp_port, path=_rtsp_path)
         )
         _url = "rtspsrc " \
-               "location={} " \
+               "location={url} " \
                "latency=0 drop-on-latency=true ! queue ! " \
                "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-               "videoscale ! video/x-raw,format=BGR ! queue".format(_rtsp_url)
+               "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
+            format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1]))
         self._camera_shape = _shape
         # flipcode = 0: flip vertically
         # flipcode > 0: flip horizontally
