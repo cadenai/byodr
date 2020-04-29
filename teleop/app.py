@@ -9,6 +9,7 @@ from ConfigParser import SafeConfigParser
 
 from tornado import web, ioloop
 
+from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions
 
@@ -67,6 +68,9 @@ def main():
     threads.append(camera)
     [t.start() for t in threads]
 
+    def on_options_save():
+        publisher.publish(dict(time=timestamp(), request='restart'), topic='aav/teleop/chatter')
+
     user_options = UserOptions(user_file)
     try:
         web_app = web.Application([
@@ -77,7 +81,7 @@ def main():
                                                                       inference.get_latest(),
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraMJPegSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
-            (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=user_options)),
+            (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=user_options, fn_on_save=on_options_save)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'

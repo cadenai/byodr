@@ -218,6 +218,7 @@ class ApiUserOptionsHandler(JSONRequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._options = kwargs.get('user_options')
+        self._fn_on_save = kwargs.get('fn_on_save')
 
     def get(self):
         self.write(json.dumps({s: self._options.get_options(s) for s in (self._options.list_sections())}))
@@ -229,4 +230,5 @@ class ApiUserOptionsHandler(JSONRequestHandler):
                 self._options.set_option(section, key, value)
         if data:
             self._options.save()
+            self._fn_on_save()
         self.write(json.dumps(dict(message='ok')))
