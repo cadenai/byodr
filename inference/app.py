@@ -129,8 +129,8 @@ def main():
     [t.start() for t in threads]
 
     publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
-    runner = TFRunner(model_directory=args.models, gpu_id=_gpu_id, **cfg)
     try:
+        runner = TFRunner(model_directory=args.models, gpu_id=_gpu_id, **cfg)
         while not quit_event.is_set():
             proc_start = time.time()
             blob = pilot.get_latest()
@@ -142,17 +142,17 @@ def main():
             if _proc_sleep < 0:
                 logger.debug("Cannot maintain {} Hz.".format(_process_frequency))
             time.sleep(max(0., _proc_sleep))
+        # Main loop ran.
+        logger.info("Waiting on runner to quit.")
+        runner.quit()
     except KeyboardInterrupt:
         quit_event.set()
-    except StandardError as e:
+    except Exception as e:
         logger.error("{}".format(traceback.format_exc(e)))
         quit_event.set()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]
-
-    logger.info("Waiting on runner to quit.")
-    runner.quit()
 
 
 if __name__ == "__main__":
