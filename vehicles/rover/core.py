@@ -26,7 +26,7 @@ CTL_LAST = 0
 # The ranges do not have to be symmetrical - backwards may seem faster here but not in practice (depends on the esc settings).
 D_SPEED_PROFILES = {
     'economy': (5, 6),
-    'default': (6, 8),
+    'standard': (6, 8),
     'sport': (8, 10),
     'performance': (10, 10)
     # Yep, what's next?
@@ -109,9 +109,9 @@ class RosGate(object):
             if throttle < -.92 and reverse_gear:
                 servo_throttle = self._throttle_reverse
             elif throttle < 0:
-                servo_throttle = self._backward_shift + int(throttle * self._backward_range)
+                servo_throttle = self._backward_shift + int(math.floor(throttle * self._backward_range))
             elif throttle > 0:
-                servo_throttle = self._forward_shift + int(throttle * self._forward_range)
+                servo_throttle = self._forward_shift + int(math.ceil(throttle * self._forward_range))
             # Fill and send.
             twist = Twist()
             twist.angular.x = self._steer_shift

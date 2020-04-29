@@ -56,7 +56,7 @@ camera.password = pass
 
 [vehicle] 
 calibrate.steer.shift = 0
-throttle.speed.profile = default
+throttle.speed.profile = standard
 '''
 
 
