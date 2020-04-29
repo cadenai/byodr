@@ -50,6 +50,9 @@ class ReceiverThread(threading.Thread):
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None
 
+    def pop_latest(self):
+        return self._queue.popleft() if bool(self._queue) else None
+
     def run(self):
         while not self._quit_event.is_set():
             try:
