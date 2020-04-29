@@ -89,7 +89,7 @@ def main():
             (r"/api/system/state", ApiSystemStateHandler, dict(fn_list_start_messages=list_process_start_messages)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
-                'default_filename': 'index.htm?v=0.12'
+                'default_filename': 'index.htm'
             })
         ])
         port = args.port
