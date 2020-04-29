@@ -228,7 +228,18 @@ class ApiUserOptionsHandler(JSONRequestHandler):
         for section in data.keys():
             for key, value in data.get(section):
                 self._options.set_option(section, key, value)
+                logger.info("Save {} {} {}.".format(section, key, value))
         if data:
             self._options.save()
             self._fn_on_save()
         self.write(json.dumps(dict(message='ok')))
+
+
+class ApiSystemStateHandler(JSONRequestHandler):
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self._list_start_messages = kwargs.get('fn_list_start_messages')
+
+    def get(self):
+        messages = self._list_start_messages()
+        self.write(json.dumps(messages))

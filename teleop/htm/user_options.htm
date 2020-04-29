@@ -24,11 +24,17 @@
 <body>
 <div id="container" class="centered">
     <div id="column">
+        <div id="system_state"></div>
         <form id="form_user_options" action="" method="post"></form>
     </div>
 </div>
 </body>
 <script type="text/javascript">
+function system_state_setup(data) {
+    const el_parent = $("div#system_state");
+    el_parent.append($("<p/>").text(data));
+}
+
 function user_options_form_submit() {
     const dirty_inputs = $("form#form_user_options").find(':input').toArray().filter(x => {
         return x.value != x.defaultValue
@@ -46,44 +52,47 @@ function user_options_form_submit() {
     });
 }
 
-$(function () {
-    $.get("/api/user/options", function(data) {
-        const el_form = $("form#form_user_options");
-        Object.keys(data).forEach(section => {
-            var el_table = $("<table/>");
-            el_table.append($("<caption/>").text(section));
-            var section_a = Object.keys(data[section]).sort();
-            section_a.forEach(name => {
-                var value = data[section][name];
-                var el_row = $("<tr/>");
-                el_row.append($("<td/>").text(name));
-                // Setup the input field for the option value.
-                var el_input_td = $("<td/>")
-                el_input_td.append($("<input/>", {
-                    section: section,
-                    name: name,
-                    type: 'text',
-                    value: value,
-                    size: 40,
-                    maxlen: 80
-                }));
-                el_row.append(el_input_td);
-                el_table.append(el_row);
-            });
-            el_form.append(el_table);
+function user_options_form_setup(data) {
+    const el_form = $("form#form_user_options");
+    Object.keys(data).forEach(section => {
+        var el_table = $("<table/>");
+        el_table.append($("<caption/>").text(section));
+        var section_a = Object.keys(data[section]).sort();
+        section_a.forEach(name => {
+            var value = data[section][name];
+            var el_row = $("<tr/>");
+            el_row.append($("<td/>").text(name));
+            // Setup the input field for the option value.
+            var el_input_td = $("<td/>")
+            el_input_td.append($("<input/>", {
+                section: section,
+                name: name,
+                type: 'text',
+                value: value,
+                size: 40,
+                maxlen: 80
+            }));
+            el_row.append(el_input_td);
+            el_table.append(el_row);
         });
-        const el_button = $("<input/>", {
-            id: 'submit_save_apply',
-            type: 'button',
-            value: 'Save & Apply',
-            disabled: true,
-            click: user_options_form_submit
-        });
-        el_form.append(el_button);
-        el_form.on("input", function(evt) {
-            el_button.prop('disabled', false);
-        });
+        el_form.append(el_table);
     });
+    const el_button = $("<input/>", {
+        id: 'submit_save_apply',
+        type: 'button',
+        value: 'Save & Apply',
+        disabled: true,
+        click: user_options_form_submit
+    });
+    el_form.append(el_button);
+    el_form.on("input", function(evt) {
+        el_button.prop('disabled', false);
+    });
+}
+
+$(function () {
+    $.get("/api/system/state", system_state_setup);
+    $.get("/api/user/options", user_options_form_setup);
 });
 </script>
 </html>

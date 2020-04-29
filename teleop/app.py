@@ -11,7 +11,7 @@ from tornado import web, ioloop
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, ApiSystemStateHandler
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,6 @@ def main():
     _display_speed_scale = float(cfg.get('display.speed.scale'))
 
     threads = []
-    publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
@@ -68,8 +67,13 @@ def main():
     threads.append(camera)
     [t.start() for t in threads]
 
+    publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
+
     def on_options_save():
-        publisher.publish(dict(time=timestamp(), request='restart'), topic='aav/teleop/chatter')
+        publisher.publish(dict(time=timestamp(), message='restart'), topic='aav/teleop/chatter')
+
+    def list_process_start_messages():
+        return ['pop']
 
     user_options = UserOptions(user_file)
     try:
@@ -82,9 +86,10 @@ def main():
                                                                       recorder.get_latest())))),
             (r"/ws/cam", CameraMJPegSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=user_options, fn_on_save=on_options_save)),
+            (r"/api/system/state", ApiSystemStateHandler, dict(fn_list_start_messages=list_process_start_messages)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
-                'default_filename': 'index.htm'
+                'default_filename': 'index.htm?v=0.12'
             })
         ])
         port = args.port
