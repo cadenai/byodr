@@ -1,12 +1,17 @@
 import argparse
 import glob
+import json
 import logging
 import multiprocessing
 import os
 import signal
+import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
+from abc import abstractmethod
+
+import zmq
 
 from byodr.utils.ipc import ReceiverThread, JSONPublisher
 from pilot import DriverManager, CommandProcessor
@@ -21,6 +26,38 @@ signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
+
+
+class JSONServerThread(threading.Thread):
+    def __init__(self, url, event, receive_timeout_ms=50):
+        super(JSONServerThread, self).__init__()
+        server = zmq.Context().socket(zmq.REP)
+        server.setsockopt(zmq.RCVHWM, 1)
+        server.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
+        server.setsockopt(zmq.LINGER, 0)
+        server.bind(url)
+        self._server = server
+        self._quit_event = event
+
+    @abstractmethod
+    def serve(self, request):
+        raise NotImplementedError()
+
+    def run(self):
+        while not self._quit_event.is_set():
+            try:
+                message = json.loads(self._server.recv())
+                self._server.send(json.dumps(self.serve(message)))
+            except zmq.Again:
+                pass
+
+
+class PilotServer(JSONServerThread):
+    def __init__(self, url, event):
+        super(PilotServer, self).__init__(url, event)
+
+    def serve(self, request):
+        pass
 
 
 def main():
@@ -42,9 +79,11 @@ def main():
     controller = CommandProcessor(driver=DriverManager(**cfg), patience_ms=_patience_ms)
     publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
     threads.append(teleop)
+    threads.append(chatter)
     threads.append(vehicle)
     threads.append(inference)
     [t.start() for t in threads]
@@ -58,6 +97,9 @@ def main():
             action = controller.next_action(*commands)
             if action:
                 publisher.publish(action)
+            chat = chatter.pop_latest()
+            if chat:
+                logger.info(chat)
             # Allow our threads some cpu.
             _proc_sleep = max_duration - (time.time() - _ts)
             if _proc_sleep < 0:
