@@ -2,12 +2,12 @@ version: '2'
 services:
   cam1:
     image: centipede2donald/byodr-ce:rover
-    restart: on-failure
+    restart: always
     command: python stream.py
     stop_signal: SIGKILL
   nodews:
     image: centipede2donald/byodr-ce:nodews
-    restart: on-failure
+    restart: always
     depends_on:
       - "cam1"
     ports:
@@ -17,13 +17,13 @@ services:
     stop_signal: SIGKILL
   ros:
     image: centipede2donald/byodr-ce:rosserial
-    restart: on-failure
+    restart: always
     command: roscore
     ports:
       - "11311:11311"
   rosserial:
     image: centipede2donald/byodr-ce:rosserial
-    restart: on-failure
+    restart: always
     command: python rosserial.py --port=/dev/arduino
     environment:
       ROS_MASTER_URI: 'http://byodr_ros:11311'
@@ -31,12 +31,12 @@ services:
       - /dev/arduino
   vehicle:
     image: centipede2donald/byodr-ce:rover
-    restart: on-failure
+    restart: always
     environment:
       ROS_MASTER_URI: 'http://byodr_ros:11311'
   inference:
     image: centipede2donald/byodr-ce:inference
-    restart: on-failure
+    restart: always
     volumes:
       - '/usr/local/cuda:/usr/local/cuda'
       - '/usr/lib/aarch64-linux-gnu:/usr-extra'
