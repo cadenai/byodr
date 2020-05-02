@@ -339,10 +339,10 @@ class DeepNetworkDriver(AbstractCruiseControl):
         blob.speed_driver = OriginType.CONSOLE if _speed_intervention else OriginType.DNN
         blob.throttle = self.calculate_throttle(desired_speed=blob.desired_speed, current_speed=(vehicle.get('velocity', 0)))
         # Handle steering.
-        if blob.forced_steering or blob.forced_acceleration:
-            blob.save_event = blob.desired_speed > 1e-3
+        if blob.forced_steering or _speed_intervention:
             # Any intervention type is sufficient to set the steering coming in from the user.
             steering = blob.steering
+            blob.save_event = blob.desired_speed > 1e-3 if blob.forced_steering else True
             # Mark the first few interventions as such.
             if self._piv_count > 2:
                 steering_driver = (OriginType.DAGGER if _dagger else OriginType.CONSOLE)
