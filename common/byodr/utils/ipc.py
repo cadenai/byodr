@@ -148,13 +148,17 @@ class JSONZmqClient(object):
         socket.setsockopt(zmq.RCVHWM, 1)
         socket.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         socket.setsockopt(zmq.LINGER, 0)
-        for location in urls:
-            socket.connect(location)
+        locations = urls if isinstance(urls, list) else [urls]
+        [socket.connect(location) for location in locations]
+        self._num_locations = len(locations)
         self._socket = socket
 
     def call(self, message):
-        self._socket.send(json.dumps(message), zmq.NOBLOCK)
-        try:
-            return json.loads(self._socket.recv())
-        except (zmq.Again, zmq.ZMQError):
-            return {}
+        ret = {}
+        for _ in range(self._num_locations):
+            self._socket.send(json.dumps(message), zmq.NOBLOCK)
+            try:
+                ret.update(json.loads(self._socket.recv()))
+            except (zmq.Again, zmq.ZMQError):
+                pass
+        return ret

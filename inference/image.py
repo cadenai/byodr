@@ -3,6 +3,8 @@ from functools import partial
 import cv2
 import numpy as np
 
+from byodr.utils.option import PropertyError
+
 
 def hwc_bgr_to_yuv(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
@@ -61,5 +63,10 @@ _registered_functions = {
 }
 
 
-def get_registered_function(name):
-    return _registered_functions.get(name)
+def get_registered_function(key, errors, **kwargs):
+    name = kwargs.get(key, None)
+    if name in _registered_functions:
+        return _registered_functions.get(name)
+    else:
+        errors.append(PropertyError(key=key, msg='Not a function'))
+        return lambda x: x

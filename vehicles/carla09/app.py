@@ -44,11 +44,12 @@ def main():
     vehicle = create_handler(remote=_remote, on_image=(lambda x: image_publisher.publish(x)))
     vehicle.start()
 
-    threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    threads.append(pilot)
-    [t.start() for t in threads]
+    threads = [pilot]
+    if quit_event.is_set():
+        return 0
 
+    [t.start() for t in threads]
     _period = 1. / _process_frequency
     while not quit_event.is_set():
         command = pilot.get_latest()

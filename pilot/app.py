@@ -76,6 +76,7 @@ def main():
                 publisher.publish(action)
             chat = ipc_chatter.pop_latest()
             if chat and chat.get('command') == 'restart':
+                controller.quit()
                 controller = create_controller(ipc_server, config_dir, previous=controller)
                 max_duration = 1. / controller.get_frequency()
             else:

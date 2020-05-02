@@ -75,7 +75,8 @@ def main():
     [t.start() for t in threads]
 
     publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
-    pilot_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock'])
+    pilot_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock',
+                                       'ipc:///byodr/inference_c.sock'])
     user_options = UserOptions(user_file)
     try:
         web_app = web.Application([

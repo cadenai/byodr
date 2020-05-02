@@ -166,19 +166,16 @@ def main():
     max_process_duration = 1. / _process_frequency
     max_publish_duration = 1. / _publish_frequency
 
-    state_publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
-
-    threads = []
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     handler = EventHandler(directory=sessions_dir, event=quit_event, **cfg)
-    threads.append(camera)
-    threads.append(pilot)
-    threads.append(vehicle)
-    threads.append(handler)
-    [t.start() for t in threads]
+    threads = [camera, pilot, vehicle, handler]
+    if quit_event.is_set():
+        return 0
 
+    state_publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
+    [t.start() for t in threads]
     try:
         _last_publish = time.time()
         while not quit_event.is_set():

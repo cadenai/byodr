@@ -63,13 +63,13 @@ def main():
     ptz_camera = PTZCamera(**camera_cfg)
     gst_source = GstSource(image_publisher, **camera_cfg)
 
-    threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    threads.append(pilot)
-    threads.append(teleop)
-    [t.start() for t in threads]
+    threads = [pilot, teleop]
+    if quit_event.is_set():
+        return 0
 
+    [t.start() for t in threads]
     _process_frequency = int(vehicle_cfg.get('clock.hz'))
     _patience_micro = float(vehicle_cfg.get('patience.ms', 200)) * 1000
 
