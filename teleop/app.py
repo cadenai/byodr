@@ -6,11 +6,12 @@ import multiprocessing
 import os
 import signal
 from ConfigParser import SafeConfigParser
+from functools import partial
 
 from tornado import web, ioloop
 
 from byodr.utils import timestamp
-from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
+from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, JSONZmqClient
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, ApiSystemStateHandler
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,14 @@ def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
     io_loop.stop()
+
+
+def on_options_save(publisher):
+    publisher.publish(dict(time=timestamp(), command='restart'), topic='aav/teleop/chatter')
+
+
+def list_process_start_messages(client):
+    return client.call(dict(request='system/startup/list'))
 
 
 def main():
@@ -54,39 +63,36 @@ def main():
 
     _display_speed_scale = float(cfg.get('display.speed.scale'))
 
-    threads = []
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
     recorder = ReceiverThread(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state', event=quit_event)
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    threads.append(pilot)
-    threads.append(vehicle)
-    threads.append(inference)
-    threads.append(recorder)
-    threads.append(camera)
+    threads = [pilot, vehicle, inference, recorder, camera]
+    if quit_event.is_set():
+        return 0
+
     [t.start() for t in threads]
 
     publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
-
-    def on_options_save():
-        publisher.publish(dict(time=timestamp(), message='restart'), topic='aav/teleop/chatter')
-
-    def list_process_start_messages():
-        return ['pop']
-
+    pilot_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock'])
     user_options = UserOptions(user_file)
     try:
         web_app = web.Application([
-            (r"/ws/ctl", ControlServerSocket, dict(fn_control=(lambda x: publisher.publish(x)))),
-            (r"/ws/log", MessageServerSocket, dict(speed_scale=_display_speed_scale,
-                                                   fn_state=(lambda: (pilot.get_latest(),
-                                                                      vehicle.get_latest(),
-                                                                      inference.get_latest(),
-                                                                      recorder.get_latest())))),
-            (r"/ws/cam", CameraMJPegSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
-            (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=user_options, fn_on_save=on_options_save)),
-            (r"/api/system/state", ApiSystemStateHandler, dict(fn_list_start_messages=list_process_start_messages)),
+            (r"/ws/ctl", ControlServerSocket,
+             dict(fn_control=(lambda x: publisher.publish(x)))),
+            (r"/ws/log", MessageServerSocket,
+             dict(speed_scale=_display_speed_scale,
+                  fn_state=(lambda: (pilot.get_latest(),
+                                     vehicle.get_latest(),
+                                     inference.get_latest(),
+                                     recorder.get_latest())))),
+            (r"/ws/cam", CameraMJPegSocket,
+             dict(fn_capture=(lambda: camera.capture()[-1]))),
+            (r"/api/user/options", ApiUserOptionsHandler,
+             dict(user_options=user_options, fn_on_save=partial(on_options_save, publisher=publisher))),
+            (r"/api/system/state", ApiSystemStateHandler,
+             dict(fn_list_start_messages=partial(list_process_start_messages, client=pilot_client))),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'

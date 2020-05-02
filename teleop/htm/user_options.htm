@@ -24,18 +24,41 @@
 <body>
 <div id="container" class="centered">
     <div id="column">
-        <div id="system_state"></div>
-        <form id="form_user_options" action="" method="post"></form>
+        <h2>systems</h2>
+        <div id="system_state">
+            <button onclick="system_state_update();">refresh</button>
+        </div>
+        <h2>options</h2>
+        <form id="form_user_options" action="">
+        </form>
     </div>
 </div>
 </body>
 <script type="text/javascript">
-function system_state_setup(data) {
-    const el_parent = $("div#system_state");
-    el_parent.append($("<p/>").text(data));
+function system_state_update() {
+    $.get("/api/system/state", function(data) {
+        //window.data = data;
+        const el_parent = $("div#system_state");
+        el_parent.find('table').remove();
+        var el_table = $("<table/>");
+        Object.keys(data).forEach(subsystem => {
+            Object.keys(data[subsystem]).forEach(timestamp => {
+                var startup_errors = data[subsystem][timestamp];
+                startup_errors.forEach(err_msg => {
+                    var el_row = $("<tr/>");
+                    el_row.append($("<td/>").text(subsystem));
+                    el_row.append($("<td/>").text(timestamp));
+                    el_row.append($("<td/>").text(err_msg));
+                    el_table.append(el_row);
+                });
+            });
+        });
+        el_parent.append(el_table);
+    });
 }
 
 function user_options_form_submit() {
+    $("input#submit_save_apply").prop('disabled', true);
     const dirty_inputs = $("form#form_user_options").find(':input').toArray().filter(x => {
         return x.value != x.defaultValue
     });
@@ -48,7 +71,8 @@ function user_options_form_submit() {
         p_body[section].push([x.name, x.value]);
     });
     $.post('api/user/options', JSON.stringify(p_body)).done(function(data) {
-        console.log(data);
+        $("form#form_user_options").find(':input').toArray().forEach(el => {el.defaultValue = el.value;});
+        setTimeout(system_state_update, 1000);
     });
 }
 
@@ -91,7 +115,7 @@ function user_options_form_setup(data) {
 }
 
 $(function () {
-    $.get("/api/system/state", system_state_setup);
+    system_state_update();
     $.get("/api/user/options", user_options_form_setup);
 });
 </script>

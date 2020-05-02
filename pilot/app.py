@@ -1,19 +1,15 @@
 import argparse
 import glob
-import json
 import logging
 import multiprocessing
 import os
 import signal
-import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
-from abc import abstractmethod
 
-import zmq
-
-from byodr.utils.ipc import ReceiverThread, JSONPublisher
+from byodr.utils.ipc import ReceiverThread, JSONPublisher, LocalIPCServer
+from byodr.utils.option import hash_dict
 from pilot import DriverManager, CommandProcessor
 
 logger = logging.getLogger(__name__)
@@ -28,66 +24,47 @@ def _interrupt():
     quit_event.set()
 
 
-class JSONServerThread(threading.Thread):
+class IPCServer(LocalIPCServer):
     def __init__(self, url, event, receive_timeout_ms=50):
-        super(JSONServerThread, self).__init__()
-        server = zmq.Context().socket(zmq.REP)
-        server.setsockopt(zmq.RCVHWM, 1)
-        server.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
-        server.setsockopt(zmq.LINGER, 0)
-        server.bind(url)
-        self._server = server
-        self._quit_event = event
+        super(IPCServer, self).__init__('pilot', url, event, receive_timeout_ms)
 
-    @abstractmethod
-    def serve(self, request):
-        raise NotImplementedError()
-
-    def run(self):
-        while not self._quit_event.is_set():
-            try:
-                message = json.loads(self._server.recv())
-                self._server.send(json.dumps(self.serve(message)))
-            except zmq.Again:
-                pass
+    def serve_local(self, message):
+        return {}
 
 
-class PilotServer(JSONServerThread):
-    def __init__(self, url, event):
-        super(PilotServer, self).__init__(url, event)
-
-    def serve(self, request):
-        pass
+def create_controller(ipc_server, config_dir, previous=None):
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
+    cfg = dict(parser.items('pilot'))
+    if previous is None or previous.get_config_hash() != hash_dict(**cfg):
+        driver = DriverManager(**cfg)
+        controller = CommandProcessor(driver=driver, **cfg)
+        ipc_server.register_start(driver.get_errors() + controller.get_errors())
+        logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(controller.get_frequency(), controller.get_patience_ms()))
+        return controller
+    else:
+        return previous
 
 
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
+    config_dir = args.config
 
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
-    cfg = dict(parser.items('pilot'))
-
-    # Determine the process frequency - we have no control over the frequency of the teleop inputs.
-    _process_frequency = int(cfg.get('clock.hz'))
-    _patience_ms = float(cfg.get('patience.ms', 500))
-    logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_process_frequency, _patience_ms))
-    max_duration = 1. / _process_frequency
-
-    threads = []
-    controller = CommandProcessor(driver=DriverManager(**cfg), patience_ms=_patience_ms)
     publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
-    threads.append(teleop)
-    threads.append(chatter)
-    threads.append(vehicle)
-    threads.append(inference)
-    [t.start() for t in threads]
+    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+    ipc_server = IPCServer(url='ipc:///byodr/pilot_c.sock', event=quit_event)
+    threads = [teleop, vehicle, inference, ipc_chatter, ipc_server]
+    if quit_event.is_set():
+        return 0
 
+    [t.start() for t in threads]
+    controller = create_controller(ipc_server, config_dir)
+    max_duration = 1. / controller.get_frequency()
     # Teleop commands or states can be none or stale when not connected or slow - default to noop.
     while not quit_event.is_set():
         try:
@@ -97,14 +74,14 @@ def main():
             action = controller.next_action(*commands)
             if action:
                 publisher.publish(action)
-            chat = chatter.pop_latest()
-            if chat:
-                logger.info(chat)
-            # Allow our threads some cpu.
-            _proc_sleep = max_duration - (time.time() - _ts)
-            if _proc_sleep < 0:
-                logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
-            time.sleep(max(0., _proc_sleep))
+            chat = ipc_chatter.pop_latest()
+            if chat and chat.get('command') == 'restart':
+                controller = create_controller(ipc_server, config_dir, previous=controller)
+                max_duration = 1. / controller.get_frequency()
+            else:
+                # Allow our threads some cpu.
+                _proc_sleep = max_duration - (time.time() - _ts)
+                time.sleep(max(0., _proc_sleep))
         except Exception as e:
             logger.error("{}".format(traceback.format_exc(e)))
             quit_event.set()

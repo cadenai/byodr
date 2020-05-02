@@ -8,6 +8,7 @@ import cachetools
 import pid_controller.pid as pic
 
 from byodr.utils import timestamp
+from byodr.utils.option import parse_option, hash_dict
 
 logger = logging.getLogger(__name__)
 
@@ -107,16 +108,6 @@ class AbstractDriverBase(object):
         self._control = control
         self._lock = multiprocessing.Lock()
         self._active = False
-        self._previous_config = None
-
-    def set_config(self, **kwargs):
-        # Print the changes in configuration when the previous configuration is known.
-        entries = []
-        if self._previous_config is not None:
-            entries = filter(lambda k: kwargs.get(k, None) != self._previous_config.get(k, None), kwargs.keys())
-        for key in sorted(entries):
-            logger.info("{} = {}".format(key, kwargs[key]))
-        self._previous_config = kwargs
 
     @staticmethod
     def _apply_dead_zone(value, dead_zone=0.):
@@ -189,14 +180,6 @@ class AbstractThrottleControl(object):
         raise NotImplementedError()
 
 
-class NoThrottleControl(AbstractThrottleControl):
-    def __init__(self):
-        super(NoThrottleControl, self).__init__(min_desired_speed=0, max_desired_speed=0)
-
-    def calculate_throttle(self, desired_speed, current_speed):
-        return 0
-
-
 class PidThrottleControl(AbstractThrottleControl):
     def __init__(self, (p, i, d), stop_p, min_desired_speed, max_desired_speed):
         super(PidThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
@@ -238,24 +221,20 @@ class DirectThrottleControl(AbstractThrottleControl):
 class AbstractCruiseControl(AbstractDriverBase):
     __metaclass__ = ABCMeta
 
-    def __init__(self, control):
+    def __init__(self, control, **kwargs):
         super(AbstractCruiseControl, self).__init__(control)
+        _errors = []
         self._min_desired_speed = 0
         self._max_desired_speed = 0
-        self._throttle_control = NoThrottleControl()
-
-    def set_config(self, **kwargs):
-        super(AbstractCruiseControl, self).set_config(**kwargs)
-        self._min_desired_speed = float(kwargs['driver.cc.static.speed.min'])
-        self._max_desired_speed = float(kwargs['driver.cc.static.speed.max'])
+        self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, 0, _errors, **kwargs)
+        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, 0, _errors, **kwargs)
         #
-        _control_type = kwargs['driver.cc.control.type']
-        #
+        _control_type = parse_option('driver.cc.control.type', str, 'direct', _errors, **kwargs)
         if _control_type == 'pid':
-            p = (float(kwargs['driver.cc.throttle.pid_controller.p']))
-            i = (float(kwargs['driver.cc.throttle.pid_controller.i']))
-            d = (float(kwargs['driver.cc.throttle.pid_controller.d']))
-            stop_p = (float(kwargs['driver.cc.stop.pid_controller.p']))
+            p = (parse_option('driver.cc.throttle.pid_controller.p', float, 0, _errors, **kwargs))
+            i = (parse_option('driver.cc.throttle.pid_controller.i', float, 0, _errors, **kwargs))
+            d = (parse_option('driver.cc.throttle.pid_controller.d', float, 0, _errors, **kwargs))
+            stop_p = (parse_option('driver.cc.stop.pid_controller.p', float, 1, _errors, **kwargs))
             self._throttle_control = PidThrottleControl(
                 (p, i, d),
                 stop_p=stop_p,
@@ -263,9 +242,9 @@ class AbstractCruiseControl(AbstractDriverBase):
                 max_desired_speed=self._max_desired_speed
             )
         else:
-            _throttle_up_momentum = float(kwargs['driver.throttle.direct.up.momentum'])
-            _throttle_down_momentum = float(kwargs['driver.throttle.direct.down.momentum'])
-            _throttle_cutoff = float(kwargs['driver.throttle.direct.minimum'])
+            _throttle_up_momentum = parse_option('driver.throttle.direct.up.momentum', float, 0, _errors, **kwargs)
+            _throttle_down_momentum = parse_option('driver.throttle.direct.down.momentum', float, 0, _errors, **kwargs)
+            _throttle_cutoff = parse_option('driver.throttle.direct.minimum', float, 0, _errors, **kwargs)
             self._throttle_control = DirectThrottleControl(
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed,
@@ -273,6 +252,10 @@ class AbstractCruiseControl(AbstractDriverBase):
                 throttle_down_momentum=_throttle_down_momentum,
                 throttle_cutoff=_throttle_cutoff
             )
+        self._errors = _errors
+
+    def get_errors(self):
+        return self._errors
 
     def calculate_desired_speed(self, desired_speed, throttle, forced_acceleration, forced_deceleration, maximum=None):
         return self._throttle_control.calculate_desired_speed(desired_speed, throttle, forced_acceleration, forced_deceleration, maximum)
@@ -282,11 +265,8 @@ class AbstractCruiseControl(AbstractDriverBase):
 
 
 class RawConsoleDriver(AbstractCruiseControl):
-    def __init__(self):
-        super(RawConsoleDriver, self).__init__('driver_mode.teleop.direct')
-
-    def set_config(self, **kwargs):
-        super(RawConsoleDriver, self).set_config(**kwargs)
+    def __init__(self, **kwargs):
+        super(RawConsoleDriver, self).__init__('driver_mode.teleop.direct', **kwargs)
 
     def get_action(self, *args):
         blob = args[0]
@@ -299,8 +279,8 @@ class RawConsoleDriver(AbstractCruiseControl):
 
 
 class BackendAutopilotDriver(AbstractCruiseControl):
-    def __init__(self):
-        super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend')
+    def __init__(self, **kwargs):
+        super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
 
     def get_action(self, *args):
         blob = args[0]
@@ -311,8 +291,8 @@ class BackendAutopilotDriver(AbstractCruiseControl):
 
 
 class StaticCruiseDriver(AbstractCruiseControl):
-    def __init__(self):
-        super(StaticCruiseDriver, self).__init__('driver_mode.teleop.cruise')
+    def __init__(self, **kwargs):
+        super(StaticCruiseDriver, self).__init__('driver_mode.teleop.cruise', **kwargs)
 
     def get_action(self, *args):
         blob, vehicle = args[:2]
@@ -329,12 +309,9 @@ class StaticCruiseDriver(AbstractCruiseControl):
 
 class DeepNetworkDriver(AbstractCruiseControl):
 
-    def __init__(self):
-        super(DeepNetworkDriver, self).__init__('driver_mode.inference.dnn')
+    def __init__(self, **kwargs):
+        super(DeepNetworkDriver, self).__init__('driver_mode.inference.dnn', **kwargs)
         self._piv_count = 0
-
-    def set_config(self, **kwargs):
-        super(DeepNetworkDriver, self).set_config(**kwargs)
 
     def _activate(self):
         pass
@@ -389,43 +366,47 @@ class PilotState(object):
 
 class DriverManager(object):
     def __init__(self, **kwargs):
-        self._settings = kwargs
-        self._principal_steer_scale = float(kwargs['driver.steering.teleop.scale'])
-        self._cruise_speed_step = float(kwargs['driver.cc.static.gear.step'])
-        self._steering_stabilizer = IgnoreDifferences(threshold=float(kwargs['driver.handler.steering.diff.threshold']))
+        self._errors = []
+        self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, self._errors, **kwargs)
+        self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, self._errors, **kwargs)
+        _steer_threshold = parse_option('driver.handler.steering.diff.threshold', float, 0, self._errors, **kwargs)
+        self._steering_stabilizer = IgnoreDifferences(threshold=_steer_threshold)
         self._pilot_state = PilotState()
         self._driver_cache = {}
+        self._errors.extend(self._fill_driver_cache(**kwargs))
         self._lock = multiprocessing.RLock()
         self._driver = None
         self._driver_ctl = None
         self.switch_ctl()
 
+    def _fill_driver_cache(self, **kwargs):
+        _errors = []
+        _names = ('default', 'driver_mode.inference.dnn', 'driver_mode.teleop.cruise')
+        _methods = ((lambda: RawConsoleDriver(**kwargs)),
+                    (lambda: DeepNetworkDriver(**kwargs)),
+                    (lambda: StaticCruiseDriver(**kwargs))
+                    )
+        for n, m in zip(_names, _methods):
+            _driver = m()
+            self._driver_cache[n] = _driver
+            _errors.extend(_driver.get_errors())
+        return _errors
+
     def _get_driver(self, control=None):
-        if control in self._driver_cache:
-            return self._driver_cache[control]
-        # Create a new instance of the driver.
-        if control == 'driver_mode.inference.dnn':
-            driver = DeepNetworkDriver()
-        elif control == 'driver_mode.teleop.cruise':
-            driver = StaticCruiseDriver()
-        elif control == 'driver_mode.automatic.backend':
-            driver = BackendAutopilotDriver()
-        else:
-            driver = RawConsoleDriver()
-        # Cache the new instance.
-        self._driver_cache[control] = driver
-        return driver
+        return self._driver_cache[control] if control in self._driver_cache else self._driver_cache['default']
 
     def _activate(self):
         try:
             self._lock.acquire()
             if self._driver is not None:
-                self._driver.set_config(**self._settings)
                 self._driver.activate()
         except Exception as e:
             logger.error("Driver activation: {}".format(traceback.format_exc(e)))
         finally:
             self._lock.release()
+
+    def get_errors(self):
+        return self._errors
 
     def increase_cruise_speed(self):
         with self._lock:
@@ -476,7 +457,7 @@ class DriverManager(object):
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
             blob.steering = self._steering_stabilizer.calculate(blob.steering)
-        return blob
+            return blob
 
     def quit(self):
         for driver in self._driver_cache.values():
@@ -485,12 +466,16 @@ class DriverManager(object):
 
 
 class CommandProcessor(object):
-    def __init__(self, driver, patience_ms=100.):
+    def __init__(self, driver, **kwargs):
         self._driver = driver
-        self._patience_micro = patience_ms * 1000
+        self._hash = hash_dict(**kwargs)
+        self._errors = []
+        self._process_frequency = parse_option('clock.hz', int, 10, self._errors, **kwargs)
+        self._patience_ms = parse_option('patience.ms', int, 100, self._errors, **kwargs)
+        self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
-        self._cache = cachetools.TTLCache(maxsize=100, ttl=(patience_ms * 1e-3))
+        self._cache = cachetools.TTLCache(maxsize=100, ttl=(self._patience_ms * 1e-3))
 
     def _cache_safe(self, key, func, *arguments):
         if self._cache.get(key) is None:
@@ -522,6 +507,18 @@ class CommandProcessor(object):
             self._cache_safe('turn ahead', lambda: self._driver.turn_instruction('intersection.ahead'))
         elif command.get('button_right', 0) == 1:
             self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
+
+    def get_patience_ms(self):
+        return self._patience_ms
+
+    def get_config_hash(self):
+        return self._hash
+
+    def get_frequency(self):
+        return self._process_frequency
+
+    def get_errors(self):
+        return self._errors
 
     def quit(self):
         self._driver.quit()

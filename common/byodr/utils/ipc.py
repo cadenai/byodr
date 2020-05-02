@@ -1,6 +1,7 @@
 import collections
 import json
 import threading
+from abc import abstractmethod
 
 import numpy as np
 import zmq
@@ -88,3 +89,72 @@ class CameraThread(threading.Thread):
                 self._images.appendleft((md, img))
             except zmq.Again:
                 pass
+
+
+class JSONServerThread(threading.Thread):
+    def __init__(self, url, event, receive_timeout_ms=50):
+        super(JSONServerThread, self).__init__()
+        server = zmq.Context().socket(zmq.REP)
+        server.setsockopt(zmq.RCVHWM, 1)
+        server.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
+        server.setsockopt(zmq.LINGER, 0)
+        server.bind(url)
+        self._server = server
+        self._quit_event = event
+
+    @abstractmethod
+    def serve(self, request):
+        raise NotImplementedError()
+
+    def run(self):
+        while not self._quit_event.is_set():
+            try:
+                message = json.loads(self._server.recv())
+                self._server.send(json.dumps(self.serve(message)))
+            except zmq.Again:
+                pass
+
+
+class LocalIPCServer(JSONServerThread):
+    def __init__(self, name, url, event, receive_timeout_ms=50):
+        super(LocalIPCServer, self).__init__(url, event, receive_timeout_ms)
+        self._name = name
+        self._m_startup = collections.deque(maxlen=1)
+
+    def register_start(self, errors):
+        self._m_startup.append((timestamp(), errors))
+
+    def serve_local(self, message):
+        raise NotImplementedError()
+
+    def serve(self, message):
+        try:
+            if message.get('request') == 'system/startup/list' and self._m_startup:
+                ts, errors = self._m_startup[-1]
+                messages = ['No errors']
+                if errors:
+                    d_errors = dict()  # Merge to obtain distinct keys.
+                    [d_errors.update({error.key: error.message}) for error in errors]
+                    messages = ['{} - {}'.format(k, d_errors[k]) for k in d_errors.keys()]
+                return {self._name: {ts: messages}}
+        except IndexError:
+            pass
+        return self.serve_local(message)
+
+
+class JSONZmqClient(object):
+    def __init__(self, urls, receive_timeout_ms=200):
+        socket = zmq.Context().socket(zmq.REQ)
+        socket.setsockopt(zmq.RCVHWM, 1)
+        socket.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
+        socket.setsockopt(zmq.LINGER, 0)
+        for location in urls:
+            socket.connect(location)
+        self._socket = socket
+
+    def call(self, message):
+        self._socket.send(json.dumps(message), zmq.NOBLOCK)
+        try:
+            return json.loads(self._socket.recv())
+        except (zmq.Again, zmq.ZMQError):
+            return {}

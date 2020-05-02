@@ -6,6 +6,9 @@ class PropertyError(ValueError):
         self.message = msg
         self.suggestions = suggestions
 
+    def __str__(self):
+        return '{} - {}'.format(self.key, self.message)
+
 
 def _parse(key, fn_type=(lambda x: x), **kwargs):
     try:
@@ -20,7 +23,7 @@ def parse_option(key, fn_type=(lambda x: x), default_value=None, errors=None, **
     except PropertyError as pe:
         if errors is not None:
             errors.append(pe)
-        return default_value
+        return fn_type(default_value)
 
 
 def hash_dict(**kwargs):
