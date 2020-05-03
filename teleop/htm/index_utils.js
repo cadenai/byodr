@@ -26,3 +26,17 @@ var socket_utils = {
     }
 }
 
+var page_utils = {
+    get_stream_type: function() {
+        var stream_type = window.localStorage.getItem('video.stream.type');
+        if (stream_type == null) {
+            return 'mjpeg';
+        } else {
+            return stream_type;
+        }
+    },
+
+    set_stream_type: function(stream_type) {
+        window.localStorage.setItem('video.stream.type', stream_type);
+    }
+}

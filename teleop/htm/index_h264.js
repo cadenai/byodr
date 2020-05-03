@@ -1,7 +1,4 @@
-var h264_control_params = new URL(document.location).searchParams;
-var use_h264_control = !h264_control_params.has('stream') || h264_control_params.get('stream') == 'h264';
-
-if (use_h264_control) {
+if (page_utils.get_stream_type() == 'h264') {
     class CameraSocketResumer {
         constructor(uri, reconnect_ms) {
             this.uri = uri;
