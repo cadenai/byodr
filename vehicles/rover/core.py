@@ -137,6 +137,18 @@ class TwistHandler(object):
         super(TwistHandler, self).__init__()
         self._gate = RosGate(**kwargs)
         self._quit_event = multiprocessing.Event()
+        self._hash = -1
+        self._errors = []
+        self._process_frequency = 10
+        self._patience_micro = 100.
+        self._configure(**kwargs)
+
+    def _configure(self, **kwargs):
+        _errors = []
+        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
+        self._errors = _errors
+        self._hash = hash_dict(**kwargs)
 
     def _drive(self, steering=0, throttle=0, reverse_gear=False):
         try:
@@ -145,12 +157,22 @@ class TwistHandler(object):
         except Exception as e:
             logger.error("{}".format(e))
 
+    def get_process_frequency(self):
+        return self._process_frequency
+
+    def get_patience_micro(self):
+        return self._patience_micro
+
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
+
     def restart(self, **kwargs):
         if not self._quit_event.is_set():
+            self._configure(**kwargs)
             self._gate.restart(**kwargs)
 
     def get_errors(self):
-        return self._gate.get_errors()
+        return self._errors + self._gate.get_errors()
 
     def state(self):
         x, y = 0, 0
@@ -280,6 +302,9 @@ class PTZCamera(object):
         self._lock = threading.Lock()
         self.restart(**kwargs)
 
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
+
     def restart(self, **kwargs):
         with self._lock:
             _hash = hash_dict(**kwargs)
@@ -327,7 +352,7 @@ class PTZCamera(object):
             if self._camera:
                 self._camera.add(pilot, teleop)
 
-    def close(self):
+    def quit(self):
         with self._lock:
             if self._camera:
                 self._camera.quit()
@@ -345,6 +370,9 @@ class GstSource(object):
         self._source = None
         self._lock = threading.Lock()
         self.restart(**kwargs)
+
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
 
     def restart(self, **kwargs):
         with self._lock:
@@ -399,7 +427,7 @@ class GstSource(object):
             if self._source:
                 self._source.check()
 
-    def close(self):
+    def quit(self):
         with self._lock:
             if self._source:
                 self._source.close()

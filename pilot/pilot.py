@@ -511,8 +511,8 @@ class CommandProcessor(object):
     def get_patience_ms(self):
         return self._patience_ms
 
-    def get_config_hash(self):
-        return self._hash
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
 
     def get_frequency(self):
         return self._process_frequency

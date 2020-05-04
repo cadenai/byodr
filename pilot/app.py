@@ -9,7 +9,6 @@ import traceback
 from ConfigParser import SafeConfigParser
 
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, LocalIPCServer
-from byodr.utils.option import hash_dict
 from pilot import DriverManager, CommandProcessor
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,7 @@ def create_controller(ipc_server, config_dir, previous=None):
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
     cfg = dict(parser.items('pilot'))
-    if previous is None or previous.get_config_hash() != hash_dict(**cfg):
+    if previous is None or previous.is_reconfigured(**cfg):
         driver = DriverManager(**cfg)
         controller = CommandProcessor(driver=driver, **cfg)
         ipc_server.register_start(driver.get_errors() + controller.get_errors())

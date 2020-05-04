@@ -62,8 +62,8 @@ class TFRunner(object):
     def get_gpu(self):
         return self._gpu_id
 
-    def get_config_hash(self):
-        return self._hash
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
 
     def get_frequency(self):
         return self._process_frequency
@@ -137,7 +137,7 @@ def create_runner(ipc_server, config_dir, models_dir, previous=None):
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + _glob(models_dir, '*.ini') + _glob(config_dir, '*.ini')]
     cfg = dict(parser.items('inference'))
-    if previous is None or previous.get_config_hash() != hash_dict(**cfg):
+    if previous is None or previous.is_reconfigured(**cfg):
         runner = TFRunner(model_directory=models_dir, **cfg)
         ipc_server.register_start(runner.get_errors())
         logger.info("Processing at {} Hz on gpu {}.".format(runner.get_frequency(), runner.get_gpu()))
