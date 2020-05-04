@@ -1,5 +1,6 @@
 import collections
 import json
+import logging
 import threading
 from abc import abstractmethod
 
@@ -7,6 +8,8 @@ import numpy as np
 import zmq
 
 from byodr.utils import timestamp
+
+logger = logging.getLogger(__name__)
 
 
 class JSONPublisher(object):
@@ -144,21 +147,26 @@ class LocalIPCServer(JSONServerThread):
 
 class JSONZmqClient(object):
     def __init__(self, urls, receive_timeout_ms=200):
+        self._urls = urls if isinstance(urls, list) else [urls]
+        self._receive_timeout = receive_timeout_ms
+        self._socket = None
+        self._create(self._urls)
+
+    def _create(self, locations):
         socket = zmq.Context().socket(zmq.REQ)
         socket.setsockopt(zmq.RCVHWM, 1)
-        socket.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
+        socket.setsockopt(zmq.RCVTIMEO, self._receive_timeout)
         socket.setsockopt(zmq.LINGER, 0)
-        locations = urls if isinstance(urls, list) else [urls]
         [socket.connect(location) for location in locations]
-        self._num_locations = len(locations)
         self._socket = socket
 
     def call(self, message):
         ret = {}
-        for _ in range(self._num_locations):
-            self._socket.send(json.dumps(message), zmq.NOBLOCK)
+        for i in range(len(self._urls)):
             try:
+                self._socket.send(json.dumps(message), zmq.NOBLOCK)
                 ret.update(json.loads(self._socket.recv()))
-            except (zmq.Again, zmq.ZMQError):
-                pass
+            except zmq.ZMQError:
+                j = i + 1
+                self._create(self._urls[j:] + self._urls[:j])
         return ret
