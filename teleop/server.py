@@ -230,6 +230,7 @@ class ApiUserOptionsHandler(JSONRequestHandler):
         self._fn_on_save = kwargs.get('fn_on_save')
 
     def get(self):
+        self._options.reload()
         self.write(json.dumps({s: self._options.get_options(s) for s in (self._options.list_sections())}))
 
     def post(self):
