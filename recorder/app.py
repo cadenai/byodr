@@ -15,7 +15,7 @@ import cv2
 import numpy as np
 
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
-from byodr.utils.option import parse_option
+from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
 from store import Event
 
@@ -156,6 +156,64 @@ class IPCServer(LocalIPCServer):
         return {}
 
 
+class LocalHandler(object):
+    def __init__(self, sessions_dir, **kwargs):
+        self._hash = -1
+        self._errors = []
+        self._process_frequency = 1
+        self._publish_frequency = 1
+        self._event_handler = EventHandler(directory=sessions_dir, event=quit_event, **kwargs)
+        self.reload(**kwargs)
+
+    def get_errors(self):
+        return self._errors
+
+    def get_process_frequency(self):
+        return self._process_frequency
+
+    def get_publish_frequency(self):
+        return self._publish_frequency
+
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
+
+    def start(self):
+        self._event_handler.start()
+
+    def reload(self, **kwargs):
+        _errors = []
+        self._hash = hash_dict(**kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        self._publish_frequency = parse_option('publish.hz', int, 1, _errors, **kwargs)
+        self._errors = _errors
+
+    def state(self):
+        return self._event_handler.state()
+
+    def record(self, blob, vehicle, image_meta, image):
+        self._event_handler.record(blob, vehicle, image_meta, image)
+
+    def join(self):
+        self._event_handler.join()
+
+
+def create_handler(ipc_server, config_dir, sessions_dir, previous=None):
+    parser = SafeConfigParser()
+    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
+    cfg = dict(parser.items('recorder'))
+    _configured = False
+    if previous is None:
+        previous = LocalHandler(sessions_dir=sessions_dir, **cfg)
+        _configured = True
+    elif previous.is_reconfigured(**cfg):
+        previous.reload(**cfg)
+        _configured = True
+    if _configured:
+        ipc_server.register_start(previous.get_errors())
+        logger.info("Processing at {} Hz publishing at {} Hz.".format(previous.get_process_frequency(), previous.get_publish_frequency()))
+    return previous
+
+
 def main():
     parser = argparse.ArgumentParser(description='Recorder.')
     parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
@@ -165,29 +223,20 @@ def main():
     sessions_dir = os.path.expanduser(args.sessions)
     assert os.path.exists(sessions_dir), "Cannot use sessions directory '{}'".format(sessions_dir)
 
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
-    cfg = dict(parser.items('recorder'))
-
-    _errors = []
-    _process_frequency = parse_option('clock.hz', int, 10, _errors, **cfg)
-    _publish_frequency = parse_option('publish.hz', int, 1, _errors, **cfg)
-    logger.info("Processing at {} Hz publishing at {} Hz.".format(_process_frequency, _publish_frequency))
-    max_process_duration = 1. / _process_frequency
-    max_publish_duration = 1. / _publish_frequency
-
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    handler = EventHandler(directory=sessions_dir, event=quit_event, **cfg)
+    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     ipc_server = IPCServer(url='ipc:///byodr/recorder_c.sock', event=quit_event)
-    threads = [camera, pilot, vehicle, handler, ipc_server]
+    handler = create_handler(ipc_server, args.config, sessions_dir)
+    threads = [camera, pilot, vehicle, handler, ipc_chatter, ipc_server]
     if quit_event.is_set():
         return 0
 
     state_publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
     [t.start() for t in threads]
-    ipc_server.register_start(_errors)
+    max_process_duration = 1. / handler.get_process_frequency()
+    max_publish_duration = 1. / handler.get_publish_frequency()
     try:
         _last_publish = time.time()
         while not quit_event.is_set():
@@ -200,9 +249,14 @@ def main():
             if time.time() - _last_publish > max_publish_duration:
                 state_publisher.publish(handler.state())
                 _last_publish = time.time()
-            _proc_sleep = max_process_duration - (time.time() - proc_start)
-            # if _proc_sleep < 0: logger.warning("Cannot maintain {} Hz.".format(_process_frequency))
-            time.sleep(max(0., _proc_sleep))
+            chat = ipc_chatter.pop_latest()
+            if chat and chat.get('command') == 'restart':
+                handler = create_handler(ipc_server, args.config, sessions_dir, previous=handler)
+                max_process_duration = 1. / handler.get_process_frequency()
+                max_publish_duration = 1. / handler.get_publish_frequency()
+            else:
+                _proc_sleep = max_process_duration - (time.time() - proc_start)
+                time.sleep(max(0., _proc_sleep))
     except KeyboardInterrupt:
         quit_event.set()
     except StandardError as e:

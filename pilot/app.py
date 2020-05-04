@@ -37,7 +37,7 @@ def create_controller(ipc_server, config_dir, previous=None):
     cfg = dict(parser.items('pilot'))
     if previous is None or previous.is_reconfigured(**cfg):
         driver = DriverManager(**cfg)
-        controller = CommandProcessor(driver=driver, **cfg)
+        controller = CommandProcessor(driver, **cfg)
         ipc_server.register_start(driver.get_errors() + controller.get_errors())
         logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(controller.get_frequency(), controller.get_patience_ms()))
         return controller

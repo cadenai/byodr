@@ -30,7 +30,7 @@ def _interrupt():
 
 
 class TFRunner(object):
-    def __init__(self, **kwargs):
+    def __init__(self, model_directory, **kwargs):
         self._lock = multiprocessing.Lock()
         self._dagger = False
         self._hash = hash_dict(**kwargs)
@@ -54,8 +54,7 @@ class TFRunner(object):
         p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        _model_directory = parse_option('model_directory', str, None, _errors, **kwargs)
-        self._driver = TFDriver(model_directory=_model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
+        self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._errors = _errors
         self._driver.activate()
 
@@ -137,13 +136,18 @@ def create_runner(ipc_server, config_dir, models_dir, previous=None):
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + _glob(models_dir, '*.ini') + _glob(config_dir, '*.ini')]
     cfg = dict(parser.items('inference'))
-    if previous is None or previous.is_reconfigured(**cfg):
-        runner = TFRunner(model_directory=models_dir, **cfg)
-        ipc_server.register_start(runner.get_errors())
-        logger.info("Processing at {} Hz on gpu {}.".format(runner.get_frequency(), runner.get_gpu()))
-        return runner
-    else:
-        return previous
+    _configured = False
+    if previous is None:
+        previous = TFRunner(models_dir, **cfg)
+        _configured = True
+    elif previous.is_reconfigured(**cfg):
+        previous.quit()
+        previous = TFRunner(models_dir, **cfg)
+        _configured = True
+    if _configured:
+        ipc_server.register_start(previous.get_errors())
+        logger.info("Processing at {} Hz on gpu {}.".format(previous.get_frequency(), previous.get_gpu()))
+    return previous
 
 
 def main():
@@ -174,7 +178,6 @@ def main():
                 publisher.publish(runner.forward(image=image, turn=instruction))
             chat = ipc_chatter.pop_latest()
             if chat and chat.get('command') == 'restart':
-                runner.quit()
                 runner = create_runner(ipc_server, args.config, args.models, previous=runner)
                 max_duration = 1. / runner.get_frequency()
             else:
