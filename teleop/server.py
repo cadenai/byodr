@@ -238,7 +238,6 @@ class ApiUserOptionsHandler(JSONRequestHandler):
         for section in data.keys():
             for key, value in data.get(section):
                 self._options.set_option(section, key, value)
-                logger.info("Save {} {} {}.".format(section, key, value))
         if data:
             self._options.save()
             self._options.reload()
