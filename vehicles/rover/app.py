@@ -47,7 +47,7 @@ def ros_init():
 
 class IPCServer(LocalIPCServer):
     def __init__(self, url, event, receive_timeout_ms=50):
-        super(IPCServer, self).__init__('rover', url, event, receive_timeout_ms)
+        super(IPCServer, self).__init__('platform', url, event, receive_timeout_ms)
 
     def serve_local(self, message):
         return {}
@@ -67,7 +67,7 @@ def create_all(ipc_server, image_publisher, config_dir, previous=(None, None, No
     _configured = any(map(lambda _x: _x is None, previous))
     if vehicle is None:
         vehicle = TwistHandler(**vehicle_cfg)
-    elif vehicle.is_reconfigured():
+    elif vehicle.is_reconfigured(**vehicle_cfg):
         vehicle.restart(**vehicle_cfg)
         _configured = True
     if ptz_camera is None:
@@ -83,8 +83,8 @@ def create_all(ipc_server, image_publisher, config_dir, previous=(None, None, No
     if _configured:
         errors = [item for sublist in [x.get_errors() for x in (vehicle, ptz_camera, gst_source)] for item in sublist]
         ipc_server.register_start(errors)
-        _process_frequency = previous.get_process_frequency()
-        _patience_micro = previous.get_patience_micro()
+        _process_frequency = vehicle.get_process_frequency()
+        _patience_micro = vehicle.get_patience_micro()
         logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
     return vehicle, ptz_camera, gst_source
 

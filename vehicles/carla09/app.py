@@ -8,7 +8,8 @@ import time
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import timestamp
-from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher
+from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
+from byodr.utils.option import parse_option
 from vehicle import create_handler
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,14 @@ def _interrupt():
     quit_event.set()
 
 
+class IPCServer(LocalIPCServer):
+    def __init__(self, url, event, receive_timeout_ms=50):
+        super(IPCServer, self).__init__('platform', url, event, receive_timeout_ms)
+
+    def serve_local(self, message):
+        return {}
+
+
 def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
@@ -33,8 +42,9 @@ def main():
     cfg = dict(parser.items('vehicle'))
     cfg.update(dict(parser.items('platform')))
 
-    _process_frequency = int(cfg.get('clock.hz'))
-    _patience_micro = float(cfg.get('patience.ms', 200)) * 1000
+    _errors = []
+    _process_frequency = parse_option('clock.hz', int, 10, _errors, **cfg)
+    _patience_micro = parse_option('patience.ms', int, 200, _errors, **cfg) * 1000.
     logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
@@ -45,11 +55,13 @@ def main():
     vehicle.start()
 
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    threads = [pilot]
+    ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
+    threads = [pilot, ipc_server]
     if quit_event.is_set():
         return 0
 
     [t.start() for t in threads]
+    ipc_server.register_start(_errors)
     _period = 1. / _process_frequency
     while not quit_event.is_set():
         command = pilot.get_latest()

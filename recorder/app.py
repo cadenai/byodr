@@ -14,7 +14,8 @@ from ConfigParser import SafeConfigParser
 import cv2
 import numpy as np
 
-from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher
+from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
+from byodr.utils.option import parse_option
 from recorder import get_or_create_recorder
 from store import Event
 
@@ -147,6 +148,14 @@ class EventHandler(threading.Thread):
                 pass
 
 
+class IPCServer(LocalIPCServer):
+    def __init__(self, url, event, receive_timeout_ms=50):
+        super(IPCServer, self).__init__('recorder', url, event, receive_timeout_ms)
+
+    def serve_local(self, message):
+        return {}
+
+
 def main():
     parser = argparse.ArgumentParser(description='Recorder.')
     parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
@@ -160,8 +169,9 @@ def main():
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(args.config, '*.ini'))]
     cfg = dict(parser.items('recorder'))
 
-    _process_frequency = int(cfg.get('clock.hz'))
-    _publish_frequency = int(cfg.get('publish.hz'))
+    _errors = []
+    _process_frequency = parse_option('clock.hz', int, 10, _errors, **cfg)
+    _publish_frequency = parse_option('publish.hz', int, 1, _errors, **cfg)
     logger.info("Processing at {} Hz publishing at {} Hz.".format(_process_frequency, _publish_frequency))
     max_process_duration = 1. / _process_frequency
     max_publish_duration = 1. / _publish_frequency
@@ -170,12 +180,14 @@ def main():
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     handler = EventHandler(directory=sessions_dir, event=quit_event, **cfg)
-    threads = [camera, pilot, vehicle, handler]
+    ipc_server = IPCServer(url='ipc:///byodr/recorder_c.sock', event=quit_event)
+    threads = [camera, pilot, vehicle, handler, ipc_server]
     if quit_event.is_set():
         return 0
 
     state_publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
     [t.start() for t in threads]
+    ipc_server.register_start(_errors)
     try:
         _last_publish = time.time()
         while not quit_event.is_set():

@@ -362,7 +362,7 @@ class PTZCamera(object):
 
 class GstSource(object):
     def __init__(self, image_publisher, **kwargs):
-        self.errors = []
+        self._errors = []
         self._image_publisher = image_publisher
         self._camera_shape = None
         self._flipcode = None
@@ -370,6 +370,9 @@ class GstSource(object):
         self._source = None
         self._lock = threading.Lock()
         self.restart(**kwargs)
+
+    def get_errors(self):
+        return self._errors
 
     def is_reconfigured(self, **kwargs):
         return self._hash != hash_dict(**kwargs)
@@ -387,14 +390,14 @@ class GstSource(object):
             self._image_publisher.publish(cv2.flip(_img, self._flipcode) if self._flipcode else _img)
 
     def _start(self, **kwargs):
-        errors = []
-        _server = parse_option('camera.ip', str, errors=errors, **kwargs)
-        _user = parse_option('camera.user', str, errors=errors, **kwargs)
-        _password = parse_option('camera.password', str, errors=errors, **kwargs)
-        _rtsp_port = parse_option('camera.rtsp.port', int, 0, errors=errors, **kwargs)
-        _rtsp_path = parse_option('camera.image.path', str, errors=errors, **kwargs)
-        _img_wh = parse_option('camera.image.shape', str, errors=errors, **kwargs)
-        _img_flip = parse_option('camera.image.flip', str, errors=errors, **kwargs)
+        _errors = []
+        _server = parse_option('camera.ip', str, errors=_errors, **kwargs)
+        _user = parse_option('camera.user', str, errors=_errors, **kwargs)
+        _password = parse_option('camera.password', str, errors=_errors, **kwargs)
+        _rtsp_port = parse_option('camera.rtsp.port', int, 0, errors=_errors, **kwargs)
+        _rtsp_path = parse_option('camera.image.path', str, errors=_errors, **kwargs)
+        _img_wh = parse_option('camera.image.shape', str, errors=_errors, **kwargs)
+        _img_flip = parse_option('camera.image.flip', str, errors=_errors, **kwargs)
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
         _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
@@ -413,8 +416,8 @@ class GstSource(object):
         if _img_flip in ('both', 'vertical', 'horizontal'):
             self._flipcode = 0 if _img_flip == 'vertical' else 1 if _img_flip == 'horizontal' else -1
 
-        self.errors = errors
-        if len(errors) == 0:
+        self._errors = _errors
+        if len(_errors) == 0:
             # Do not use our method - already under lock.
             if self._source:
                 self._source.close()

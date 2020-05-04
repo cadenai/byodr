@@ -183,11 +183,9 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
 
 class UserOptions(object):
     def __init__(self, fname):
-        parser = SafeConfigParser()
-        if os.path.exists(fname):
-            parser.read(fname)
         self._fname = fname
-        self._parser = parser
+        self._parser = SafeConfigParser()
+        self.reload()
 
     def list_sections(self):
         return self._parser.sections()
@@ -201,7 +199,18 @@ class UserOptions(object):
     def set_option(self, section, name, value):
         self._parser.set(section, name, value)
 
+    def reload(self):
+        if os.path.exists(self._fname):
+            self._parser.read(self._fname)
+
     def save(self):
+        # The options could have been updated on disk.
+        parser = SafeConfigParser()
+        parser.read(self._fname)
+        for section in parser.sections():
+            for option in parser.options(section):
+                if not self._parser.has_option(section, option):
+                    self.set_option(section, option, parser.get(section, option))
         with open(self._fname, 'wb') as f:
             self._parser.write(f)
 
@@ -231,6 +240,7 @@ class ApiUserOptionsHandler(JSONRequestHandler):
                 logger.info("Save {} {} {}.".format(section, key, value))
         if data:
             self._options.save()
+            self._options.reload()
             self._fn_on_save()
         self.write(json.dumps(dict(message='ok')))
 
