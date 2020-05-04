@@ -387,7 +387,7 @@ class GstSource(object):
     def _publish(self, _b):
         if self._camera_shape is not None:
             _img = np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(self._camera_shape)
-            self._image_publisher.publish(cv2.flip(_img, self._flipcode) if self._flipcode else _img)
+            self._image_publisher.publish(cv2.flip(_img, self._flipcode) if self._flipcode is not None else _img)
 
     def _start(self, **kwargs):
         _errors = []
@@ -413,6 +413,7 @@ class GstSource(object):
         # flipcode = 0: flip vertically
         # flipcode > 0: flip horizontally
         # flipcode < 0: flip vertically and horizontally
+        self._flipcode = None
         if _img_flip in ('both', 'vertical', 'horizontal'):
             self._flipcode = 0 if _img_flip == 'vertical' else 1 if _img_flip == 'horizontal' else -1
 
