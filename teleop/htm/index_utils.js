@@ -8,7 +8,7 @@ function extend(proto, literal) {
 }
 
 var socket_utils = {
-    create_socket: function(path, binary=true, reconnect=1000, assign=function(e) {}) {
+    create_socket: function(path, binary=true, reconnect=100, assign=function(e) {}) {
         ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
         ws_url = ws_protocol + document.location.hostname + ":" + document.location.port + path;
         ws = new WebSocket(ws_url);
