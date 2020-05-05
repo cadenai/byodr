@@ -133,7 +133,7 @@ class DirectRecorder(AbstractRecorder):
 
 
 class InterventionsRecorder(DirectRecorder):
-    def __init__(self, datasource, mode, vehicle_type, vehicle_config, session_max=1000, intervention_batch_size=16):
+    def __init__(self, datasource, mode, vehicle_type, vehicle_config, session_max=1000, intervention_batch_size=10):
         """
         Persist intervention events as well as non-save events leading up to and trailing the intervention.
         """
