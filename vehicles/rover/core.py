@@ -25,9 +25,9 @@ CTL_LAST = 0
 # Ranges are from the servo domain, i.e. 1/90 - the pair is for forwards and reverse.
 # The ranges do not have to be symmetrical - backwards may seem faster here but not in practice (depends on the esc settings).
 D_SPEED_PROFILES = {
-    'economy': (5, 6),
-    'standard': (6, 8),
-    'sport': (8, 10),
+    'economy': (4, 8),
+    'standard': (5, 8),
+    'sport': (7, 10),
     'performance': (10, 10)
     # Yep, what's next?
 }
@@ -54,10 +54,6 @@ class RosGate(object):
             _hash = hash_dict(**kwargs)
             if _hash != self._hash:
                 self._hash = _hash
-                if self._subscriber:
-                    self._subscriber.unregister()
-                if self._publisher:
-                    self._publisher.unregister()
                 self._start(**kwargs)
 
     def get_errors(self):
@@ -66,7 +62,7 @@ class RosGate(object):
 
     def _start(self, **kwargs):
         errors = []
-        self._dry_run = parse_option('dry.run', (lambda x: bool(int(x))), False, errors, **kwargs)
+        self._dry_run = parse_option('dry.run', (lambda x: bool(int(x))), 0, errors, **kwargs)
         self._steer_shift = parse_option('calibrate.steer.shift', int, 0, errors, **kwargs)
         self._throttle_zero = parse_option('calibrate.throttle.zero.position', int, 0, errors, **kwargs)
         self._throttle_reverse = parse_option('calibrate.throttle.reverse.position', int, 0, errors, **kwargs)
@@ -87,12 +83,16 @@ class RosGate(object):
         else:
             errors.append(PropertyError('throttle.speed.profile', 'Not recognized', suggestions=D_SPEED_PROFILES.keys()))
         self._errors = errors
-        if not self._dry_run:
+        if self._dry_run and self._subscriber is not None and self._publisher is not None:
+            self._publisher.unregister()
+            self._subscriber.unregister()
+        else:
             logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(
                 self._wheel_radius, self._gear_ratio)
             )
-            self._subscriber = rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
-            self._publisher = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
+            if self._subscriber is None and self._publisher is None:
+                self._subscriber = rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
+                self._publisher = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
 
     def _update_odometer(self, message):
         # The odometer publishes revolutions per second.
@@ -128,8 +128,9 @@ class RosGate(object):
                 self._publisher.publish(twist)
 
     def get_odometer_value(self):
-        # Convert to travel speed in meters per second.
-        return (self._rps / self._gear_ratio) * self._circum_m
+        with self._lock:
+            # Convert to travel speed in meters per second.
+            return (self._rps / self._gear_ratio) * self._circum_m
 
 
 class TwistHandler(object):

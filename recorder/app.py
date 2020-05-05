@@ -203,7 +203,7 @@ def create_handler(ipc_server, config_dir, sessions_dir, previous=None):
     cfg = dict(parser.items('recorder'))
     _configured = False
     if previous is None:
-        previous = LocalHandler(sessions_dir=sessions_dir, **cfg)
+        previous = LocalHandler(sessions_dir, **cfg)
         _configured = True
     elif previous.is_reconfigured(**cfg):
         previous.reload(**cfg)

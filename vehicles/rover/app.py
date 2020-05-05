@@ -81,7 +81,8 @@ def create_all(ipc_server, image_publisher, config_dir, previous=(None, None, No
         gst_source.restart(**camera_cfg)
         _configured = True
     if _configured:
-        errors = [item for sublist in [x.get_errors() for x in (vehicle, ptz_camera, gst_source)] for item in sublist]
+        errors = []
+        [errors.extend(x.get_errors()) for x in (vehicle, ptz_camera, gst_source)]
         ipc_server.register_start(errors)
         _process_frequency = vehicle.get_process_frequency()
         _patience_micro = vehicle.get_patience_micro()
@@ -107,9 +108,6 @@ def main():
         return 0
 
     vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, args.config)
-    if quit_event.is_set():
-        return 0
-
     [t.start() for t in threads]
     _period = 1. / vehicle.get_process_frequency()
     while not quit_event.is_set():
@@ -122,8 +120,8 @@ def main():
         chat = ipc_chatter.pop_latest()
         if chat and chat.get('command') == 'restart':
             previous = (vehicle, ptz_camera, gst_source)
-            map(lambda _i: _i.quit(), previous)
             vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, args.config, previous=previous)
+            _period = 1. / vehicle.get_process_frequency()
         else:
             time.sleep(_period)
 

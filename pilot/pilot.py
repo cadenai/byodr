@@ -518,7 +518,7 @@ class CommandProcessor(object):
         return self._process_frequency
 
     def get_errors(self):
-        return self._errors
+        return self._errors + self._driver.get_errors()
 
     def quit(self):
         self._driver.quit()

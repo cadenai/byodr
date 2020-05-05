@@ -36,13 +36,12 @@ def create_controller(ipc_server, config_dir, previous=None):
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
     cfg = dict(parser.items('pilot'))
     if previous is None or previous.is_reconfigured(**cfg):
-        driver = DriverManager(**cfg)
-        controller = CommandProcessor(driver, **cfg)
-        ipc_server.register_start(driver.get_errors() + controller.get_errors())
-        logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(controller.get_frequency(), controller.get_patience_ms()))
-        return controller
-    else:
-        return previous
+        if previous is not None:
+            previous.quit()
+        previous = CommandProcessor(DriverManager(**cfg), **cfg)
+        ipc_server.register_start(previous.get_errors())
+        logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(previous.get_frequency(), previous.get_patience_ms()))
+    return previous
 
 
 def main():
@@ -75,7 +74,6 @@ def main():
                 publisher.publish(action)
             chat = ipc_chatter.pop_latest()
             if chat and chat.get('command') == 'restart':
-                controller.quit()
                 controller = create_controller(ipc_server, config_dir, previous=controller)
                 max_duration = 1. / controller.get_frequency()
             else:
