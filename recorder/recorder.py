@@ -133,22 +133,27 @@ class DirectRecorder(AbstractRecorder):
 
 
 class InterventionsRecorder(DirectRecorder):
-    def __init__(self, datasource, mode, vehicle_type, vehicle_config, session_max=1000, intervention_batch_size=10):
+    def __init__(self, datasource, mode, vehicle_type, vehicle_config, session_max=1000, intervention_batch_size=16):
+        """
+        Persist intervention events as well as non-save events leading up to and trailing the intervention.
+        """
         super(InterventionsRecorder, self).__init__(datasource=datasource,
                                                     mode=mode,
                                                     vehicle_type=vehicle_type,
                                                     vehicle_config=vehicle_config,
                                                     session_max=session_max)
-        self._queue = deque(maxlen=intervention_batch_size)
+        self._maxlen = intervention_batch_size + 1
+        self._queue = deque(maxlen=self._maxlen)
+
+    def _do_save(self):
+        return len(self._queue) == self._maxlen and any([e.save_event for e in self._queue])
 
     def _record_event(self, event):
-        _save = event.save_event
-        if _save:
-            _events = list(self._queue) + [event]
+        num_recorded = 0
+        if self._do_save():
+            _events = list(self._queue)
             self._queue.clear()
             map(lambda e: super(InterventionsRecorder, self)._persist_event(e), _events)
             num_recorded = len(_events)
-        else:
-            num_recorded = 0
-            self._queue.append(event)
+        self._queue.append(event)
         return num_recorded
