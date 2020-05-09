@@ -283,8 +283,10 @@ class BackendAutopilotDriver(AbstractCruiseControl):
         super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
 
     def get_action(self, *args):
-        blob = args[0]
-        blob.desired_speed = blob.throttle * self._max_desired_speed
+        blob, vehicle = args[:2]
+        blob.desired_speed = vehicle.get('velocity', 0)
+        blob.steering = vehicle.get('auto_steering', 0)
+        blob.throttle = vehicle.get('auto_throttle', 0)
         blob.steering_driver = OriginType.BACKEND_AUTOPILOT
         blob.speed_driver = OriginType.BACKEND_AUTOPILOT
         blob.save_event = True
@@ -381,10 +383,11 @@ class DriverManager(object):
 
     def _fill_driver_cache(self, **kwargs):
         _errors = []
-        _names = ('default', 'driver_mode.inference.dnn', 'driver_mode.teleop.cruise')
+        _names = ('default', 'driver_mode.inference.dnn', 'driver_mode.teleop.cruise', 'driver_mode.automatic.backend')
         _methods = ((lambda: RawConsoleDriver(**kwargs)),
                     (lambda: DeepNetworkDriver(**kwargs)),
-                    (lambda: StaticCruiseDriver(**kwargs))
+                    (lambda: StaticCruiseDriver(**kwargs)),
+                    (lambda: BackendAutopilotDriver(**kwargs))
                     )
         for n, m in zip(_names, _methods):
             _driver = m()
@@ -466,12 +469,13 @@ class DriverManager(object):
 
 
 class CommandProcessor(object):
-    def __init__(self, driver, **kwargs):
-        self._driver = driver
+    def __init__(self, **kwargs):
         self._hash = hash_dict(**kwargs)
-        self._errors = []
+        self._driver = DriverManager(**kwargs)
+        self._errors = [] + self._driver.get_errors()
         self._process_frequency = parse_option('clock.hz', int, 10, self._errors, **kwargs)
         self._patience_ms = parse_option('patience.ms', int, 100, self._errors, **kwargs)
+        self._button_y_ctl = parse_option('controller.button.north.driver', str, 0, self._errors, **kwargs)
         self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
@@ -485,14 +489,13 @@ class CommandProcessor(object):
                 self._cache[key] = 1
 
     def _process(self, command):
-        keys = {} if command is None else command.keys()
-        if 'quit' in keys:
+        if 'quit' in command.keys():
             self._driver.switch_ctl()
         #
         # Buttons clockwise: N, E, S, W
         # N
         elif command.get('button_y', 0) == 1:
-            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl('driver_mode.inference.dnn'))
+            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl(self._button_y_ctl))
         # E
         elif command.get('button_b', 0) == 1:
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
@@ -518,7 +521,7 @@ class CommandProcessor(object):
         return self._process_frequency
 
     def get_errors(self):
-        return self._errors + self._driver.get_errors()
+        return self._errors
 
     def quit(self):
         self._driver.quit()
@@ -531,16 +534,21 @@ class CommandProcessor(object):
         # What to do on message timeout depends on which driver is active.
         _ctl = self._driver.get_driver_ctl()
         teleop, vehicle, inference = commands
+        # First process teleop commands.
+        if teleop is not None:
+            self._process(teleop)
         # Switch off autopilot on internal errors.
-        if None in (vehicle, inference) and _ctl != 'driver_mode.teleop.direct':
+        if _ctl == 'driver_mode.inference.dnn' and None in (vehicle, inference):
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
             return self._driver.noop()
         # Everything normal or there is no autopilot process but teleop should function normally.
         if None not in commands or (None not in (teleop, vehicle) and _ctl == 'driver_mode.teleop.direct'):
-            self._process(teleop)
             return self._driver.next_action(teleop, vehicle, inference)
         # Autopilot drives without teleop commands.
         if None not in (vehicle, inference) and _ctl == 'driver_mode.inference.dnn':
             return self._driver.next_action(dict(), vehicle, inference)
+        # Vehicle control by backend.
+        if vehicle is not None and _ctl == 'driver_mode.automatic.backend':
+            return self._driver.next_action(dict(), vehicle, dict())
         # Ignore old or repetitive teleop commands.
         return None

@@ -90,6 +90,8 @@ class CameraThread(threading.Thread):
                 img = np.frombuffer(buffer(data), dtype=np.uint8)
                 img = img.reshape((height, width, channels))
                 self._images.appendleft((md, img))
+            except ValueError as e:
+                logger.warning(e)
             except zmq.Again:
                 pass
 
