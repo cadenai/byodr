@@ -9,7 +9,7 @@ import traceback
 from ConfigParser import SafeConfigParser
 
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, LocalIPCServer
-from pilot import DriverManager, CommandProcessor
+from pilot import CommandProcessor
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
@@ -38,7 +38,7 @@ def create_controller(ipc_server, config_dir, previous=None):
     if previous is None or previous.is_reconfigured(**cfg):
         if previous is not None:
             previous.quit()
-        previous = CommandProcessor(DriverManager(**cfg), **cfg)
+        previous = CommandProcessor(**cfg)
         ipc_server.register_start(previous.get_errors())
         logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(previous.get_frequency(), previous.get_patience_ms()))
     return previous
