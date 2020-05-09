@@ -32,6 +32,13 @@ class IPCServer(LocalIPCServer):
         return {}
 
 
+def _latest_or_none(receiver, patience):
+    candidate = receiver.get_latest()
+    _time = 0 if candidate is None else candidate.get('time')
+    _on_time = (timestamp() - _time) < patience
+    return candidate if _on_time else None
+
+
 def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
@@ -54,9 +61,10 @@ def main():
     vehicle = create_handler(remote=_remote, on_image=(lambda x: image_publisher.publish(x)))
     vehicle.start()
 
+    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
-    threads = [pilot, ipc_server]
+    threads = [teleop, pilot, ipc_server]
     if quit_event.is_set():
         return 0
 
@@ -64,12 +72,13 @@ def main():
     ipc_server.register_start(_errors)
     _period = 1. / _process_frequency
     while not quit_event.is_set():
-        command = pilot.get_latest()
-        _command_time = 0 if command is None else command.get('time')
-        _command_age = timestamp() - _command_time
-        _on_time = _command_age < _patience_micro
-        if _on_time:
-            vehicle.drive(command)
+        c_pilot = _latest_or_none(pilot, patience=_patience_micro)
+        c_teleop = _latest_or_none(teleop, patience=_patience_micro)
+        if c_teleop is not None and c_teleop.get('button_x', 0):
+            vehicle.quit()
+            vehicle.start()
+        if c_pilot is not None:
+            vehicle.drive(c_pilot)
         else:
             vehicle.noop()
         state_publisher.publish(vehicle.state())
