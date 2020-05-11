@@ -278,20 +278,6 @@ class RawConsoleDriver(AbstractCruiseControl):
         blob.save_event = False
 
 
-class BackendAutopilotDriver(AbstractCruiseControl):
-    def __init__(self, **kwargs):
-        super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
-
-    def get_action(self, *args):
-        blob, vehicle = args[:2]
-        blob.desired_speed = vehicle.get('velocity', 0)
-        blob.steering = vehicle.get('auto_steering', 0)
-        blob.throttle = vehicle.get('auto_throttle', 0)
-        blob.steering_driver = OriginType.BACKEND_AUTOPILOT
-        blob.speed_driver = OriginType.BACKEND_AUTOPILOT
-        blob.save_event = True
-
-
 class StaticCruiseDriver(AbstractCruiseControl):
     def __init__(self, **kwargs):
         super(StaticCruiseDriver, self).__init__('driver_mode.teleop.cruise', **kwargs)
@@ -307,6 +293,21 @@ class StaticCruiseDriver(AbstractCruiseControl):
         blob.steering_driver = OriginType.HUMAN
         blob.speed_driver = OriginType.HUMAN
         blob.save_event = True
+
+
+class BackendAutopilotDriver(AbstractCruiseControl):
+    def __init__(self, **kwargs):
+        super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
+        self._corridor_threshold = .99
+
+    def get_action(self, *args):
+        blob, vehicle, inference = args
+        blob.desired_speed = vehicle.get('velocity', 0)
+        blob.steering = vehicle.get('auto_steering', 0)
+        blob.throttle = vehicle.get('auto_throttle', 0)
+        blob.steering_driver = OriginType.BACKEND_AUTOPILOT
+        blob.speed_driver = OriginType.BACKEND_AUTOPILOT
+        blob.save_event = inference is None or inference.get('corridor') > self._corridor_threshold
 
 
 class DeepNetworkDriver(AbstractCruiseControl):
@@ -475,7 +476,8 @@ class CommandProcessor(object):
         self._errors = [] + self._driver.get_errors()
         self._process_frequency = parse_option('clock.hz', int, 10, self._errors, **kwargs)
         self._patience_ms = parse_option('patience.ms', int, 100, self._errors, **kwargs)
-        self._button_y_ctl = parse_option('controller.button.north.driver', str, 0, self._errors, **kwargs)
+        self._button_north_ctl = parse_option('controller.button.north.mode', str, 0, self._errors, **kwargs)
+        self._button_south_ctl = parse_option('controller.button.south.mode', str, 0, self._errors, **kwargs)
         self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
@@ -495,10 +497,13 @@ class CommandProcessor(object):
         # Buttons clockwise: N, E, S, W
         # N
         elif command.get('button_y', 0) == 1:
-            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl(self._button_y_ctl))
+            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl(self._button_north_ctl))
         # E
         elif command.get('button_b', 0) == 1:
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
+        # S
+        elif command.get('button_a', 0) == 1:
+            self._cache_safe('backend auto driver', lambda: self._driver.switch_ctl(self._button_south_ctl))
         #
         elif command.get('arrow_up', 0) == 1:
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
@@ -549,6 +554,6 @@ class CommandProcessor(object):
             return self._driver.next_action(dict(), vehicle, inference)
         # Vehicle control by backend.
         if vehicle is not None and _ctl == 'driver_mode.automatic.backend':
-            return self._driver.next_action(dict(), vehicle, dict())
+            return self._driver.next_action(dict(), vehicle, inference)
         # Ignore old or repetitive teleop commands.
         return None

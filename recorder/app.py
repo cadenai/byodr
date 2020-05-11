@@ -105,13 +105,17 @@ class EventHandler(threading.Thread):
 
     @staticmethod
     def _cruising(mode):
-        return mode in ('driver_mode.teleop.cruise', 'driver_mode.automatic.backend')
+        return mode == 'driver_mode.teleop.cruise'
+
+    @staticmethod
+    def _automatic(mode):
+        return mode in ('driver_mode.inference.dnn', 'driver_mode.automatic.backend')
 
     def _instance(self, driver):
         mode = None
         if self._cruising(driver):
             mode = 'record.mode.driving'
-        elif driver == 'driver_mode.inference.dnn':
+        elif self._automatic(driver):
             mode = 'record.mode.interventions'
         return get_or_create_recorder(mode=mode,
                                       directory=self._directory,
@@ -124,14 +128,14 @@ class EventHandler(threading.Thread):
     def record(self, blob, vehicle, image_meta, image):
         # Switch on automatically and then off only when the driver changes.
         _driver = blob.get('driver')
-        _recorder_dnn = _driver == 'driver_mode.inference.dnn'
+        _recorder_auto = self._automatic(_driver)
         _recorder_cruise = self._cruising(_driver)
-        if not self._active and (_recorder_dnn or _recorder_cruise):
+        if not self._active and (_recorder_auto or _recorder_cruise):
             self._tracker.clear()
             self._recorder = self._instance(_driver)
             self._recorder.start()
             self._active = True
-        elif self._active and not (_recorder_dnn or _recorder_cruise):
+        elif self._active and not (_recorder_auto or _recorder_cruise):
             self._recorder.stop()
             self._recorder = self._instance(_driver)
             self._active = False

@@ -10,7 +10,7 @@ from ConfigParser import SafeConfigParser
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
 from byodr.utils.option import parse_option
-from vehicle import create_handler
+from vehicle import CarlaHandler
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
@@ -58,7 +58,7 @@ def main():
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
     _remote = cfg.get('host.location')
-    vehicle = create_handler(remote=_remote, on_image=(lambda x: image_publisher.publish(x)))
+    vehicle = CarlaHandler((lambda x: image_publisher.publish(x)), **cfg)
     vehicle.start()
 
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)

@@ -1,11 +1,14 @@
 import logging
 import math
 import multiprocessing
+import re
+import time
 
 import carla
 import numpy as np
 
 from byodr.utils import timestamp
+from byodr.utils.option import parse_option
 
 logger = logging.getLogger(__name__)
 
@@ -13,25 +16,23 @@ logger = logging.getLogger(__name__)
 CAMERA_SHAPE = (480, 640, 3)
 
 
-def create_handler(remote, connect_timeout_sec=2, on_image=(lambda x: x)):
-    carla_host, carla_port = remote, 2000
-    if ':' in carla_host:
-        host, port = carla_host.split(':')
-        carla_host, carla_port = host, int(port)
-    carla_client = carla.Client(carla_host, carla_port)
-    carla_client.set_timeout(float(connect_timeout_sec))
-    return CarlaHandler(carla_client=carla_client, camera_callback=on_image)
-
-
 class CarlaHandler(object):
 
-    def __init__(self, **kwargs):
-        _client = kwargs.get('carla_client')
-        self._world = _client.get_world()
+    def __init__(self, fn_on_image, **kwargs):
+        _errors = []
+        _remote = parse_option('host.location', str, 'localhost', _errors, **kwargs)
+        carla_host, carla_port = _remote, 2000
+        if ':' in carla_host:
+            host, port = carla_host.split(':')
+            carla_host, carla_port = host, int(port)
+        carla_client = carla.Client(carla_host, carla_port)
+        carla_client.set_timeout(2.)
+        self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, -1, _errors, **kwargs)
+        self._world = carla_client.get_world()
         self._tm_port = 8000
-        self._traffic_manager = _client.get_trafficmanager(self._tm_port)
+        self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
         self._traffic_manager.global_percentage_speed_difference(65)
-        self._camera_callback = kwargs.get('camera_callback')
+        self._camera_callback = fn_on_image
         self._actor = None
         self._image_shape = CAMERA_SHAPE
         self._sensors = []
@@ -39,8 +40,9 @@ class CarlaHandler(object):
         self._actor_last_location = None
         self._actor_distance_traveled = 0.
         self._spawn_index = 1
-        self._vehicle_tick = self._world.on_tick(lambda x: self.tick(x))
+        self._vehicle_tick = None
         self._on_carla_autopilot = False
+        self._change_weather_time = 0
 
     def _reset_agent_travel(self):
         logger.info("Actor distance traveled is {:8.3f}.".format(self._actor_distance_traveled))
@@ -85,6 +87,7 @@ class CarlaHandler(object):
         camera.listen(lambda data: self._on_camera(data))
         self._reset_agent_travel()
         self._traffic_manager.ignore_lights_percentage(self._actor, 100.)
+        self._set_random_weather()
 
     def _on_camera(self, data):
         img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
@@ -126,6 +129,13 @@ class CarlaHandler(object):
             self._on_carla_autopilot = _autopilot
             self._actor.set_autopilot(_autopilot, self._tm_port)
 
+    def _set_random_weather(self):
+        if self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
+            self._change_weather_time = time.time() + self._rand_weather_seconds
+            preset = np.random.choice([x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)])
+            logger.info("Setting the weather to preset '{}'.".format(preset))
+            self._world.set_weather(getattr(carla.WeatherParameters, preset))
+
     def state(self):
         x, y = self._position()
         ap_steering, ap_throttle = 0, 0
@@ -142,14 +152,17 @@ class CarlaHandler(object):
 
     def start(self):
         self._reset()
+        self._vehicle_tick = self._world.on_tick(lambda x: self.tick(x))
 
     def quit(self):
-        self._world.remove_on_tick(self._vehicle_tick)
+        if self._vehicle_tick:
+            self._world.remove_on_tick(self._vehicle_tick)
         self._destroy()
 
     def tick(self, _):
         if self._actor is not None and self._actor.is_alive:
             with self._actor_lock:
+                self._set_random_weather()
                 location = self._actor.get_location()
                 if self._actor_last_location is not None:
                     _x, _y = self._actor_last_location
