@@ -433,16 +433,17 @@ class DriverManager(object):
         return self._driver_ctl
 
     def switch_ctl(self, control='driver_mode.teleop.direct'):
-        with self._lock:
-            self._pilot_state.cruise_speed = 0
-            # The switch must be immediate. Do not force wait on the previous driver to deactivate.
-            if control != self._driver_ctl:
-                if self._driver is not None:
-                    threading.Thread(target=self._driver.deactivate).start()
-                self._driver_ctl = control
-                self._driver = self._get_driver(control=control)
-                threading.Thread(target=self._activate).start()
-                logger.info("Pilot switch control to '{}'.".format(control))
+        if control is not None and control.lower() not in ('none', 'null', 'ignore', '0', 'false'):
+            with self._lock:
+                self._pilot_state.cruise_speed = 0
+                # The switch must be immediate. Do not force wait on the previous driver to deactivate.
+                if control != self._driver_ctl:
+                    if self._driver is not None:
+                        threading.Thread(target=self._driver.deactivate).start()
+                    self._driver_ctl = control
+                    self._driver = self._get_driver(control=control)
+                    threading.Thread(target=self._activate).start()
+                    logger.info("Pilot switch control to '{}'.".format(control))
 
     def noop(self):
         blob = Blob()
@@ -477,7 +478,7 @@ class CommandProcessor(object):
         self._process_frequency = parse_option('clock.hz', int, 10, self._errors, **kwargs)
         self._patience_ms = parse_option('patience.ms', int, 100, self._errors, **kwargs)
         self._button_north_ctl = parse_option('controller.button.north.mode', str, 0, self._errors, **kwargs)
-        self._button_south_ctl = parse_option('controller.button.south.mode', str, 0, self._errors, **kwargs)
+        self._button_west_ctl = parse_option('controller.button.west.mode', str, 0, self._errors, **kwargs)
         self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
@@ -497,13 +498,13 @@ class CommandProcessor(object):
         # Buttons clockwise: N, E, S, W
         # N
         elif command.get('button_y', 0) == 1:
-            self._cache_safe('dnn driver', lambda: self._driver.switch_ctl(self._button_north_ctl))
+            self._cache_safe('button north ctl', lambda: self._driver.switch_ctl(self._button_north_ctl))
         # E
         elif command.get('button_b', 0) == 1:
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
         # S
-        elif command.get('button_a', 0) == 1:
-            self._cache_safe('backend auto driver', lambda: self._driver.switch_ctl(self._button_south_ctl))
+        elif command.get('button_x', 0) == 1:
+            self._cache_safe('button west ctl', lambda: self._driver.switch_ctl(self._button_west_ctl))
         #
         elif command.get('arrow_up', 0) == 1:
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
