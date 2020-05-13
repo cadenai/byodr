@@ -15,7 +15,7 @@ from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
-from inference import TFDriver, DynamicMomentum
+from inference2 import TFDriver, DynamicMomentum
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
@@ -90,7 +90,7 @@ class TFRunner(object):
             dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
-        action_out, brake_out, surprise_out, critic_out, entropy_out = \
+        action_out, brake_out, surprise_out, critic_out, entropy_out, gumbel = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=turn,
