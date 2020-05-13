@@ -74,7 +74,7 @@ def main():
     while not quit_event.is_set():
         c_pilot = _latest_or_none(pilot, patience=_patience_micro)
         c_teleop = _latest_or_none(teleop, patience=_patience_micro)
-        if c_teleop is not None and c_teleop.get('button_x', 0):
+        if c_teleop is not None and c_teleop.get('button_a', 0):
             vehicle.quit()
             vehicle.start()
         if c_pilot is not None:
