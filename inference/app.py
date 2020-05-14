@@ -15,7 +15,7 @@ from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
-from inference3 import TFDriver, DynamicMomentum
+from inference4 import TFDriver, DynamicMomentum
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
@@ -90,7 +90,7 @@ class TFRunner(object):
             dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
-        action_out, brake_out, surprise_out, critic_out, entropy_out = \
+        p_action, p_critic, p_surprise, f_action, f_critic, f_surprise, brake_out, entropy_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=turn,
@@ -99,8 +99,16 @@ class TFRunner(object):
         # The critic is a good indicator at inference time which is why the difference between the two values does not work.
         # Both surprise and critic are standard deviations.
         # Using the geometric mean would lessen the impact of large differences between the values.
-        _corridor_uncertainty = np.mean([surprise_out, critic_out])
+        p_corridor = np.mean([p_surprise, p_critic])
+        f_corridor = np.mean([f_surprise, f_critic])
+        use_fallback = f_corridor < p_corridor
+
+        _corridor_uncertainty = f_corridor if use_fallback else p_corridor
         _corridor_penalty = self._fn_corridor_norm(_corridor_uncertainty)
+
+        action_out = f_action if use_fallback else p_action
+        critic_out = f_critic if use_fallback else p_critic
+        surprise_out = f_surprise if use_fallback else p_surprise
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
@@ -112,7 +120,7 @@ class TFRunner(object):
                     critic=float(critic_out),
                     dagger=int(dagger),
                     entropy=float(entropy_out),
-                    obstacle=float(_obstacle_penalty),
+                    obstacle=float(f_corridor),
                     penalty=float(_total_penalty),
                     surprise=float(surprise_out),
                     time=timestamp()
