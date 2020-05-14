@@ -15,7 +15,7 @@ from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
-from inference4 import TFDriver, DynamicMomentum
+from inference7 import TFDriver, DynamicMomentum
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
@@ -96,31 +96,31 @@ class TFRunner(object):
                                  turn=turn,
                                  dagger=dagger)
 
-        # The critic is a good indicator at inference time which is why the difference between the two values does not work.
-        # Both surprise and critic are standard deviations.
-        # Using the geometric mean would lessen the impact of large differences between the values.
-        p_corridor = np.mean([p_surprise, p_critic])
-        f_corridor = np.mean([f_surprise, f_critic])
-        use_fallback = f_corridor < p_corridor
+        # Base the decision on the expected error.
+        use_fallback = f_critic < p_critic
 
-        _corridor_uncertainty = f_corridor if use_fallback else p_corridor
-        _corridor_penalty = self._fn_corridor_norm(_corridor_uncertainty)
+        # Both surprise and critic are standard deviations.
+        # The critic is a good indicator at inference time which is why the difference between them does not work.
+        # Using the geometric mean would lessen the impact of large differences between the values.
+        p_corridor = self._fn_corridor_norm(np.mean([p_surprise, p_critic]))
+        f_corridor = self._fn_corridor_norm(np.mean([f_surprise, f_critic]))
 
         action_out = f_action if use_fallback else p_action
         critic_out = f_critic if use_fallback else p_critic
         surprise_out = f_surprise if use_fallback else p_surprise
 
         # Penalties to decrease desired speed.
+        _corridor_penalty = f_corridor if use_fallback else p_corridor
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         return dict(action=float(self._dnn_steering(action_out)),
                     brake=float(brake_out),
-                    corridor=float(_corridor_penalty),
+                    corridor=float(0 if use_fallback else p_corridor),
                     critic=float(critic_out),
                     dagger=int(dagger),
                     entropy=float(entropy_out),
-                    obstacle=float(f_corridor),
+                    obstacle=float(f_corridor if use_fallback else 0),
                     penalty=float(_total_penalty),
                     surprise=float(surprise_out),
                     time=timestamp()
