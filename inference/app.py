@@ -97,7 +97,8 @@ class TFRunner(object):
                                  dagger=dagger)
 
         # Base the decision on the expected error.
-        use_fallback = f_critic < p_critic
+        # use_fallback = f_critic < p_critic
+        use_fallback = f_surprise < p_surprise
 
         # Both surprise and critic are standard deviations.
         # The critic is a good indicator at inference time which is why the difference between them does not work.
@@ -105,7 +106,7 @@ class TFRunner(object):
         p_corridor = self._fn_corridor_norm(np.mean([p_surprise, p_critic]))
         f_corridor = self._fn_corridor_norm(np.mean([f_surprise, f_critic]))
 
-        action_out = f_action if use_fallback else p_action
+        action_out = p_action  # f_action if use_fallback else p_action
         critic_out = f_critic if use_fallback else p_critic
         surprise_out = f_surprise if use_fallback else p_surprise
 
@@ -116,11 +117,11 @@ class TFRunner(object):
 
         return dict(action=float(self._dnn_steering(action_out)),
                     brake=float(brake_out),
-                    corridor=float(0 if use_fallback else p_corridor),
+                    corridor=float(0 if use_fallback else self._fn_corridor_norm(p_surprise)),
                     critic=float(critic_out),
                     dagger=int(dagger),
                     entropy=float(entropy_out),
-                    obstacle=float(f_corridor if use_fallback else 0),
+                    obstacle=float(self._fn_corridor_norm(f_surprise) if use_fallback else 0),
                     penalty=float(_total_penalty),
                     surprise=float(surprise_out),
                     time=timestamp()
