@@ -105,9 +105,9 @@ class TFDriver(object):
         self.p_steering = None
         self.p_critic = None
         self.p_surprise = None
-        self.f_steering = None
-        self.f_critic = None
-        self.f_surprise = None
+        # self.f_steering = None
+        # self.f_critic = None
+        # self.f_surprise = None
         self.tf_entropy = None
         self.tf_brake = None
         self.sess = None
@@ -156,7 +156,7 @@ class TFDriver(object):
                 _input_maneuver = {
                     'input/dave_image': self.input_dave,
                     'input/maneuver_command': self.maneuver_cmd,
-                    'input/fallback_command': self.fallback_cmd,
+                    # 'input/fallback_command': self.fallback_cmd,
                     'input/use_dropout': self.input_udr,
                     'input/p_dropout': self.input_pdr
                 }
@@ -169,9 +169,9 @@ class TFDriver(object):
                 self.p_steering = graph.get_tensor_by_name('fm/output/p_steering:0')
                 self.p_critic = graph.get_tensor_by_name('fm/output/p_critic:0')
                 self.p_surprise = graph.get_tensor_by_name('fm/output/p_surprise:0')
-                self.f_steering = graph.get_tensor_by_name('fm/output/f_steering:0')
-                self.f_critic = graph.get_tensor_by_name('fm/output/f_critic:0')
-                self.f_surprise = graph.get_tensor_by_name('fm/output/f_surprise:0')
+                # self.f_steering = graph.get_tensor_by_name('fm/output/f_steering:0')
+                # self.f_critic = graph.get_tensor_by_name('fm/output/f_critic:0')
+                # self.f_surprise = graph.get_tensor_by_name('fm/output/f_surprise:0')
                 self.tf_entropy = graph.get_tensor_by_name('fm/output/entropy:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
 
@@ -187,9 +187,9 @@ class TFDriver(object):
             _ops = [self.p_steering,
                     self.p_critic,
                     self.p_surprise,
-                    self.f_steering,
-                    self.f_critic,
-                    self.f_surprise,
+                    # self.f_steering,
+                    # self.f_critic,
+                    # self.f_surprise,
                     self.tf_brake,
                     self.tf_entropy]
             _ret = (0, 1, 1, 0, 1, 1, 1, [0, 0, 0])
@@ -202,13 +202,13 @@ class TFDriver(object):
                     self.input_udr: dagger,
                     self.input_pdr: self.p_conv_dropout if dagger else 0,
                     self.maneuver_cmd: [_maneuver_intention(turn=turn)],
-                    self.fallback_cmd: [_maneuver_intention()],
+                    # self.fallback_cmd: [_maneuver_intention()],
                     self.speed_cmd: [_speed_intention(turn=turn)],
                     self.input_task: [[0, 0]]
                 }
                 try:
-                    p_action, p_critic, p_surprise, f_action, f_critic, f_surprise, _brake, _entropy = self.sess.run(_ops, feed_dict=feeder)
-                    return p_action, max(0, p_critic), p_surprise, f_action, max(0, f_critic), f_surprise, max(0, _brake), _entropy
+                    p_action, p_critic, p_surprise, _brake, _entropy = self.sess.run(_ops, feed_dict=feeder)
+                    return p_action, p_critic, p_surprise, max(0, _brake), _entropy
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')

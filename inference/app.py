@@ -90,7 +90,7 @@ class TFRunner(object):
             dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
-        p_action, p_critic, p_surprise, f_action, f_critic, f_surprise, brake_out, entropy_out = \
+        p_action, p_critic, p_surprise, brake_out, entropy_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=turn,
@@ -98,30 +98,30 @@ class TFRunner(object):
 
         # Base the decision on the expected error.
         # use_fallback = f_critic < p_critic
-        use_fallback = f_surprise < p_surprise
+        # use_fallback = f_surprise < p_surprise
 
         # Both surprise and critic are standard deviations.
         # The critic is a good indicator at inference time which is why the difference between them does not work.
         # Using the geometric mean would lessen the impact of large differences between the values.
         p_corridor = self._fn_corridor_norm(np.mean([p_surprise, p_critic]))
-        f_corridor = self._fn_corridor_norm(np.mean([f_surprise, f_critic]))
+        # f_corridor = self._fn_corridor_norm(np.mean([f_surprise, f_critic]))
 
         action_out = p_action  # f_action if use_fallback else p_action
-        critic_out = f_critic if use_fallback else p_critic
-        surprise_out = f_surprise if use_fallback else p_surprise
+        critic_out = p_critic
+        surprise_out = p_surprise
 
         # Penalties to decrease desired speed.
-        _corridor_penalty = f_corridor if use_fallback else p_corridor
+        _corridor_penalty = p_corridor
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         return dict(action=float(self._dnn_steering(action_out)),
                     brake=float(brake_out),
-                    corridor=float(0 if use_fallback else self._fn_corridor_norm(p_surprise)),
+                    corridor=float(self._fn_corridor_norm(p_surprise)),
                     critic=float(critic_out),
                     dagger=int(dagger),
                     entropy=float(entropy_out),
-                    obstacle=float(self._fn_corridor_norm(f_surprise) if use_fallback else 0),
+                    obstacle=float(self._fn_corridor_norm(p_critic)),
                     penalty=float(_total_penalty),
                     surprise=float(surprise_out),
                     time=timestamp()
