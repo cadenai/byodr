@@ -90,14 +90,14 @@ class TFRunner(object):
             dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
-        p_action, p_critic, p_surprise, brake_out, entropy_out = \
+        p_steering, p_critic, p_surprise, f_critic, brake_out, entropy_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=turn,
                                  dagger=dagger)
 
         # Base the decision on the expected error.
-        # use_fallback = f_critic < p_critic
+        use_fallback = f_critic < p_critic
         # use_fallback = f_surprise < p_surprise
 
         # Both surprise and critic are standard deviations.
@@ -106,7 +106,7 @@ class TFRunner(object):
         p_corridor = self._fn_corridor_norm(np.mean([p_surprise, p_critic]))
         # f_corridor = self._fn_corridor_norm(np.mean([f_surprise, f_critic]))
 
-        action_out = p_action  # f_action if use_fallback else p_action
+        action_out = p_steering  # f_action if use_fallback else p_action
         critic_out = p_critic
         surprise_out = p_surprise
 
@@ -117,11 +117,11 @@ class TFRunner(object):
 
         return dict(action=float(self._dnn_steering(action_out)),
                     brake=float(brake_out),
-                    corridor=float(self._fn_corridor_norm(p_surprise)),
+                    corridor=float(self._fn_corridor_norm(p_critic)),
                     critic=float(critic_out),
                     dagger=int(dagger),
                     entropy=float(entropy_out),
-                    obstacle=float(self._fn_corridor_norm(p_critic)),
+                    obstacle=float(self._fn_corridor_norm(f_critic)),
                     penalty=float(_total_penalty),
                     surprise=float(surprise_out),
                     time=timestamp()
