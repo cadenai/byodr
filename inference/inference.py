@@ -47,13 +47,15 @@ class Barrier(object):
 
 def _create_input_nodes():
     placeholder = tf.placeholder
-    input_dave_image = placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
-    input_speed_image = placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
-    input_command = placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
+    input_dave = placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
+    input_alex = placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
+    maneuver_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/maneuver_command')
+    other_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/other_command')
+    speed_command = tf.placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
     input_task = placeholder(dtype=tf.float32, shape=[None, 2], name='input/task')
     input_use_dropout = placeholder(tf.bool, shape=(), name='input/use_dropout')
     input_p_dropout = placeholder(tf.float32, shape=(), name='input/p_dropout')
-    return (input_dave_image, input_command, input_task, input_use_dropout, input_p_dropout), (input_speed_image, input_command)
+    return (input_dave, maneuver_command, other_command, input_task, input_use_dropout, input_p_dropout), (input_alex, speed_command)
 
 
 def _newest_file(path, pattern):
@@ -72,10 +74,17 @@ def _load_definition(f_name):
     return graph_def
 
 
-def _cmd_vector(turn='intersection.ahead', dtype=np.float32):
+def _maneuver_intention(turn='general.fallback', dtype=np.float32):
+    command = np.zeros(4, dtype=dtype)
+    _options = {'general.fallback': 0, 'intersection.left': 1, 'intersection.ahead': 2, 'intersection.right': 3}
+    command[_options[turn]] = 1
+    return command
+
+
+def _speed_intention(turn='intersection.ahead', dtype=np.float32):
     command = np.zeros(3, dtype=dtype)
-    _maneuvers = {'intersection.left': 0, 'intersection.ahead': 1, 'intersection.right': 2}
-    command[_maneuvers[turn]] = 1
+    _options = {'intersection.left': 0, 'intersection.ahead': 1, 'intersection.right': 2}
+    command[_options[turn]] = 1
     return command
 
 
@@ -85,22 +94,24 @@ class TFDriver(object):
         self.p_conv_dropout = p_conv_dropout
         self.model_directory = model_directory
         self._lock = multiprocessing.Lock()
-        self.input_dave_image = None
-        self.input_alex_image = None
-        self.input_command = None
+        self.input_dave = None
+        self.input_alex = None
         self.input_task = None
-        self.input_use_dropout = None
-        self.input_p_dropout = None
+        self.input_udr = None
+        self.input_pdr = None
+        self.tf_maneuver_cmd = None
+        self.tf_other_cmd = None
+        self.tf_speed_cmd = None
         self.tf_steering = None
-        self.tf_surprise = None
         self.tf_critic = None
+        self.tf_surprise = None
+        self.tf_other_critic = None
         self.tf_entropy = None
         self.tf_brake = None
-        self.tf_features = None
         self.sess = None
         self.maneuver_graph_def = None
         self.speed_graph_def = None
-        self.posor_graph_def = None
+        self._fallback_intention = _maneuver_intention()
 
     def set_conv_dropout_probability(self, p):
         self.p_conv_dropout = p
@@ -120,54 +131,46 @@ class TFDriver(object):
         self.speed_graph_def = _load_definition(_newest_file(self.model_directory, 'speed*.pb'))
         barrier.wait()
 
-    def _load_posor_graph_def(self, barrier):
-        self.posor_graph_def = _load_definition(_newest_file(self.model_directory, 'posor*.pb'))
-        barrier.wait()
-
     def activate(self):
         with self._lock:
             _start = time.time()
             graph = tf.Graph()
             _threads = []
-            _barrier = Barrier(parties=4)
+            _barrier = Barrier(parties=3)
             _threads.append(Thread(target=self._create_session, args=(graph, _barrier)))
             _threads.append(Thread(target=self._load_maneuver_graph_def, args=(_barrier,)))
             _threads.append(Thread(target=self._load_speed_graph_def, args=(_barrier,)))
-            _threads.append(Thread(target=self._load_posor_graph_def, args=(_barrier,)))
             for thr in _threads:
                 thr.start()
             for thr in _threads:
                 thr.join(timeout=30)
             logger.info("Loaded session and graph definitions in {:2.2f} seconds.".format(time.time() - _start))
-            if None in (self.maneuver_graph_def, self.speed_graph_def, self.posor_graph_def):
+            if None in (self.maneuver_graph_def, self.speed_graph_def):
                 logger.warning("Cannot create the graph when one of the parts is missing.")
                 return
             with graph.as_default():
-                nodes_tuple = _create_input_nodes()
-                self.input_dave_image, self.input_command, self.input_task, self.input_use_dropout, self.input_p_dropout = nodes_tuple[0]
-                self.input_alex_image = nodes_tuple[-1][0]
+                _nodes = _create_input_nodes()
+                self.input_dave, self.tf_maneuver_cmd, self.tf_other_cmd, self.input_task, self.input_udr, self.input_pdr = _nodes[0]
+                self.input_alex, self.tf_speed_cmd = _nodes[-1]
                 _input_maneuver = {
-                    'input/dave_image': self.input_dave_image,
-                    'input/command': self.input_command,
-                    'input/use_dropout': self.input_use_dropout,
-                    'input/p_dropout': self.input_p_dropout
+                    'input/dave_image': self.input_dave,
+                    'input/maneuver_command': self.tf_maneuver_cmd,
+                    'input/other_command': self.tf_other_cmd,
+                    'input/use_dropout': self.input_udr,
+                    'input/p_dropout': self.input_pdr
                 }
                 _input_speed = {
-                    'input/alex_image': self.input_alex_image,
-                    'input/command': self.input_command
-                }
-                _input_posor = {
-                    'input/alex_image': self.input_alex_image
+                    'input/alex_image': self.input_alex,
+                    'input/command': self.tf_speed_cmd
                 }
                 tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
                 tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
-                tf.import_graph_def(self.posor_graph_def, input_map=_input_posor, name='fp')
                 self.tf_steering = graph.get_tensor_by_name('fm/output/steering:0')
-                self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
                 self.tf_critic = graph.get_tensor_by_name('fm/output/critic:0')
+                self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
+                self.tf_other_critic = graph.get_tensor_by_name('fm/output/other_critic:0')
                 self.tf_entropy = graph.get_tensor_by_name('fm/output/entropy:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
-                self.tf_features = graph.get_tensor_by_name('fp/output/features:0')
 
     def deactivate(self):
         with self._lock:
@@ -175,42 +178,35 @@ class TFDriver(object):
                 self.sess.close()
                 self.sess = None
 
-    def forward(self, dave_image, alex_image, turn, dagger=False):
+    def forward(self, dave_image, alex_image, turn, use_intention, dagger=False):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
-            _ops = [self.tf_steering, self.tf_brake, self.tf_surprise, self.tf_critic, self.tf_entropy]
-            _ret = (0, 1, 1, 1, 0, [0])
+            _ops = [self.tf_steering,
+                    self.tf_critic,
+                    self.tf_surprise,
+                    self.tf_other_critic,
+                    self.tf_brake,
+                    self.tf_entropy]
+            _ret = (0, 1, 1, 1, 1, [0, 0, 0])
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
                 feeder = {
-                    self.input_dave_image: [dave_image],
-                    self.input_alex_image: [alex_image],
-                    self.input_use_dropout: dagger,
-                    self.input_p_dropout: self.p_conv_dropout if dagger else 0,
-                    self.input_command: [_cmd_vector(turn=turn)],
+                    self.input_dave: [dave_image],
+                    self.input_alex: [alex_image],
+                    self.input_udr: dagger,
+                    self.input_pdr: self.p_conv_dropout if dagger else 0,
+                    self.tf_maneuver_cmd: [_maneuver_intention(turn=turn) if use_intention else self._fallback_intention],
+                    self.tf_other_cmd: [self._fallback_intention if use_intention else _maneuver_intention(turn=turn)],
+                    self.tf_speed_cmd: [_speed_intention(turn=turn)],
                     self.input_task: [[0, 0]]
                 }
                 try:
-                    _steer, _brake, _surprise, _critic, _entropy = self.sess.run(_ops, feed_dict=feeder)
-                    return _steer, max(0, _brake), _surprise, max(0, _critic), _entropy
+                    _steering, _critic, _surprise, other_critic, _brake, _entropy = self.sess.run(_ops, feed_dict=feeder)
+                    return _steering, _critic, _surprise, other_critic, max(0, _brake), _entropy
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
                     else:
                         logger.warning(e)
-                    return _ret
-
-    def features(self, image):
-        with self._lock:
-            assert self.sess is not None, "There is no session - run activation prior to calling this method."
-            _ret = [0]
-            if self.tf_features is None:
-                return _ret
-            with self.sess.graph.as_default():
-                feeder = {self.input_alex_image: [image]}
-                try:
-                    return self.sess.run(self.tf_features, feed_dict=feeder).ravel()
-                except (StandardError, CancelledError) as e:
-                    logger.warning(e)
                     return _ret

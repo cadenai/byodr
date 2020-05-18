@@ -15,7 +15,7 @@ from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
-from inference7 import TFDriver, DynamicMomentum
+from inference import TFDriver, DynamicMomentum
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
