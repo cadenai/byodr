@@ -57,7 +57,7 @@ class TFRunner(object):
         self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._errors = _errors
         self._driver.activate()
-        self._use_turn_fallback = False
+        self._switch_intention = False
 
     def get_gpu(self):
         return self._gpu_id
@@ -96,11 +96,11 @@ class TFRunner(object):
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
-                                 use_intention=(not self._use_turn_fallback),
+                                 use_intention=(not self._switch_intention),
                                  dagger=dagger)
 
         # Base the decision on the expected error.
-        self._use_turn_fallback = other_critic_out < critic_out
+        self._switch_intention = other_critic_out < critic_out
 
         # The critic is a good indicator at inference time which is why the difference between them does not work.
         # Using the geometric mean would lessen the impact of large differences between the values.

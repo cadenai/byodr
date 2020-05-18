@@ -50,12 +50,12 @@ def _create_input_nodes():
     input_dave = placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
     input_alex = placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
     maneuver_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/maneuver_command')
-    fallback_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/fallback_command')
+    other_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/other_command')
     speed_command = tf.placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
     input_task = placeholder(dtype=tf.float32, shape=[None, 2], name='input/task')
     input_use_dropout = placeholder(tf.bool, shape=(), name='input/use_dropout')
     input_p_dropout = placeholder(tf.float32, shape=(), name='input/p_dropout')
-    return (input_dave, maneuver_command, fallback_command, input_task, input_use_dropout, input_p_dropout), (input_alex, speed_command)
+    return (input_dave, maneuver_command, other_command, input_task, input_use_dropout, input_p_dropout), (input_alex, speed_command)
 
 
 def _newest_file(path, pattern):
@@ -100,12 +100,12 @@ class TFDriver(object):
         self.input_udr = None
         self.input_pdr = None
         self.tf_maneuver_cmd = None
-        self.tf_fallback_cmd = None
+        self.tf_other_cmd = None
         self.tf_speed_cmd = None
-        self.p_steering = None
-        self.p_critic = None
-        self.p_surprise = None
-        self.f_critic = None
+        self.tf_steering = None
+        self.tf_critic = None
+        self.tf_surprise = None
+        self.tf_other_critic = None
         self.tf_entropy = None
         self.tf_brake = None
         self.sess = None
@@ -149,14 +149,13 @@ class TFDriver(object):
                 logger.warning("Cannot create the graph when one of the parts is missing.")
                 return
             with graph.as_default():
-                nodes_tuple = _create_input_nodes()
-                self.input_dave, self.tf_maneuver_cmd, self.tf_fallback_cmd, self.input_task, self.input_udr, self.input_pdr = nodes_tuple[
-                    0]
-                self.input_alex, self.tf_speed_cmd = nodes_tuple[-1]
+                _nodes = _create_input_nodes()
+                self.input_dave, self.tf_maneuver_cmd, self.tf_other_cmd, self.input_task, self.input_udr, self.input_pdr = _nodes[0]
+                self.input_alex, self.tf_speed_cmd = _nodes[-1]
                 _input_maneuver = {
                     'input/dave_image': self.input_dave,
                     'input/maneuver_command': self.tf_maneuver_cmd,
-                    'input/fallback_command': self.tf_fallback_cmd,
+                    'input/other_command': self.tf_other_cmd,
                     'input/use_dropout': self.input_udr,
                     'input/p_dropout': self.input_pdr
                 }
@@ -166,10 +165,10 @@ class TFDriver(object):
                 }
                 tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
                 tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
-                self.p_steering = graph.get_tensor_by_name('fm/output/p_steering:0')
-                self.p_critic = graph.get_tensor_by_name('fm/output/p_critic:0')
-                self.p_surprise = graph.get_tensor_by_name('fm/output/p_surprise:0')
-                self.f_critic = graph.get_tensor_by_name('fm/output/f_critic:0')
+                self.tf_steering = graph.get_tensor_by_name('fm/output/steering:0')
+                self.tf_critic = graph.get_tensor_by_name('fm/output/critic:0')
+                self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
+                self.tf_other_critic = graph.get_tensor_by_name('fm/output/other_critic:0')
                 self.tf_entropy = graph.get_tensor_by_name('fm/output/entropy:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
 
@@ -182,10 +181,10 @@ class TFDriver(object):
     def forward(self, dave_image, alex_image, turn, use_intention, dagger=False):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
-            _ops = [self.p_steering,
-                    self.p_critic,
-                    self.p_surprise,
-                    self.f_critic,
+            _ops = [self.tf_steering,
+                    self.tf_critic,
+                    self.tf_surprise,
+                    self.tf_other_critic,
                     self.tf_brake,
                     self.tf_entropy]
             _ret = (0, 1, 1, 1, 1, [0, 0, 0])
@@ -198,13 +197,13 @@ class TFDriver(object):
                     self.input_udr: dagger,
                     self.input_pdr: self.p_conv_dropout if dagger else 0,
                     self.tf_maneuver_cmd: [_maneuver_intention(turn=turn) if use_intention else self._fallback_intention],
-                    self.tf_fallback_cmd: [self._fallback_intention],
+                    self.tf_other_cmd: [self._fallback_intention if use_intention else _maneuver_intention(turn=turn)],
                     self.tf_speed_cmd: [_speed_intention(turn=turn)],
                     self.input_task: [[0, 0]]
                 }
                 try:
-                    p_steering, p_critic, p_surprise, f_critic, _brake, _entropy = self.sess.run(_ops, feed_dict=feeder)
-                    return p_steering, p_critic, p_surprise, f_critic, max(0, _brake), _entropy
+                    _steering, _critic, _surprise, other_critic, _brake, _entropy = self.sess.run(_ops, feed_dict=feeder)
+                    return _steering, _critic, _surprise, other_critic, max(0, _brake), _entropy
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
