@@ -96,12 +96,12 @@ class TFDriver(object):
         self._lock = multiprocessing.Lock()
         self.input_dave = None
         self.input_alex = None
-        self.maneuver_cmd = None
-        self.fallback_cmd = None
-        self.speed_cmd = None
         self.input_task = None
         self.input_udr = None
         self.input_pdr = None
+        self.tf_maneuver_cmd = None
+        self.tf_fallback_cmd = None
+        self.tf_speed_cmd = None
         self.p_steering = None
         self.p_critic = None
         self.p_surprise = None
@@ -111,6 +111,7 @@ class TFDriver(object):
         self.sess = None
         self.maneuver_graph_def = None
         self.speed_graph_def = None
+        self._fallback_intention = _maneuver_intention()
 
     def set_conv_dropout_probability(self, p):
         self.p_conv_dropout = p
@@ -149,18 +150,19 @@ class TFDriver(object):
                 return
             with graph.as_default():
                 nodes_tuple = _create_input_nodes()
-                self.input_dave, self.maneuver_cmd, self.fallback_cmd, self.input_task, self.input_udr, self.input_pdr = nodes_tuple[0]
-                self.input_alex, self.speed_cmd = nodes_tuple[-1]
+                self.input_dave, self.tf_maneuver_cmd, self.tf_fallback_cmd, self.input_task, self.input_udr, self.input_pdr = nodes_tuple[
+                    0]
+                self.input_alex, self.tf_speed_cmd = nodes_tuple[-1]
                 _input_maneuver = {
                     'input/dave_image': self.input_dave,
-                    'input/maneuver_command': self.maneuver_cmd,
-                    'input/fallback_command': self.fallback_cmd,
+                    'input/maneuver_command': self.tf_maneuver_cmd,
+                    'input/fallback_command': self.tf_fallback_cmd,
                     'input/use_dropout': self.input_udr,
                     'input/p_dropout': self.input_pdr
                 }
                 _input_speed = {
                     'input/alex_image': self.input_alex,
-                    'input/command': self.speed_cmd
+                    'input/command': self.tf_speed_cmd
                 }
                 tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
                 tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
@@ -177,7 +179,7 @@ class TFDriver(object):
                 self.sess.close()
                 self.sess = None
 
-    def forward(self, dave_image, alex_image, turn, dagger=False):
+    def forward(self, dave_image, alex_image, turn, use_intention, dagger=False):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.p_steering,
@@ -195,9 +197,9 @@ class TFDriver(object):
                     self.input_alex: [alex_image],
                     self.input_udr: dagger,
                     self.input_pdr: self.p_conv_dropout if dagger else 0,
-                    self.maneuver_cmd: [_maneuver_intention(turn=turn)],
-                    self.fallback_cmd: [_maneuver_intention()],
-                    self.speed_cmd: [_speed_intention(turn=turn)],
+                    self.tf_maneuver_cmd: [_maneuver_intention(turn=turn) if use_intention else self._fallback_intention],
+                    self.tf_fallback_cmd: [self._fallback_intention],
+                    self.tf_speed_cmd: [_speed_intention(turn=turn)],
                     self.input_task: [[0, 0]]
                 }
                 try:
