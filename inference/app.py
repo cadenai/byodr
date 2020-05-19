@@ -57,7 +57,6 @@ class TFRunner(object):
         self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._errors = _errors
         self._driver.activate()
-        self._switch_intention = False
 
     def get_gpu(self):
         return self._gpu_id
@@ -92,29 +91,33 @@ class TFRunner(object):
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
 
-        action_out, critic_out, surprise_out, other_critic_out, brake_out, entropy_out = \
+        action_out, critic_out, surprise_out, other_critic_out, other_action_out, brake_out, entropy_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
-                                 use_intention=(not self._switch_intention),
                                  dagger=dagger)
 
-        # Base the decision on the expected error.
-        self._switch_intention = other_critic_out < critic_out
+        surprise = self._fn_corridor_norm(surprise_out)
+        critic = self._fn_corridor_norm(critic_out)
+        other_critic = self._fn_corridor_norm(other_critic_out)
 
         # The critic is a good indicator at inference time which is why the difference between them does not work.
         # Using the geometric mean would lessen the impact of large differences between the values.
-        _corridor_penalty = self._fn_corridor_norm(np.mean([surprise_out, critic_out]))
+        _corridor_penalty = np.mean([surprise, critic])
+
+        # Base the decision on the expected error.
+        _use_fallback = 1 < other_critic < _corridor_penalty
+        steering = other_action_out if _use_fallback else action_out
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
-        return dict(action=float(self._dnn_steering(action_out)),
+        return dict(action=float(self._dnn_steering(steering)),
                     corridor=float(_corridor_penalty),
-                    surprise=float(self._fn_corridor_norm(surprise_out)),
-                    critic=float(self._fn_corridor_norm(critic_out)),
-                    critic2=float(self._fn_corridor_norm(other_critic_out)),
+                    surprise=float(surprise),
+                    critic=float(critic),
+                    critic2=float(other_critic),
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
