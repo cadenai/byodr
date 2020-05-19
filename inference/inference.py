@@ -107,7 +107,6 @@ class TFDriver(object):
         self.tf_surprise = None
         self.tf_critic = None
         self.tf_other_critic = None
-        self.tf_entropy = None
         self.tf_brake = None
         self.sess = None
         self.maneuver_graph_def = None
@@ -171,7 +170,6 @@ class TFDriver(object):
                 self.tf_critic = graph.get_tensor_by_name('fm/output/critic:0')
                 self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
                 self.tf_other_critic = graph.get_tensor_by_name('fm/output/other_critic:0')
-                self.tf_entropy = graph.get_tensor_by_name('fm/output/entropy:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
 
     def deactivate(self):
@@ -188,9 +186,8 @@ class TFDriver(object):
                     self.tf_surprise,
                     self.tf_other_critic,
                     self.tf_other_steering,
-                    self.tf_brake,
-                    self.tf_entropy]
-            _ret = (0, 1, 1, 1, 0, 1, [0, 0, 0])
+                    self.tf_brake]
+            _ret = (0, 1, 1, 1, 0, 1)
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
@@ -205,8 +202,8 @@ class TFDriver(object):
                     self.input_task: [[0, 0]]
                 }
                 try:
-                    _steering, _critic, _surprise, _critic2, _steering2, _brake, _entropy = self.sess.run(_ops, feed_dict=feeder)
-                    return _steering, _critic, _surprise, _critic2, _steering2, max(0, _brake), _entropy
+                    _steering, _critic, _surprise, _critic2, _steering2, _brake = self.sess.run(_ops, feed_dict=feeder)
+                    return _steering, _critic, _surprise, _critic2, _steering2, max(0, _brake)
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')

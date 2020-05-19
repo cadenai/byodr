@@ -91,7 +91,7 @@ class TFRunner(object):
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
 
-        action_out, critic_out, surprise_out, other_critic_out, other_action_out, brake_out, entropy_out = \
+        action_out, critic_out, surprise_out, other_critic_out, other_action_out, brake_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
@@ -106,7 +106,7 @@ class TFRunner(object):
         _corridor_penalty = np.mean([surprise, critic])
 
         # Base the decision on the expected error.
-        _use_fallback = 1 < other_critic < _corridor_penalty
+        _use_fallback = 1 > other_critic < critic
         steering = other_action_out if _use_fallback else action_out
 
         # Penalties to decrease desired speed.
@@ -117,7 +117,7 @@ class TFRunner(object):
                     corridor=float(_corridor_penalty),
                     surprise=float(surprise),
                     critic=float(critic),
-                    critic2=float(other_critic),
+                    critic2=float(0 if _use_fallback else other_critic),
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
