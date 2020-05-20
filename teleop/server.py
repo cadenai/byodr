@@ -105,7 +105,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'debug3': 0 if inference is None else inference.get('penalty'),
                 'debug4': 0 if inference is None else inference.get('surprise'),
                 'debug5': 0 if inference is None else inference.get('critic'),
-                'debug6': 0 if inference is None else inference.get('critic2'),
+                'debug6': 0 if inference is None else inference.get('fallback'),
                 'rec_act': False if recorder is None else recorder.get('active'),
                 'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),

@@ -91,33 +91,36 @@ class TFRunner(object):
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
 
-        action_out, critic_out, surprise_out, other_critic_out, other_action_out, brake_out = \
+        action_out, critic_out, surprise_out, other_action_out, other_critic_out, other_suprise_out, brake_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
                                  dagger=dagger)
 
-        surprise = self._fn_corridor_norm(surprise_out)
         critic = self._fn_corridor_norm(critic_out)
-        other_critic = self._fn_corridor_norm(other_critic_out)
+        critic2 = self._fn_corridor_norm(other_critic_out)
+        surprise = self._fn_corridor_norm(surprise_out)
+        surprise2 = self._fn_corridor_norm(other_suprise_out)
 
         # The critic is a good indicator at inference time which is why the difference between them does not work.
         # Using the geometric mean would lessen the impact of large differences between the values.
-        _corridor_penalty = np.mean([surprise, critic])
+        _corridor = np.mean([surprise, critic])
+        _corridor2 = np.mean([surprise2, critic2])
 
         # Base the decision on the expected error.
-        _use_fallback = 1 > other_critic < critic
-        steering = other_action_out if _use_fallback else action_out
+        _use_fallback = 1 > critic2 < critic
+        d_steering = other_action_out if _use_fallback else action_out
+        d_corridor = _corridor2 if _use_fallback else _corridor
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
-        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
+        _total_penalty = max(0, min(1, self._penalty_filter.calculate(d_corridor + _obstacle_penalty)))
 
-        return dict(action=float(self._dnn_steering(steering)),
-                    corridor=float(_corridor_penalty),
-                    surprise=float(surprise),
-                    critic=float(critic),
-                    critic2=float(0 if _use_fallback else other_critic),
+        return dict(action=float(self._dnn_steering(d_steering)),
+                    corridor=float(d_corridor),
+                    surprise=float(surprise2 if _use_fallback else surprise),
+                    critic=float(critic2 if _use_fallback else critic),
+                    fallback=int(_use_fallback),
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
