@@ -426,8 +426,9 @@ class DriverManager(object):
 
     def turn_instruction(self, turn):
         with self._lock:
-            if self.get_driver_ctl() != 'driver_mode.teleop.direct':
-                self._pilot_state.instruction = turn
+            _is_ahead = self._pilot_state.instruction == turn and turn == 'intersection.ahead'
+            intention = 'general.fallback' if _is_ahead else turn
+            self._pilot_state.instruction = intention
 
     def get_driver_ctl(self):
         return self._driver_ctl

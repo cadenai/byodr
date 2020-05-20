@@ -125,7 +125,7 @@ class DirectRecorder(AbstractRecorder):
             return 0
 
     def _persist_event(self, event):
-        _commands = ('intersection.left', 'intersection.ahead', 'intersection.right')
+        _commands = ('general.fallback', 'intersection.left', 'intersection.ahead', 'intersection.right')
         assert event.command in _commands, "Command {} not recognized.".format(event.command)
         event.vehicle = self._vehicle_type
         event.vehicle_config = self._vehicle_config

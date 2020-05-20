@@ -162,8 +162,11 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
                 case "intersection.right":
                     el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.11');
                     break;
-                default:
+                case "intersection.ahead":
                     el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.11');
+                    break;
+                default:
+                    el_turn_arrow.attr('src', '');
                     break;
             }
         }

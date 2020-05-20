@@ -84,7 +84,7 @@ def _maneuver_intention(turn='general.fallback', dtype=np.float32):
 def _speed_intention(turn='intersection.ahead', dtype=np.float32):
     command = np.zeros(3, dtype=dtype)
     _options = {'intersection.left': 0, 'intersection.ahead': 1, 'intersection.right': 2}
-    command[_options[turn]] = 1
+    command[_options.get(turn, 1)] = 1
     return command
 
 
