@@ -107,8 +107,8 @@ class TFRunner(object):
         _corridor = np.mean([surprise, critic])
         _corridor2 = np.mean([surprise2, critic2])
 
-        # Base the decision on the expected error.
-        _use_fallback = 1 > critic2 < critic
+        # Base the decision on the corridor.
+        _use_fallback = intention == 'general.fallback' or 1 > _corridor2 < _corridor
         d_steering = other_action_out if _use_fallback else action_out
         d_corridor = _corridor2 if _use_fallback else _corridor
 
