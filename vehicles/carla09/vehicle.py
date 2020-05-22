@@ -138,14 +138,16 @@ class CarlaHandler(object):
 
     def state(self):
         x, y = self._position()
-        ap_steering, ap_throttle = 0, 0
+        ap_active, ap_steering, ap_throttle = False, 0, 0
         if self._actor is not None and self._actor.is_alive and self._on_carla_autopilot:
+            ap_active = True
             ap_steering = self._actor.get_control().steer
             ap_throttle = self._actor.get_control().throttle
         return dict(x_coordinate=x,
                     y_coordinate=y,
                     heading=self._heading(),
                     velocity=self._velocity(),
+                    auto_active=ap_active,
                     auto_steering=ap_steering,
                     auto_throttle=ap_throttle,
                     time=timestamp())

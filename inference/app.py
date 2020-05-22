@@ -32,7 +32,6 @@ def _interrupt():
 class TFRunner(object):
     def __init__(self, model_directory, **kwargs):
         self._lock = multiprocessing.Lock()
-        self._dagger = False
         self._hash = hash_dict(**kwargs)
         _errors = []
         self._gpu_id = parse_option('gpu.id', int, 0, _errors, **kwargs)
@@ -55,6 +54,7 @@ class TFRunner(object):
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
         self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
+        self._dagger = p_conv_dropout > 0
         self._errors = _errors
         self._driver.activate()
 
@@ -73,10 +73,6 @@ class TFRunner(object):
     def quit(self):
         self._driver.deactivate()
 
-    def set_dagger(self, value):
-        with self._lock:
-            self._dagger = value
-
     def _dnn_steering(self, raw):
         return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
 
@@ -86,10 +82,9 @@ class TFRunner(object):
         return abs(max(0., v - min_) / (max_ - min_))
 
     def forward(self, image, intention):
-        with self._lock:
-            dagger = self._dagger
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
+        dagger = self._dagger
 
         action_out, critic_out, surprise_out, other_action_out, other_critic_out, other_suprise_out, brake_out = \
             self._driver.forward(dave_image=_dave_img,

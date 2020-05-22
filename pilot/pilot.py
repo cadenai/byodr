@@ -298,16 +298,39 @@ class StaticCruiseDriver(AbstractCruiseControl):
 class BackendAutopilotDriver(AbstractCruiseControl):
     def __init__(self, **kwargs):
         super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
-        self._corridor_threshold = .99
 
     def get_action(self, *args):
         blob, vehicle, inference = args
-        blob.desired_speed = vehicle.get('velocity', 0)
-        blob.steering = vehicle.get('auto_steering', 0)
-        blob.throttle = vehicle.get('auto_throttle', 0)
-        blob.steering_driver = OriginType.BACKEND_AUTOPILOT
-        blob.speed_driver = OriginType.BACKEND_AUTOPILOT
-        blob.save_event = inference is None or inference.get('corridor') > self._corridor_threshold
+        # Vehicle is required, the user command and inference are optional.
+        if inference is None:
+            # Assume the backend is active.
+            blob.desired_speed = vehicle.get('velocity')
+            blob.steering = vehicle.get('auto_steering')
+            blob.throttle = vehicle.get('auto_throttle')
+            blob.steering_driver = OriginType.BACKEND_AUTOPILOT
+            blob.speed_driver = OriginType.BACKEND_AUTOPILOT
+            blob.save_event = True
+        else:
+            velocity = vehicle.get('velocity')
+            dnn_desired_speed = max(5, velocity * 1.01)
+            dnn_throttle = self.calculate_throttle(desired_speed=dnn_desired_speed, current_speed=velocity)
+            if inference.get('corridor') < 1:
+                blob.driver = 'driver_mode.inference.dnn'
+                blob.desired_speed = dnn_desired_speed
+                blob.steering = inference.get('action')
+                blob.throttle = dnn_throttle
+                blob.steering_driver = OriginType.DNN
+                blob.speed_driver = OriginType.DNN
+                blob.save_event = False
+            else:
+                backend_active = vehicle.get('auto_active')
+                blob.driver = 'driver_mode.automatic.backend'
+                blob.desired_speed = vehicle.get('velocity') if backend_active else dnn_desired_speed
+                blob.steering = vehicle.get('auto_steering') if backend_active else inference.get('action')
+                blob.throttle = vehicle.get('auto_throttle') if backend_active else dnn_throttle
+                blob.steering_driver = OriginType.BACKEND_AUTOPILOT if backend_active else OriginType.DNN
+                blob.speed_driver = OriginType.BACKEND_AUTOPILOT if backend_active else OriginType.DNN
+                blob.save_event = backend_active
 
 
 class DeepNetworkDriver(AbstractCruiseControl):
@@ -434,6 +457,7 @@ class DriverManager(object):
         return self._driver_ctl
 
     def switch_ctl(self, control='driver_mode.teleop.direct'):
+        self.turn_instruction('general.fallback')
         if control is not None and control.lower() not in ('none', 'null', 'ignore', '0', 'false'):
             with self._lock:
                 self._pilot_state.cruise_speed = 0

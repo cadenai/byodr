@@ -2,7 +2,7 @@ var mjpeg_controller = {
     actual_fps: 0,
     target_fps: 16,
     display_resolution: 'default',
-    jpeg_quality: 50,
+    jpeg_quality: 20,
     min_jpeg_quality: 15,
     max_jpeg_quality: 95,
 
