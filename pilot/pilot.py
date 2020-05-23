@@ -467,9 +467,7 @@ class DriverManager(object):
 
     def turn_instruction(self, turn):
         with self._lock:
-            _is_ahead = self._pilot_state.instruction == turn and turn == 'intersection.ahead'
-            intention = 'general.fallback' if _is_ahead else turn
-            self._pilot_state.instruction = intention
+            self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
 
     def get_driver_ctl(self):
         return self._driver_ctl

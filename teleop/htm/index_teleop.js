@@ -133,7 +133,7 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         el_pilot_throttle.text(command.thr.toFixed(2));
         el_inference_penalty.text(command.debug3.toFixed(2));
         el_inference_surprise.text(command.debug4.toFixed(2));
-        el_inference_critic.text(command.debug5.toFixed(2));
+        el_inference_critic.text(command.debug7.toFixed(3));
         var txt_fallback = 'a';
         if (command.debug6 == 1) {
             txt_fallback = 'b';

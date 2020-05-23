@@ -11,7 +11,7 @@ from functools import partial
 
 import numpy as np
 
-from byodr.utils import timestamp
+from byodr.utils import timestamp, entropy
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
@@ -56,6 +56,7 @@ class TFRunner(object):
         self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._dagger = p_conv_dropout > 0
         self._errors = _errors
+        self._max_entropy = entropy([.25] * 4)
         self._driver.activate()
 
     def get_gpu(self):
@@ -86,7 +87,7 @@ class TFRunner(object):
         _alex_img = self._fn_alex_image(image)
         dagger = self._dagger
 
-        action_out, critic_out, surprise_out, other_action_out, other_critic_out, other_suprise_out, brake_out = \
+        action_out, critic_out, surprise_out, other_action_out, other_critic_out, other_suprise_out, brake_out, internal_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
@@ -102,8 +103,11 @@ class TFRunner(object):
         _corridor = np.mean([surprise, critic])
         _corridor2 = np.mean([surprise2, critic2])
 
+        #
+        _entropy = entropy(internal_out) / self._max_entropy
+
         # Base the decision on the corridor.
-        _use_fallback = intention == 'general.fallback' or 1 > _corridor2 < _corridor
+        _use_fallback = intention == 'general.fallback' or _entropy < .01
         d_steering = other_action_out if _use_fallback else action_out
         d_corridor = _corridor2 if _use_fallback else _corridor
 
@@ -119,6 +123,7 @@ class TFRunner(object):
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
+                    internal=float(_entropy),
                     time=timestamp()
                     )
 
