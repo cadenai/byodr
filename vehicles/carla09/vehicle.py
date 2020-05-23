@@ -43,6 +43,7 @@ class CarlaHandler(object):
         self._vehicle_tick = None
         self._on_carla_autopilot = False
         self._change_weather_time = 0
+        self._on_reverse = False
 
     def _reset_agent_travel(self):
         logger.info("Actor distance traveled is {:8.3f}.".format(self._actor_distance_traveled))
@@ -59,6 +60,7 @@ class CarlaHandler(object):
     def _reset(self):
         logger.info('Resetting ...')
         self._on_carla_autopilot = False
+        self._on_reverse = False
         self._destroy()
         #
         blueprint_library = self._world.get_blueprint_library()
@@ -113,9 +115,13 @@ class CarlaHandler(object):
 
     def _drive(self, steering, throttle):
         try:
+            _reverse = self._on_reverse
             control = carla.VehicleControl()
+            control.reverse = _reverse
             control.steer = steering
-            if throttle > 0:
+            if _reverse:
+                control.throttle = abs(throttle)
+            elif throttle > 0:
                 control.throttle = throttle
             else:
                 control.brake = abs(throttle)
@@ -128,6 +134,12 @@ class CarlaHandler(object):
         if self._on_carla_autopilot != _autopilot:
             self._on_carla_autopilot = _autopilot
             self._actor.set_autopilot(_autopilot, self._tm_port)
+
+    def _track_reverse(self, command):
+        if self._on_reverse:
+            self._on_reverse = command.get('throttle') <= 0
+        else:
+            self._on_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.9 and command.get('arrow_down', 0) == 1
 
     def _set_random_weather(self):
         if self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
@@ -177,5 +189,6 @@ class CarlaHandler(object):
     def drive(self, cmd):
         if cmd is not None and self._actor is not None:
             self._track_carla_autopilot(cmd.get('driver'))
+            self._track_reverse(cmd)
             if not self._on_carla_autopilot:
                 self._drive(steering=cmd.get('steering'), throttle=cmd.get('throttle'))

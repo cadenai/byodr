@@ -134,7 +134,7 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         el_inference_penalty.text(command.debug3.toFixed(2));
         el_inference_surprise.text(command.debug4.toFixed(2));
         el_inference_critic.text(command.debug5.toFixed(2));
-        var txt_fallback = ' ';
+        var txt_fallback = 'a';
         if (command.debug6 == 1) {
             txt_fallback = 'b';
         }

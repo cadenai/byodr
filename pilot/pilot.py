@@ -61,6 +61,8 @@ class Blob(AttrDict):
         self.steering = kwargs.get('steering', 0)
         self.steering_driver = kwargs.get('steering_driver')
         self.throttle = kwargs.get('throttle', 0)
+        self.arrow_up = kwargs.get('arrow_up')
+        self.arrow_down = kwargs.get('arrow_down')
         if self.forced_steering is None:
             self.forced_steering = abs(self.steering) > 0
         if self.forced_throttle is None:
@@ -298,7 +300,7 @@ class StaticCruiseDriver(AbstractCruiseControl):
 class BackendAutopilotDriver(AbstractCruiseControl):
     def __init__(self, **kwargs):
         super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
-        self._version = 'v2'
+        self._version = 'v3'
 
     def get_action(self, *args):
         blob, vehicle, inference = args
@@ -330,7 +332,7 @@ class BackendAutopilotDriver(AbstractCruiseControl):
         velocity = vehicle.get('velocity')
         dnn_desired_speed = max(5, velocity * 1.01)
         dnn_throttle = self.calculate_throttle(desired_speed=dnn_desired_speed, current_speed=velocity)
-        if inference.get('corridor') < 1:
+        if inference.get('critic') < 1:
             blob.driver = 'driver_mode.inference.dnn'
             blob.desired_speed = dnn_desired_speed
             blob.steering = inference.get('action')
