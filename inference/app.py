@@ -57,6 +57,7 @@ class TFRunner(object):
         self._dagger = p_conv_dropout > 0
         self._errors = _errors
         self._max_entropy = entropy([.25] * 4)
+        self._fallback = False
         self._driver.activate()
 
     def get_gpu(self):
@@ -87,39 +88,33 @@ class TFRunner(object):
         _alex_img = self._fn_alex_image(image)
         dagger = self._dagger
 
-        action_out, critic_out, surprise_out, other_action_out, other_critic_out, other_suprise_out, brake_out, internal_out = \
+        action_out, critic_out, surprise_out, brake_out, internal_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
+                                 fallback=self._fallback,
                                  dagger=dagger)
 
         critic = self._fn_corridor_norm(critic_out)
-        critic2 = self._fn_corridor_norm(other_critic_out)
         surprise = self._fn_corridor_norm(surprise_out)
-        surprise2 = self._fn_corridor_norm(other_suprise_out)
 
         # The critic is a good indicator at inference time which is why the difference between them does not work.
         # Using the geometric mean would lessen the impact of large differences between the values.
         _corridor = np.mean([surprise, critic])
-        _corridor2 = np.mean([surprise2, critic2])
 
-        #
+        # Internal intentions could still have high entropy if multiple skills are combined.
         _entropy = entropy(internal_out) / self._max_entropy
-
-        # Base the decision on the corridor.
-        _use_fallback = intention == 'general.fallback' or _entropy < .01
-        d_steering = other_action_out if _use_fallback else action_out
-        d_corridor = _corridor2 if _use_fallback else _corridor
+        self._fallback = intention == 'general.fallback' or _entropy < 0.100
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
-        _total_penalty = max(0, min(1, self._penalty_filter.calculate(d_corridor + _obstacle_penalty)))
+        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor + _obstacle_penalty)))
 
-        return dict(action=float(self._dnn_steering(d_steering)),
-                    corridor=float(d_corridor),
-                    surprise=float(surprise2 if _use_fallback else surprise),
-                    critic=float(critic2 if _use_fallback else critic),
-                    fallback=int(_use_fallback),
+        return dict(action=float(self._dnn_steering(action_out)),
+                    corridor=float(_corridor),
+                    surprise=float(surprise),
+                    critic=float(critic),
+                    fallback=int(self._fallback),
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),

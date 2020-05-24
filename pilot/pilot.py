@@ -5,6 +5,7 @@ import traceback
 from abc import ABCMeta, abstractmethod
 
 import cachetools
+import numpy as np
 import pid_controller.pid as pic
 
 from byodr.utils import timestamp
@@ -301,6 +302,7 @@ class BackendAutopilotDriver(AbstractCruiseControl):
     def __init__(self, **kwargs):
         super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
         self._version = 'v3'
+        self._desired_speed = 2.0
 
     def get_action(self, *args):
         blob, vehicle, inference = args
@@ -329,11 +331,16 @@ class BackendAutopilotDriver(AbstractCruiseControl):
 
     def _action_v3(self, *args):
         blob, vehicle, inference = args
-        velocity = vehicle.get('velocity')
-        dnn_desired_speed = max(5, velocity * 1.01)
-        dnn_throttle = self.calculate_throttle(desired_speed=dnn_desired_speed, current_speed=velocity)
+        self._desired_speed = min(12., max(2., self._desired_speed * 1.0001))
+        dnn_desired_speed = self._desired_speed
+        dnn_throttle = self.calculate_throttle(desired_speed=dnn_desired_speed, current_speed=vehicle.get('velocity'))
         if inference.get('critic') < 1:
             blob.driver = 'driver_mode.inference.dnn'
+            if inference.get('internal') < .050:
+                blob.instruction = 'general.fallback'
+            elif blob.instruction == 'general.fallback' and inference.get('internal') > .200:
+                blob.instruction = np.random.choice(['intersection.left', 'intersection.ahead', 'intersection.right'])
+            blob.cruise_speed = dnn_desired_speed
             blob.desired_speed = dnn_desired_speed
             blob.steering = inference.get('action')
             blob.throttle = dnn_throttle
@@ -342,6 +349,7 @@ class BackendAutopilotDriver(AbstractCruiseControl):
             blob.save_event = False
         else:
             backend_active = vehicle.get('auto_active')
+            self._desired_speed = vehicle.get('velocity') if backend_active else self._desired_speed
             blob.driver = 'driver_mode.automatic.backend'
             blob.desired_speed = vehicle.get('velocity') if backend_active else dnn_desired_speed
             blob.steering = vehicle.get('auto_steering') if backend_active else inference.get('action')
@@ -499,10 +507,13 @@ class DriverManager(object):
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         **command)
+            old_instruction = self._pilot_state.instruction
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
             blob.steering = self._steering_stabilizer.calculate(blob.steering)
+            if blob.driver == 'driver_mode.inference.dnn' and blob.instruction != old_instruction:
+                self.turn_instruction(blob.instruction)
             return blob
 
     def quit(self):
