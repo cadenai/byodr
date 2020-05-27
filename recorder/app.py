@@ -89,19 +89,24 @@ class ImageEventLog(object):
 
 
 class EventHandler(threading.Thread):
-    def __init__(self, directory, event, **kwargs):
+    def __init__(self, directory, **kwargs):
         super(EventHandler, self).__init__()
+        _errors = []
+        self._hash = hash_dict(**kwargs)
         self._directory = directory
-        self._quit_event = event
-        self._vehicle = kwargs.get('constant.vehicle.type')
-        self._config = kwargs.get('constant.vehicle.config')
-        _im_height, _im_width = kwargs.get('image.persist.scale').split('x')
+        self._quit_event = threading.Event()
+        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        self._publish_frequency = parse_option('publish.hz', int, 1, _errors, **kwargs)
+        self._vehicle = parse_option('constant.vehicle.type', str, 'none', _errors, **kwargs)
+        self._config = parse_option('constant.vehicle.config', str, 'none', _errors, **kwargs)
+        _im_height, _im_width = parse_option('image.persist.scale', str, '240x320', _errors, **kwargs).split('x')
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
         self._active = False
         self._tracker = ImageEventLog()
         self._recorder = get_or_create_recorder(directory=directory, mode=None)
         self._recent = collections.deque(maxlen=100)
+        self._errors = _errors
 
     @staticmethod
     def _cruising(mode):
@@ -122,6 +127,18 @@ class EventHandler(threading.Thread):
                                       vehicle_type=self._vehicle,
                                       vehicle_config=self._config)
 
+    def get_errors(self):
+        return self._errors
+
+    def get_process_frequency(self):
+        return self._process_frequency
+
+    def get_publish_frequency(self):
+        return self._publish_frequency
+
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
+
     def state(self):
         return dict(active=self._active, mode=self._recorder.get_mode())
 
@@ -141,6 +158,9 @@ class EventHandler(threading.Thread):
             self._active = False
         if self._active:
             self._tracker.append(blob, vehicle, image_meta, image)
+
+    def quit(self):
+        self._quit_event.set()
 
     def run(self):
         while not self._quit_event.is_set():
@@ -164,57 +184,17 @@ class IPCServer(LocalIPCServer):
         return {}
 
 
-class LocalHandler(object):
-    def __init__(self, sessions_dir, **kwargs):
-        self._hash = -1
-        self._errors = []
-        self._process_frequency = 1
-        self._publish_frequency = 1
-        self._event_handler = EventHandler(directory=sessions_dir, event=quit_event, **kwargs)
-        self.reload(**kwargs)
-
-    def get_errors(self):
-        return self._errors
-
-    def get_process_frequency(self):
-        return self._process_frequency
-
-    def get_publish_frequency(self):
-        return self._publish_frequency
-
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs)
-
-    def start(self):
-        self._event_handler.start()
-
-    def reload(self, **kwargs):
-        _errors = []
-        self._hash = hash_dict(**kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
-        self._publish_frequency = parse_option('publish.hz', int, 1, _errors, **kwargs)
-        self._errors = _errors
-
-    def state(self):
-        return self._event_handler.state()
-
-    def record(self, blob, vehicle, image_meta, image):
-        self._event_handler.record(blob, vehicle, image_meta, image)
-
-    def join(self):
-        self._event_handler.join()
-
-
 def create_handler(ipc_server, config_dir, sessions_dir, previous=None):
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
     cfg = dict(parser.items('recorder'))
     _configured = False
     if previous is None:
-        previous = LocalHandler(sessions_dir, **cfg)
+        previous = EventHandler(sessions_dir, **cfg)
         _configured = True
     elif previous.is_reconfigured(**cfg):
-        previous.reload(**cfg)
+        previous.quit()
+        previous = EventHandler(sessions_dir, **cfg)
         _configured = True
     if _configured:
         ipc_server.register_start(previous.get_errors())
@@ -265,6 +245,8 @@ def main():
             else:
                 _proc_sleep = max_process_duration - (time.time() - proc_start)
                 time.sleep(max(0., _proc_sleep))
+        logger.info("Waiting on handler to quit.")
+        handler.quit()
     except KeyboardInterrupt:
         quit_event.set()
     except StandardError as e:

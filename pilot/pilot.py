@@ -301,7 +301,7 @@ class StaticCruiseDriver(AbstractCruiseControl):
 class BackendAutopilotDriver(AbstractCruiseControl):
     def __init__(self, **kwargs):
         super(BackendAutopilotDriver, self).__init__('driver_mode.automatic.backend', **kwargs)
-        self._version = 'v3'
+        self._version = 'v2'
         self._desired_speed = 2.0
 
     def get_action(self, *args):
@@ -327,7 +327,7 @@ class BackendAutopilotDriver(AbstractCruiseControl):
         blob.throttle = vehicle.get('auto_throttle')
         blob.steering_driver = OriginType.BACKEND_AUTOPILOT
         blob.speed_driver = OriginType.BACKEND_AUTOPILOT
-        blob.save_event = inference.get('corridor') > .95
+        blob.save_event = inference.get('corridor') > .95 or inference.get('surprise') > .95
 
     def _action_v3(self, *args):
         blob, vehicle, inference = args
@@ -338,7 +338,7 @@ class BackendAutopilotDriver(AbstractCruiseControl):
             blob.driver = 'driver_mode.inference.dnn'
             if inference.get('internal') < .050:
                 blob.instruction = 'general.fallback'
-            elif blob.instruction == 'general.fallback' and inference.get('internal') > .200:
+            elif blob.instruction == 'general.fallback' and inference.get('internal') >= .050:
                 blob.instruction = np.random.choice(['intersection.left', 'intersection.ahead', 'intersection.right'])
             blob.cruise_speed = dnn_desired_speed
             blob.desired_speed = dnn_desired_speed

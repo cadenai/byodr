@@ -8,7 +8,7 @@ import carla
 import numpy as np
 
 from byodr.utils import timestamp
-from byodr.utils.option import parse_option
+from byodr.utils.option import parse_option, hash_dict
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ CAMERA_SHAPE = (480, 640, 3)
 class CarlaHandler(object):
 
     def __init__(self, fn_on_image, **kwargs):
+        self._hash = hash_dict(**kwargs)
         _errors = []
         _remote = parse_option('host.location', str, 'localhost', _errors, **kwargs)
         carla_host, carla_port = _remote, 2000
@@ -44,6 +45,7 @@ class CarlaHandler(object):
         self._on_carla_autopilot = False
         self._change_weather_time = 0
         self._on_reverse = False
+        self._errors = _errors
 
     def _reset_agent_travel(self):
         logger.info("Actor distance traveled is {:8.3f}.".format(self._actor_distance_traveled))
@@ -147,6 +149,12 @@ class CarlaHandler(object):
             preset = np.random.choice([x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)])
             logger.info("Setting the weather to preset '{}'.".format(preset))
             self._world.set_weather(getattr(carla.WeatherParameters, preset))
+
+    def get_errors(self):
+        return self._errors
+
+    def is_reconfigured(self, **kwargs):
+        return self._hash != hash_dict(**kwargs)
 
     def state(self):
         x, y = self._position()

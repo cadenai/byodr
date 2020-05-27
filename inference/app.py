@@ -104,7 +104,7 @@ class TFRunner(object):
 
         # Internal intentions could still have high entropy if multiple skills are combined.
         _entropy = entropy(internal_out) / self._max_entropy
-        self._fallback = intention == 'general.fallback' or _entropy < 0.100
+        self._fallback = intention == 'general.fallback' or _entropy < 0.050
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
