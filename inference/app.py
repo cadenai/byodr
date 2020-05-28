@@ -11,7 +11,7 @@ from functools import partial
 
 import numpy as np
 
-from byodr.utils import timestamp, entropy
+from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
@@ -55,8 +55,8 @@ class TFRunner(object):
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
         self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._dagger = p_conv_dropout > 0
+        self._poi_fallback = parse_option('driver.autopilot.poi.fallback', float, 0, _errors, **kwargs)
         self._errors = _errors
-        self._max_entropy = entropy([.25] * 4)
         self._fallback = False
         self._driver.activate()
 
@@ -102,9 +102,9 @@ class TFRunner(object):
         # Using the geometric mean would lessen the impact of large differences between the values.
         _corridor = np.mean([surprise, critic])
 
-        # Internal intentions could still have high entropy if multiple skills are combined.
-        _entropy = entropy(internal_out) / self._max_entropy
-        self._fallback = intention == 'general.fallback' or _entropy < 0.050
+        # The decision points were made dependant on turn marked samples during training.
+        _poi = np.sum(internal_out)
+        self._fallback = intention == 'general.fallback' or _poi < self._poi_fallback
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
@@ -118,7 +118,7 @@ class TFRunner(object):
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
-                    internal=float(_entropy),
+                    internal=float(_poi),
                     time=timestamp()
                     )
 
