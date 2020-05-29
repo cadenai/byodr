@@ -15,7 +15,7 @@ from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import hash_dict, parse_option
 from image import get_registered_function
-from inference import TFDriver, DynamicMomentum
+from inference import TFDriver, DynamicMomentum, maneuver_index
 
 logger = logging.getLogger(__name__)
 quit_event = multiprocessing.Event()
@@ -103,7 +103,8 @@ class TFRunner(object):
         _corridor = np.mean([surprise, critic])
 
         # The decision points were made dependant on turn marked samples during training.
-        self._fallback = intention == 'general.fallback'
+        _intention_index = maneuver_index(intention)
+        self._fallback = _intention_index == 0 or internal_out[_intention_index - 1] < self._poi_fallback
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
