@@ -103,8 +103,7 @@ class TFRunner(object):
         _corridor = np.mean([surprise, critic])
 
         # The decision points were made dependant on turn marked samples during training.
-        _poi = np.sum(internal_out)
-        self._fallback = intention == 'general.fallback' or _poi < self._poi_fallback
+        self._fallback = intention == 'general.fallback'
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out)
@@ -118,7 +117,7 @@ class TFRunner(object):
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
-                    internal=float(_poi),
+                    internal=[float(x) for x in internal_out],
                     time=timestamp()
                     )
 
