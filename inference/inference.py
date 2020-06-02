@@ -50,12 +50,9 @@ def _create_input_nodes():
     input_dave = placeholder(dtype=tf.uint8, shape=[None, 3, 66, 200], name='input/dave_image')
     input_alex = placeholder(dtype=tf.uint8, shape=[None, 227, 227, 3], name='input/alex_image')
     maneuver_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/maneuver_command')
-    # other_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/other_command')
-    speed_command = tf.placeholder(dtype=tf.float32, shape=[None, 3], name='input/command')
-    input_task = placeholder(dtype=tf.float32, shape=[None, 2], name='input/task')
     input_use_dropout = placeholder(tf.bool, shape=(), name='input/use_dropout')
     input_p_dropout = placeholder(tf.float32, shape=(), name='input/p_dropout')
-    return (input_dave, maneuver_command, input_task, input_use_dropout, input_p_dropout), (input_alex, speed_command)
+    return (input_dave, maneuver_command, input_use_dropout, input_p_dropout), input_alex
 
 
 def _newest_file(path, pattern):
@@ -100,20 +97,15 @@ class TFDriver(object):
         self._lock = multiprocessing.Lock()
         self.input_dave = None
         self.input_alex = None
-        self.input_task = None
         self.input_udr = None
         self.input_pdr = None
         self.tf_maneuver_cmd = None
-        # self.tf_other_cmd = None
-        self.tf_speed_cmd = None
         self.tf_steering = None
-        # self.tf_other_steering = None
         self.tf_critic = None
-        # self.tf_other_critic = None
         self.tf_surprise = None
-        # self.tf_other_surprise = None
         self.tf_internal = None
         self.tf_brake = None
+        self.tf_category = None
         self.sess = None
         self.maneuver_graph_def = None
         self.speed_graph_def = None
@@ -156,29 +148,25 @@ class TFDriver(object):
                 return
             with graph.as_default():
                 _nodes = _create_input_nodes()
-                self.input_dave, self.tf_maneuver_cmd, self.input_task, self.input_udr, self.input_pdr = _nodes[0]
-                self.input_alex, self.tf_speed_cmd = _nodes[-1]
+                self.input_dave, self.tf_maneuver_cmd, self.input_udr, self.input_pdr = _nodes[0]
+                self.input_alex = _nodes[-1]
                 _input_maneuver = {
                     'input/dave_image': self.input_dave,
                     'input/maneuver_command': self.tf_maneuver_cmd,
-                    # 'input/other_command': self.tf_other_cmd,
                     'input/use_dropout': self.input_udr,
                     'input/p_dropout': self.input_pdr
                 }
                 _input_speed = {
-                    'input/alex_image': self.input_alex,
-                    'input/command': self.tf_speed_cmd
+                    'input/alex_image': self.input_alex
                 }
                 tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
                 tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
                 self.tf_steering = graph.get_tensor_by_name('fm/output/steering:0')
-                # self.tf_other_steering = graph.get_tensor_by_name('fm/output/other_steering:0')
                 self.tf_critic = graph.get_tensor_by_name('fm/output/critic:0')
-                # self.tf_other_critic = graph.get_tensor_by_name('fm/output/other_critic:0')
                 self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
-                # self.tf_other_surprise = graph.get_tensor_by_name('fm/output/other_surprise:0')
                 self.tf_internal = graph.get_tensor_by_name('fm/output/internal:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
+                self.tf_category = graph.get_tensor_by_name('fs/output/category:0')
 
     def deactivate(self):
         with self._lock:
@@ -192,12 +180,11 @@ class TFDriver(object):
             _ops = [self.tf_steering,
                     self.tf_critic,
                     self.tf_surprise,
-                    # self.tf_other_steering,
-                    # self.tf_other_critic,
-                    # self.tf_other_surprise,
+                    self.tf_internal,
                     self.tf_brake,
-                    self.tf_internal]
-            _ret = (0, 1, 1, 1, [0, 0, 0, 0])
+                    self.tf_category
+                    ]
+            _ret = (0, 1, 1, [0, 0, 0, 0], 1, [0, 1])
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
@@ -206,14 +193,11 @@ class TFDriver(object):
                     self.input_alex: [alex_image],
                     self.input_udr: dagger,
                     self.input_pdr: self.p_conv_dropout if dagger else 0,
-                    self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)],
-                    # self.tf_other_cmd: [self._fallback_intention],
-                    self.tf_speed_cmd: [speed_intention(turn=turn)],
-                    self.input_task: [[0, 0]]
+                    self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
-                    _action, _critic, _surprise, _brake, _internal = self.sess.run(_ops, feed_dict=feeder)
-                    return _action, _critic, _surprise, max(0, _brake), map(lambda x: max(0, x), _internal)
+                    _action, _critic, _surprise, _internal, _brake, _category = self.sess.run(_ops, feed_dict=feeder)
+                    return _action, _critic, _surprise, map(lambda x: max(0, x), _internal), max(0, _brake), _category
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
