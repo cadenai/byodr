@@ -105,7 +105,6 @@ class TFDriver(object):
         self.tf_surprise = None
         self.tf_internal = None
         self.tf_brake = None
-        self.tf_category = None
         self.sess = None
         self.maneuver_graph_def = None
         self.speed_graph_def = None
@@ -157,7 +156,8 @@ class TFDriver(object):
                     'input/p_dropout': self.input_pdr
                 }
                 _input_speed = {
-                    'input/alex_image': self.input_alex
+                    'input/alex_image': self.input_alex,
+                    'input/maneuver_command': self.tf_maneuver_cmd
                 }
                 tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
                 tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
@@ -166,7 +166,6 @@ class TFDriver(object):
                 self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
                 self.tf_internal = graph.get_tensor_by_name('fm/output/internal:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
-                self.tf_category = graph.get_tensor_by_name('fs/output/category:0')
 
     def deactivate(self):
         with self._lock:
@@ -181,10 +180,9 @@ class TFDriver(object):
                     self.tf_critic,
                     self.tf_surprise,
                     self.tf_internal,
-                    self.tf_brake,
-                    self.tf_category
+                    self.tf_brake
                     ]
-            _ret = (0, 1, 1, [0, 0, 0, 0], 1, [0, 1])
+            _ret = (0, 1, 1, [0, 0, 0, 0], 1)
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
@@ -196,8 +194,8 @@ class TFDriver(object):
                     self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
-                    _action, _critic, _surprise, _internal, _brake, _category = self.sess.run(_ops, feed_dict=feeder)
-                    return _action, _critic, _surprise, map(lambda x: max(0, x), _internal), max(0, _brake), _category
+                    _action, _critic, _surprise, _internal, _brake = self.sess.run(_ops, feed_dict=feeder)
+                    return _action, _critic, _surprise, map(lambda x: max(0, x), _internal), max(0, _brake)
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')

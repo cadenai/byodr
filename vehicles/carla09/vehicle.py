@@ -59,7 +59,7 @@ class CarlaHandler(object):
             if sensor.is_alive:
                 sensor.destroy()
 
-    def _reset(self):
+    def _reset(self, attempt=0):
         logger.info('Resetting ...')
         self._on_carla_autopilot = False
         self._on_reverse = False
@@ -69,7 +69,13 @@ class CarlaHandler(object):
         vehicle_bp = blueprint_library.find('vehicle.tesla.model3')
         spawn_points = self._world.get_map().get_spawn_points()
         spawn_point = np.random.choice(spawn_points)
-        self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
+        try:
+            self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
+        except RuntimeError as e:
+            if attempt < 4:
+                self._reset(attempt + 1)
+            else:
+                raise e
         logger.info("Spawn point is '{}'.".format(spawn_point))
         # Attach the camera's - defaults at https://carla.readthedocs.io/en/latest/cameras_and_sensors/.
         camera_bp = self._world.get_blueprint_library().find('sensor.camera.rgb')

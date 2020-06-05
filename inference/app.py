@@ -88,7 +88,7 @@ class TFRunner(object):
         _alex_img = self._fn_alex_image(image)
         dagger = self._dagger
 
-        action_out, critic_out, surprise_out, internal_out, brake_out, category_out = \
+        action_out, critic_out, surprise_out, internal_out, brake_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,

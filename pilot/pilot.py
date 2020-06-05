@@ -412,7 +412,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
 
 class PilotState(object):
     def __init__(self):
-        self.instruction = 'intersection.ahead'
+        self.instruction = 'general.fallback'
         self.cruise_speed = 0
 
 
@@ -507,13 +507,10 @@ class DriverManager(object):
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         **command)
-            old_instruction = self._pilot_state.instruction
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
             blob.steering = self._steering_stabilizer.calculate(blob.steering)
-            if blob.driver == 'driver_mode.inference.dnn' and blob.instruction != old_instruction:
-                self.turn_instruction(blob.instruction)
             return blob
 
     def quit(self):
