@@ -69,6 +69,7 @@ var PS4StandardController = extend(NoneController, {
     threshold: 0.05,
 
     poll: function() {
+        // On ubuntu 18 under chrome button 17 does not exist - use button 16.
         pad = this.gamepad();
         this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
         this.steering = this.collapse(pad.axes[2], this.threshold);
@@ -80,7 +81,7 @@ var PS4StandardController = extend(NoneController, {
         this.button_a = pad.buttons[0].value;
         this.button_left = pad.buttons[4].value;
         this.button_right = pad.buttons[5].value;
-        this.button_center = pad.buttons[17].value;
+        this.button_center = pad.buttons[16].value;
         this.arrow_up = pad.buttons[12].value;
         this.arrow_down = pad.buttons[13].value;
         return this.healthy;
