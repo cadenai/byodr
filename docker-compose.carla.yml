@@ -25,6 +25,8 @@ services:
       context: .
       dockerfile: inference/Dockerfile.x86
     image: centipede2donald/byodr-ce:inference-carla
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
     volumes:
       - ./common:/common
       - ./inference:/app

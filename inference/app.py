@@ -44,12 +44,12 @@ class TFRunner(object):
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum,
                                                down=_penalty_down_momentum,
                                                ceiling=_penalty_ceiling)
-        _brake_scale_min = parse_option('driver.dnn.obstacle.scale.min', float, 0, _errors, **kwargs)
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
-        _corridor_scale_min = parse_option('driver.dnn.steer.corridor.scale.min', float, 0, _errors, **kwargs)
+        _brake_critic_scale_max = parse_option('driver.dnn.brake_critic.scale.max', float, 1e-6, _errors, **kwargs)
         _corridor_scale_max = parse_option('driver.dnn.steer.corridor.scale.max', float, 1e-6, _errors, **kwargs)
-        self._fn_obstacle_norm = partial(self._norm_scale, min_=_brake_scale_min, max_=_brake_scale_max)
-        self._fn_corridor_norm = partial(self._norm_scale, min_=_corridor_scale_min, max_=_corridor_scale_max)
+        self._fn_obstacle_norm = partial(self._norm_scale, min_=0, max_=_brake_scale_max)
+        self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)
+        self._fn_corridor_norm = partial(self._norm_scale, min_=0, max_=_corridor_scale_max)
         p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
@@ -88,7 +88,7 @@ class TFRunner(object):
         _alex_img = self._fn_alex_image(image)
         dagger = self._dagger
 
-        action_out, critic_out, surprise_out, internal_out, brake_out = \
+        action_out, critic_out, surprise_out, internal_out, brake_out, brake_critic_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
@@ -107,7 +107,7 @@ class TFRunner(object):
         self._fallback = _intention_index == 0 or internal_out[_intention_index - 1] < self._poi_fallback
 
         # Penalties to decrease desired speed.
-        _obstacle_penalty = self._fn_obstacle_norm(brake_out)
+        _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor + _obstacle_penalty)))
 
         return dict(action=float(self._dnn_steering(action_out)),
