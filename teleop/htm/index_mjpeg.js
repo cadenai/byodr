@@ -4,7 +4,7 @@ var mjpeg_controller = {
     display_resolution: 'default',
     jpeg_quality: 20,
     min_jpeg_quality: 15,
-    max_jpeg_quality: 95,
+    max_jpeg_quality: 55,
 
     init: function() {
         var _fps = window.localStorage.getItem('mjpeg.target.fps');

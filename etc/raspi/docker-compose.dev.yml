@@ -1,0 +1,14 @@
+version: '2'
+services:
+  servos:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - .:/app
+  odometry:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    volumes:
+      - .:/app

@@ -35,27 +35,28 @@ services:
     volumes:
       - ./common:/common
       - ./recorder:/app
-  ros:
-    image: centipede2donald/byodr-ce:rosserial
-    command: roscore
-    ports:
-      - "11311:11311"
-  rosserial:
-    build:
-      context: .
-      dockerfile: vehicles/rover/Dockerfile.ros
-    image: centipede2donald/byodr-ce:rosserial
-    command: python rosserial.py --port=/dev/arduino
-    environment:
-      ROS_MASTER_URI: 'http://byodr_ros:11311'
-    volumes:
-      - ./vehicles/rover:/app
-    devices:
-      - /dev/arduino
+#  ros:
+#    image: centipede2donald/byodr-ce:rosserial
+#    command: roscore
+#    ports:
+#      - "11311:11311"
+#  rosserial:
+#    build:
+#      context: .
+#      dockerfile: vehicles/rover/Dockerfile.ros
+#    image: centipede2donald/byodr-ce:rosserial
+#    command: python rosserial.py --port=/dev/arduino
+#    environment:
+#      ROS_MASTER_URI: 'http://byodr_ros:11311'
+#    volumes:
+#      - ./vehicles/rover:/app
+#    devices:
+#      - /dev/arduino
   vehicle:
     image: centipede2donald/byodr-ce:rover
+    network_mode: "host"
     environment:
-      ROS_MASTER_URI: 'http://byodr_ros:11311'
+      ROS_MASTER_URI: 'http://raspberrypi:11311'
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app

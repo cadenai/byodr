@@ -45,14 +45,14 @@ services:
       - ${DC_RECORDER_SESSIONS}:/sessions
     volumes_from:
       - teleop:rw
-  ros:
-    image: rwgrim/docker-noop:latest
-    container_name: byodr_ros
-  rosserial:
-    image: rwgrim/docker-noop:latest
-    container_name: byodr_rosserial
-    depends_on:
-      - "ros"
+#  ros:
+#    image: rwgrim/docker-noop:latest
+#    container_name: byodr_ros
+#  rosserial:
+#    image: rwgrim/docker-noop:latest
+#    container_name: byodr_rosserial
+#    depends_on:
+#      - "ros"
   vehicle:
     image: rwgrim/docker-noop:latest
     container_name: byodr_vehicle
