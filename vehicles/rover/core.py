@@ -8,11 +8,11 @@ import time
 import cv2
 import numpy as np
 import requests
-import rospy
 from geometry_msgs.msg import Twist, TwistStamped
 from requests.auth import HTTPDigestAuth
 
 from byodr.utils import timestamp
+from byodr.utils.ipc import JSONPublisher
 from byodr.utils.option import hash_dict, parse_option, PropertyError
 from video import GstRawSource
 
@@ -31,6 +31,58 @@ D_SPEED_PROFILES = {
     'performance': (10, 10)
     # Yep, what's next?
 }
+
+
+class ZMQGate(object):
+
+    def __init__(self, **kwargs):
+        self._errors = []
+        self._hash = -1
+        self._rps = 0  # Hall sensor revolutions per second.
+        self._publisher = None
+        self._subscriber = None
+        self._lock = threading.Lock()
+        self.restart(**kwargs)
+
+    def restart(self, **kwargs):
+        with self._lock:
+            _hash = hash_dict(**kwargs)
+            if _hash != self._hash:
+                self._hash = _hash
+                self._start(**kwargs)
+
+    def get_errors(self):
+        with self._lock:
+            return self._errors
+
+    def _start(self, **kwargs):
+        errors = []
+        c_steer = dict(pin=parse_option('ras.servo.steering.pin.nr', int, 0, errors, **kwargs),
+                       min_pw=parse_option('ras.servo.steering.min_pulse_width.ms', float, 0, errors, **kwargs),
+                       max_pw=parse_option('ras.servo.steering.max_pulse_width.ms', float, 0, errors, **kwargs),
+                       frame=parse_option('ras.servo.steering.frame_width.ms', float, 0, errors, **kwargs))
+        c_motor = dict(pin=parse_option('ras.servo.motor.pin.nr', int, 0, errors, **kwargs),
+                       min_pw=parse_option('ras.servo.motor.min_pulse_width.ms', float, 0, errors, **kwargs),
+                       max_pw=parse_option('ras.servo.motor.max_pulse_width.ms', float, 0, errors, **kwargs),
+                       frame=parse_option('ras.servo.motor.frame_width.ms', float, 0, errors, **kwargs))
+        self._publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
+        self._publisher.publish(data=dict(steering=c_steer, motor=c_motor), topic='ras/servo/config')
+        self._errors = errors
+
+    def _update_odometer(self, message):
+        # The odometer publishes revolutions per second.
+        self._rps = float(message.twist.linear.y)
+
+    def publish(self, throttle=0., steering=0., reverse_gear=False):
+        with self._lock:
+            throttle = max(-1., min(1., throttle))
+            steering = max(-1., min(1., steering))
+            self._publisher.publish(dict(steering=steering, throttle=throttle))
+
+    def get_odometer_value(self):
+        with self._lock:
+            # Convert to travel speed in meters per second.
+            return 0
 
 
 class RosGate(object):
@@ -136,7 +188,7 @@ class RosGate(object):
 class TwistHandler(object):
     def __init__(self, **kwargs):
         super(TwistHandler, self).__init__()
-        self._gate = RosGate(**kwargs)
+        self._gate = ZMQGate(**kwargs)
         self._quit_event = multiprocessing.Event()
         self._hash = -1
         self._errors = []

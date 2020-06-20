@@ -4,11 +4,8 @@ import logging
 import multiprocessing
 import os
 import signal
-import sys
 import time
 from ConfigParser import SafeConfigParser
-
-import rospy
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
@@ -33,16 +30,6 @@ def _latest_or_none(receiver, patience):
     _time = 0 if candidate is None else candidate.get('time')
     _on_time = (timestamp() - _time) < patience
     return candidate if _on_time else None
-
-
-def ros_init():
-    # Ros replaces the root logger - add a new handler after ros initialisation.
-    rospy.init_node('rover', disable_signals=False, anonymous=True, log_level=rospy.INFO)
-    console_handler = logging.StreamHandler(stream=sys.stdout)
-    console_handler.setFormatter(logging.Formatter(log_format))
-    logging.getLogger().addHandler(console_handler)
-    logging.getLogger().setLevel(logging.INFO)
-    rospy.on_shutdown(lambda: quit_event.set())
 
 
 class IPCServer(LocalIPCServer):
@@ -95,7 +82,6 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    ros_init()
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 

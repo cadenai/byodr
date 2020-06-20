@@ -1,23 +1,14 @@
 version: '2'
 services:
-  ros:
-    image: ros:melodic
-    container_name: pi_ros
-    restart: always
-    command: roscore
-    ports:
-      - "11311:11311"
   servos:
     image: centipede2donald/byodr-ce:picontrol
     container_name: servos
     user: root
     restart: always
     network_mode: "host"
-    depends_on:
-      - "ros"
     command: python servos.py
     environment:
-      ROS_MASTER_URI: 'http://127.0.0.1:11311'
+      SERVO_MASTER_URI: 'tcp://nanoida:5555'
     devices:
       - /dev/gpiomem
   odometry:
@@ -25,8 +16,4 @@ services:
     container_name: odometry
     restart: always
     network_mode: "host"
-    depends_on:
-      - "ros"
     command: python odometry.py
-    environment:
-      ROS_MASTER_URI: 'http://127.0.0.1:11311'
