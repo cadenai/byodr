@@ -12,7 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Included here to avoid the long build time on minor build changes.
 RUN pip install "pyzmq >=18.1, <19.0"
 
-COPY . app/
+COPY ./common common/
+COPY ./raspi app/
 WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt

@@ -14,7 +14,6 @@ services:
       - ./recorder:/app
   vehicle:
     build:
-      context: .
       dockerfile: vehicles/carla09/Dockerfile
     image: centipede2donald/byodr-ce:carla-099
     volumes:
@@ -22,7 +21,6 @@ services:
       - ./vehicles/carla09:/app
   inference:
     build:
-      context: .
       dockerfile: inference/Dockerfile.x86
     image: centipede2donald/byodr-ce:inference-carla
     environment:

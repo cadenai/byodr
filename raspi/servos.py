@@ -6,7 +6,7 @@ import time
 
 from gpiozero import AngularServo
 
-from core import ReceiverThread
+from byodr.utils.ipc import ReceiverThread
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -49,7 +49,7 @@ def _throttle(servo, value):
 
 
 def main():
-    servo_master_uri = os.environ['SERVO_MASTER_URI']
+    servo_master_uri = os.environ['DRIVE_MASTER_URI']
     threads = []
     r_config = ReceiverThread(url=servo_master_uri, topic=b'ras/servo/config', event=quit_event)
     r_drive = ReceiverThread(url=servo_master_uri, topic=b'ras/servo/drive', event=quit_event)

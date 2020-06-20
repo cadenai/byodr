@@ -1,6 +1,8 @@
 version: '2'
 services:
   servos:
+    build:
+      context: ..
     image: centipede2donald/byodr-ce:picontrol
     container_name: servos
     user: root
@@ -8,10 +10,12 @@ services:
     network_mode: "host"
     command: python servos.py
     environment:
-      SERVO_MASTER_URI: 'tcp://nanoida:5555'
+      DRIVE_MASTER_URI: 'tcp://nanoida:5555'
     devices:
       - /dev/gpiomem
   odometry:
+    build:
+      context: ..
     image: centipede2donald/byodr-ce:picontrol
     container_name: odometry
     restart: always

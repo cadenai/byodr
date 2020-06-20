@@ -2,7 +2,6 @@ version: '2'
 services:
   cam1:
     build:
-      context: .
       dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:rover
     volumes:
@@ -12,7 +11,6 @@ services:
     stop_signal: SIGKILL
   nodews:
     build:
-      context: .
       dockerfile: teleop/nodews/Dockerfile
     image: centipede2donald/byodr-ce:nodews
     depends_on:
@@ -35,34 +33,18 @@ services:
     volumes:
       - ./common:/common
       - ./recorder:/app
-#  ros:
-#    image: centipede2donald/byodr-ce:rosserial
-#    command: roscore
-#    ports:
-#      - "11311:11311"
-#  rosserial:
-#    build:
-#      context: .
-#      dockerfile: vehicles/rover/Dockerfile.ros
-#    image: centipede2donald/byodr-ce:rosserial
-#    command: python rosserial.py --port=/dev/arduino
-#    environment:
-#      ROS_MASTER_URI: 'http://byodr_ros:11311'
-#    volumes:
-#      - ./vehicles/rover:/app
-#    devices:
-#      - /dev/arduino
   vehicle:
+    build:
+      dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:rover
     network_mode: "host"
     environment:
-      ROS_MASTER_URI: 'http://raspberrypi:11311'
+      PI_MASTER_URI: 'http://raspberrypi:11311'
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app
   inference:
     build:
-      context: ./
       dockerfile: inference/Dockerfile.jp
     image: centipede2donald/byodr-ce:inference
     volumes:
