@@ -5,8 +5,8 @@ services:
       dockerfile: vehicles/rover/Dockerfile
     image: centipede2donald/byodr-ce:rover
     volumes:
-      - ./common:/common
-      - ./vehicles/rover:/app
+      - ../common:/common
+      - ../vehicles/rover:/app
     command: python stream.py
     stop_signal: SIGKILL
   nodews:
@@ -23,16 +23,16 @@ services:
     stop_signal: SIGKILL
   teleop:
     volumes:
-      - ./common:/common
-      - ./teleop:/app
+      - ../common:/common
+      - ../teleop:/app
   pilot:
     volumes:
-      - ./common:/common
-      - ./pilot:/app
+      - ../common:/common
+      - ../pilot:/app
   recorder:
     volumes:
-      - ./common:/common
-      - ./recorder:/app
+      - ../common:/common
+      - ../recorder:/app
   vehicle:
     build:
       dockerfile: vehicles/rover/Dockerfile
@@ -41,8 +41,8 @@ services:
     environment:
       PI_MASTER_URI: 'http://raspberrypi:11311'
     volumes:
-      - ./common:/common
-      - ./vehicles/rover:/app
+      - ../common:/common
+      - ../vehicles/rover:/app
   inference:
     build:
       dockerfile: inference/Dockerfile.jp

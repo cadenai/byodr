@@ -15,20 +15,6 @@ services:
     environment:
       FEED_IP: 'byodr_cam1'
     stop_signal: SIGKILL
-#  ros:
-#    image: centipede2donald/byodr-ce:rosserial
-#    restart: always
-#    command: roscore
-#    ports:
-#      - "11311:11311"
-#  rosserial:
-#    image: centipede2donald/byodr-ce:rosserial
-#    restart: always
-#    command: python rosserial.py --port=/dev/arduino
-#    environment:
-#      ROS_MASTER_URI: 'http://byodr_ros:11311'
-#    devices:
-#      - /dev/arduino
   vehicle:
     image: centipede2donald/byodr-ce:rover
     restart: always

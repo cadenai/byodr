@@ -2,9 +2,9 @@ version: '2'
 services:
   servos:
     volumes:
-      - ./raspi:/app
-      - ./common:/common
+      - ../raspi:/app
+      - ../common:/common
   odometry:
     volumes:
-      - ./raspi:/app
-      - ./common:/common
+      - ../raspi:/app
+      - ../common:/common

@@ -2,23 +2,23 @@ version: '2'
 services:
   teleop:
     volumes:
-      - ./common:/common
-      - ./teleop:/app
+      - ../common:/common
+      - ../teleop:/app
   pilot:
     volumes:
-      - ./common:/common
-      - ./pilot:/app
+      - ../common:/common
+      - ../pilot:/app
   recorder:
     volumes:
-      - ./common:/common
-      - ./recorder:/app
+      - ../common:/common
+      - ../recorder:/app
   vehicle:
     build:
       dockerfile: vehicles/carla09/Dockerfile
     image: centipede2donald/byodr-ce:carla-099
     volumes:
-      - ./common:/common
-      - ./vehicles/carla09:/app
+      - ../common:/common
+      - ../vehicles/carla09:/app
   inference:
     build:
       dockerfile: inference/Dockerfile.x86
@@ -26,7 +26,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
-      - ./common:/common
-      - ./inference:/app
+      - ../common:/common
+      - ../inference:/app
 
 
