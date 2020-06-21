@@ -1,10 +1,14 @@
 version: '2'
 services:
   servos:
+    build:
+      dockerfile: raspi/Dockerfile
     volumes:
       - ../raspi:/app
       - ../common:/common
   odometry:
+    build:
+      dockerfile: raspi/Dockerfile
     volumes:
       - ../raspi:/app
       - ../common:/common

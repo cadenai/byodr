@@ -30,22 +30,24 @@ def _angular_servo(message):
 
 
 def _create_servo(servo, message):
-    if message is not None:
-        if servo is not None:
-            servo.close()
-        logger.info("Creating servo with config {}".format(message))
-        servo = _angular_servo(message=message)
+    if servo is not None:
+        servo.close()
+    logger.info("Creating servo with config {}".format(message))
+    servo = _angular_servo(message=message)
     return servo
 
 
 def _steer(servo, value):
-    if servo is not None:
-        servo.angle = 90. * min(1, max(-1, value))
+    servo.angle = 90. * min(1, max(-1, value))
 
 
-def _throttle(servo, value):
-    if servo is not None:
-        servo.angle = 90. * min(1, max(-1, value))
+def _throttle(config, servo, throttle, in_reverse):
+    _reverse, _shift, _scale = config.get('reverse'), config.get('shift'), config.get('scale')
+    if throttle < -.95 and in_reverse:
+        servo_throttle = _reverse
+    else:
+        servo_throttle = min(90, max(-90, _shift + _scale * throttle))
+    servo.angle = servo_throttle
 
 
 def main():
@@ -57,15 +59,21 @@ def main():
     threads.append(r_drive)
     [t.start() for t in threads]
 
-    steer_servo, motor_servo = None, None
+    steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, shift=0, scale=0)
     rate = 1000 / 25 * 1e-3
     while not quit_event.is_set():
         command = r_config.pop_latest()
-        steer_servo = _create_servo(steer_servo, None if command is None else command.get('steering'))
-        motor_servo = _create_servo(motor_servo, None if command is None else command.get('motor'))
+        if command is not None:
+            steer_servo = _create_servo(steer_servo, command.get('steering'))
+            motor_servo = _create_servo(motor_servo, command.get('motor'))
+            throttle_config = command.get('throttle')
         command = r_drive.pop_latest()
-        _steer(steer_servo, 0 if command is None else command.get('steering', 0))
-        _throttle(motor_servo, 0 if command is None else command.get('throttle', 0))
+        if steer_servo is not None:
+            _steer(steer_servo, 0 if command is None else command.get('steering', 0))
+        if motor_servo is not None:
+            throttle = 0 if command is None else command.get('throttle', 0)
+            in_reverse = False if command is None else bool(command.get('reverse'))
+            _throttle(throttle_config, motor_servo, throttle, in_reverse)
         time.sleep(rate)
 
     logger.info("Waiting on threads to stop.")

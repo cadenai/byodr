@@ -65,8 +65,11 @@ class ZMQGate(object):
                        min_pw=parse_option('ras.servo.motor.min_pulse_width.ms', float, 0, errors, **kwargs),
                        max_pw=parse_option('ras.servo.motor.max_pulse_width.ms', float, 0, errors, **kwargs),
                        frame=parse_option('ras.servo.motor.frame_width.ms', float, 0, errors, **kwargs))
+        c_throttle = dict(reverse=parse_option('ras.throttle.reverse.gear', int, 0, errors, **kwargs),
+                          shift=parse_option('ras.throttle.domain.shift', float, 0, errors, **kwargs),
+                          scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **kwargs))
         self._publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
-        self._publisher.publish(data=dict(steering=c_steer, motor=c_motor), topic='ras/servo/config')
+        self._publisher.publish(data=dict(steering=c_steer, motor=c_motor, throttle=c_throttle), topic='ras/servo/config')
         self._errors = errors
 
     def _update_odometer(self, message):
@@ -77,7 +80,7 @@ class ZMQGate(object):
         with self._lock:
             throttle = max(-1., min(1., throttle))
             steering = max(-1., min(1., steering))
-            self._publisher.publish(dict(steering=steering, throttle=throttle))
+            self._publisher.publish(dict(steering=steering, throttle=throttle, reverse=int(reverse_gear)))
 
     def get_odometer_value(self):
         with self._lock:
