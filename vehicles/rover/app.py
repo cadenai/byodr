@@ -82,6 +82,9 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
+    pi_master_uri = os.environ['PI_MASTER_URI']
+    logger.info("Using pi master uri '{}'.".format(pi_master_uri))
+
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
 
@@ -89,7 +92,8 @@ def main():
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
-    threads = [pilot, teleop, ipc_chatter, ipc_server]
+    r_pi_status = ReceiverThread(url=pi_master_uri, topic=b'ras/drive/status', event=quit_event)
+    threads = [pilot, teleop, ipc_chatter, ipc_server, r_pi_status]
     if quit_event.is_set():
         return 0
 
@@ -109,6 +113,11 @@ def main():
             vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, args.config, previous=previous)
             _period = 1. / vehicle.get_process_frequency()
         else:
+            pi_status = r_pi_status.pop_latest()
+            if pi_status is not None:
+                _configured = bool(pi_status.get('configured'))
+                if not _configured:
+                    vehicle.send_config()
             time.sleep(_period)
 
     logger.info("Waiting on handler to quit.")

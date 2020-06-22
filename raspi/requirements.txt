@@ -1,2 +1,0 @@
-RPIO
-rpi.gpio

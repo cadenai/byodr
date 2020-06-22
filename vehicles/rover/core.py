@@ -42,6 +42,7 @@ class ZMQGate(object):
         self._publisher = None
         self._subscriber = None
         self._lock = threading.Lock()
+        self._publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
         self.restart(**kwargs)
 
     def restart(self, **kwargs):
@@ -68,19 +69,24 @@ class ZMQGate(object):
         c_throttle = dict(reverse=parse_option('ras.throttle.reverse.gear', int, 0, errors, **kwargs),
                           shift=parse_option('ras.throttle.domain.shift', float, 0, errors, **kwargs),
                           scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **kwargs))
-        self._publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
-        self._publisher.publish(data=dict(steering=c_steer, motor=c_motor, throttle=c_throttle), topic='ras/servo/config')
+        self._servo_config = dict(steering=c_steer, motor=c_motor, throttle=c_throttle)
         self._errors = errors
+        if not errors:
+            self.publish_config()
 
     def _update_odometer(self, message):
         # The odometer publishes revolutions per second.
         self._rps = float(message.twist.linear.y)
 
+    def publish_config(self):
+        self._publisher.publish(data=self._servo_config, topic='ras/servo/config')
+
     def publish(self, throttle=0., steering=0., reverse_gear=False):
         with self._lock:
             throttle = max(-1., min(1., throttle))
             steering = max(-1., min(1., steering))
-            self._publisher.publish(dict(steering=steering, throttle=throttle, reverse=int(reverse_gear)))
+            _reverse = 1 if reverse_gear else 0
+            self._publisher.publish(dict(steering=steering, throttle=throttle, reverse=_reverse))
 
     def get_odometer_value(self):
         with self._lock:
@@ -240,6 +246,9 @@ class TwistHandler(object):
 
     def quit(self):
         self._quit_event.set()
+
+    def send_config(self):
+        self._gate.publish_config()
 
     def noop(self):
         self._drive(steering=0, throttle=0)

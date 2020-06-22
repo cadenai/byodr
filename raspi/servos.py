@@ -6,7 +6,8 @@ import time
 
 from gpiozero import AngularServo
 
-from byodr.utils.ipc import ReceiverThread
+from byodr.utils import timestamp
+from byodr.utils.ipc import ReceiverThread, JSONPublisher
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -32,8 +33,8 @@ def _angular_servo(message):
 def _create_servo(servo, message):
     if servo is not None:
         servo.close()
-    logger.info("Creating servo with config {}".format(message))
     servo = _angular_servo(message=message)
+    logger.info("Created servo with config {}".format(message))
     return servo
 
 
@@ -44,37 +45,50 @@ def _steer(servo, value):
 def _throttle(config, servo, throttle, in_reverse):
     _reverse, _shift, _scale = config.get('reverse'), config.get('shift'), config.get('scale')
     if throttle < -.95 and in_reverse:
-        servo_throttle = _reverse
+        _angle = _reverse
     else:
-        servo_throttle = min(90, max(-90, _shift + _scale * throttle))
-    servo.angle = servo_throttle
+        _angle = min(90, max(-90, _shift + _scale * throttle))
+    servo.angle = _angle
 
 
 def main():
-    servo_master_uri = os.environ['DRIVE_MASTER_URI']
     threads = []
+    servo_master_uri = os.environ['DRIVE_MASTER_URI']
+    logger.info("Connecting to uri '{}'.".format(servo_master_uri))
     r_config = ReceiverThread(url=servo_master_uri, topic=b'ras/servo/config', event=quit_event)
     r_drive = ReceiverThread(url=servo_master_uri, topic=b'ras/servo/drive', event=quit_event)
+    p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
+
     threads.append(r_config)
     threads.append(r_drive)
     [t.start() for t in threads]
 
     steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, shift=0, scale=0)
-    rate = 1000 / 25 * 1e-3
-    while not quit_event.is_set():
-        command = r_config.pop_latest()
-        if command is not None:
-            steer_servo = _create_servo(steer_servo, command.get('steering'))
-            motor_servo = _create_servo(motor_servo, command.get('motor'))
-            throttle_config = command.get('throttle')
-        command = r_drive.pop_latest()
+    try:
+        rate = 1000 / 20 * 1e-3
+        while not quit_event.is_set():
+            command = r_config.pop_latest()
+            if command is not None:
+                steer_servo = _create_servo(steer_servo, command.get('steering'))
+                motor_servo = _create_servo(motor_servo, command.get('motor'))
+                throttle_config = command.get('throttle')
+            command = r_drive.pop_latest()
+            if steer_servo is not None:
+                _steer(steer_servo, 0 if command is None else command.get('steering', 0))
+            if motor_servo is not None:
+                throttle = 0 if command is None else command.get('throttle', 0)
+                in_reverse = False if command is None else bool(command.get('reverse'))
+                _throttle(throttle_config, motor_servo, throttle, in_reverse)
+            _configured = None not in (steer_servo, motor_servo)
+            p_status.publish(data=dict(time=timestamp(), configured=int(_configured)))
+            time.sleep(rate)
+    except Exception as e:
+        logger.error(e)
+    finally:
         if steer_servo is not None:
-            _steer(steer_servo, 0 if command is None else command.get('steering', 0))
+            steer_servo.close()
         if motor_servo is not None:
-            throttle = 0 if command is None else command.get('throttle', 0)
-            in_reverse = False if command is None else bool(command.get('reverse'))
-            _throttle(throttle_config, motor_servo, throttle, in_reverse)
-        time.sleep(rate)
+            motor_servo.close()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]
