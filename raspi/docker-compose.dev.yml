@@ -1,13 +1,8 @@
 version: '2'
 services:
-  servos:
+  pigpiod:
     build:
-      dockerfile: raspi/Dockerfile
-    volumes:
-      - ../raspi:/app
-      - ../common:/common
-  odometry:
-    build:
+      context: ..
       dockerfile: raspi/Dockerfile
     volumes:
       - ../raspi:/app

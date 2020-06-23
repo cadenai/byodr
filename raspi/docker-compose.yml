@@ -1,22 +1,20 @@
 version: '2'
 services:
   pigpiod:
-    build:
-      context: ..
     image: centipede2donald/byodr-ce:picontrol
     container_name: pigpiod
     privileged: true
     user: root
     restart: always
     network_mode: "host"
-    command: sudo /app/pigpio/pigpiod -gl
+    command: sudo /pigpio/pigpiod -gl
   servos:
-    build:
-      context: ..
     image: centipede2donald/byodr-ce:picontrol
     container_name: servos
     user: root
     restart: always
+    depends_on:
+      - "pigpiod"
     network_mode: "host"
     command: python servos.py
     environment:
@@ -25,8 +23,6 @@ services:
     devices:
       - /dev/gpiomem
   odometry:
-    build:
-      context: ..
     image: centipede2donald/byodr-ce:picontrol
     container_name: odometry
     restart: always

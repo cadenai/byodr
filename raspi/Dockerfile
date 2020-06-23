@@ -13,15 +13,15 @@ RUN apt-get update && apt-get install -y \
     python-zmq \
  && rm -rf /var/lib/apt/lists/*
 
-COPY ./common common/
-COPY ./raspi app/
-WORKDIR /app
-
 # http://abyz.me.uk/rpi/pigpio/pigpiod.html
 RUN git clone https://github.com/joan2937/pigpio.git \
     && cd pigpio \
     && make \
     && make install
+
+COPY ./common common/
+COPY ./raspi app/
+WORKDIR /app
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
