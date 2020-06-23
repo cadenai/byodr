@@ -65,7 +65,7 @@ def main():
 
     steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, shift=0, scale=0)
     try:
-        rate = 1000 / 20 * 1e-3
+        rate = 0.04  # 25 Hz.
         while not quit_event.is_set():
             command = r_config.pop_latest()
             if command is not None:

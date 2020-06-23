@@ -1,5 +1,15 @@
 version: '2'
 services:
+  pigpiod:
+    build:
+      context: ..
+    image: centipede2donald/byodr-ce:picontrol
+    container_name: pigpiod
+    privileged: true
+    user: root
+    restart: always
+    network_mode: "host"
+    command: sudo /app/pigpio/pigpiod -gl
   servos:
     build:
       context: ..
@@ -10,6 +20,7 @@ services:
     network_mode: "host"
     command: python servos.py
     environment:
+      GPIOZERO_PIN_FACTORY: 'pigpio'
       DRIVE_MASTER_URI: 'tcp://nanoida:5555'
     devices:
       - /dev/gpiomem
@@ -21,3 +32,5 @@ services:
     restart: always
     network_mode: "host"
     command: python odometry.py
+    devices:
+      - /dev/gpiomem
