@@ -1,15 +1,12 @@
-import argparse
-import httplib
 import logging
 import multiprocessing
-import os
 import signal
-import socket
-import sys
 import time
-import xmlrpclib
 
-from geometry_msgs.msg import TwistStamped
+from gpiozero import DigitalInputDevice
+
+from byodr.utils import timestamp
+from byodr.utils.ipc import JSONPublisher
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -25,36 +22,43 @@ def _interrupt():
     quit_event.set()
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Pi main.')
-    parser.add_argument('--hz', type=int, default=25, help='Publish frequency')
-    args = parser.parse_args()
+class HallRps(object):
+    def __init__(self, pin=22, moment=0.10):
+        self._moment = moment
+        self._detect_time, self._up, self._rps = 0, 0, 0
+        self._sensor = DigitalInputDevice(pin=pin, pull_up=True)
+        self._sensor.when_activated = self._detect
 
-    hz = args.hz
+    def tick(self):
+        # Drop to zero when stopped.
+        if timestamp() - self._detect_time > 1e5:
+            self._rps = (1. - self._moment) * self._rps
+            self._rps = self._rps if self._rps > 1e-4 else 0
+
+    def rps(self):
+        return self._rps
+
+    def debug(self):
+        return '{} {} {}'.format(self._sensor.value, self._sensor.is_active, self._rps)
+
+    def _detect(self):
+        # self._up += 1
+        # if self._up >= 2:
+        h_val = 1e6 / (timestamp() - self._detect_time)
+        self._rps = self._moment * h_val + (1. - self._moment) * self._rps
+        self._detect_time = timestamp()
+        self._up = 0
+
+
+def main():
+    p_odo = JSONPublisher(url='tcp://0.0.0.0:5556', topic='ras/sensor/odometer')
+    s_hall = HallRps()
+
+    rate = 0.02  # 50 Hz.
     while not quit_event.is_set():
-        try:
-            console_handler = logging.StreamHandler(stream=sys.stdout)
-            console_handler.setFormatter(logging.Formatter(log_format))
-            logging.getLogger().addHandler(console_handler)
-            logging.getLogger().setLevel(logging.INFO)
-            m_server = xmlrpclib.ServerProxy(os.environ['ROS_MASTER_URI'])
-            while not quit_event.is_set():
-                odo_message = TwistStamped()
-                """
-                    message.header.stamp = nodeHandle.now();  
-                    message.twist.linear.x = h_up;
-                    message.twist.linear.y = h_rps;
-                    message.twist.linear.z = analogRead(HALL_IN_PIN);
-                """
-                odo_message.twist.linear.x = 0
-                odo_message.twist.linear.y = 0
-                odo_message.twist.linear.z = 0
-                _publisher.publish(odo_message)
-                # Survive ros master restarts.
-                m_server.getUri('odometry_caller')
-                rate.sleep()
-        except (socket.error, httplib.HTTPException):
-            time.sleep(1)
+        p_odo.publish(data=dict(rps=s_hall.rps()))
+        s_hall.tick()
+        time.sleep(rate)
 
 
 if __name__ == "__main__":

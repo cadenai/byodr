@@ -3,7 +3,18 @@ services:
   pigpiod:
     build:
       context: ..
-      dockerfile: raspi/Dockerfile
+      dockerfile: raspi/pi-gpio.dockerfile
+  servos:
+    build:
+      context: ..
+      dockerfile: raspi/pi-gpio.dockerfile
+    volumes:
+      - ../raspi:/app
+      - ../common:/common
+  odometry:
+    build:
+      context: ..
+      dockerfile: raspi/pi-gpio.dockerfile
     volumes:
       - ../raspi:/app
       - ../common:/common

@@ -25,4 +25,4 @@ WORKDIR /app
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
-CMD ["python", "app.py"]
+CMD ["sudo", "/pigpio/pigpiod", "-gl"]

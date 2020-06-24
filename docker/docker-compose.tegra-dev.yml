@@ -39,7 +39,7 @@ services:
     image: centipede2donald/byodr-ce:rover
     network_mode: "host"
     environment:
-      PI_MASTER_URI: 'tcp://raspberrypi:5555'
+      PI_MASTER_URI: 'tcp://raspberrypi'
     volumes:
       - ../common:/common
       - ../vehicles/rover:/app

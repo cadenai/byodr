@@ -8,12 +8,10 @@ import time
 import cv2
 import numpy as np
 import requests
-from geometry_msgs.msg import Twist, TwistStamped
 from requests.auth import HTTPDigestAuth
 
 from byodr.utils import timestamp
-from byodr.utils.ipc import JSONPublisher
-from byodr.utils.option import hash_dict, parse_option, PropertyError
+from byodr.utils.option import hash_dict, parse_option
 from video import GstRawSource
 
 logger = logging.getLogger(__name__)
@@ -35,15 +33,14 @@ D_SPEED_PROFILES = {
 
 class ZMQGate(object):
 
-    def __init__(self, **kwargs):
+    def __init__(self, publisher):
         self._errors = []
         self._hash = -1
         self._rps = 0  # Hall sensor revolutions per second.
         self._publisher = None
         self._subscriber = None
         self._lock = threading.Lock()
-        self._publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
-        self.restart(**kwargs)
+        self._publisher = publisher
 
     def restart(self, **kwargs):
         with self._lock:
@@ -58,6 +55,8 @@ class ZMQGate(object):
 
     def _start(self, **kwargs):
         errors = []
+        self._circum_m = 2 * math.pi * parse_option('chassis.wheel.radius.meter', float, 0, errors, **kwargs)
+        self._gear_ratio = parse_option('chassis.hall.ticks.per.rotation', int, 0, errors, **kwargs)
         c_steer = dict(pin=parse_option('ras.servo.steering.pin.nr', int, 0, errors, **kwargs),
                        min_pw=parse_option('ras.servo.steering.min_pulse_width.ms', float, 0, errors, **kwargs),
                        max_pw=parse_option('ras.servo.steering.max_pulse_width.ms', float, 0, errors, **kwargs),
@@ -74,9 +73,9 @@ class ZMQGate(object):
         if not errors:
             self.publish_config()
 
-    def _update_odometer(self, message):
+    def update_odometer(self, rps):
         # The odometer publishes revolutions per second.
-        self._rps = float(message.twist.linear.y)
+        self._rps = rps
 
     def publish_config(self):
         self._publisher.publish(data=self._servo_config, topic='ras/servo/config')
@@ -91,119 +90,19 @@ class ZMQGate(object):
     def get_odometer_value(self):
         with self._lock:
             # Convert to travel speed in meters per second.
-            return 0
-
-
-class RosGate(object):
-    """
-         rostopic hz /roy_teleop/sensor/odometer
-         subscribed to [/roy_teleop/sensor/odometer]
-         average rate: 81.741
-    """
-
-    def __init__(self, **kwargs):
-        self._errors = []
-        self._hash = -1
-        self._rps = 0  # Hall sensor revolutions per second.
-        self._publisher = None
-        self._subscriber = None
-        self._lock = threading.Lock()
-        self.restart(**kwargs)
-
-    def restart(self, **kwargs):
-        with self._lock:
-            _hash = hash_dict(**kwargs)
-            if _hash != self._hash:
-                self._hash = _hash
-                self._start(**kwargs)
-
-    def get_errors(self):
-        with self._lock:
-            return self._errors
-
-    def _start(self, **kwargs):
-        errors = []
-        self._dry_run = parse_option('dry.run', (lambda x: bool(int(x))), 0, errors, **kwargs)
-        self._steer_shift = parse_option('calibrate.steer.shift', int, 0, errors, **kwargs)
-        self._throttle_zero = parse_option('calibrate.throttle.zero.position', int, 0, errors, **kwargs)
-        self._throttle_reverse = parse_option('calibrate.throttle.reverse.position', int, 0, errors, **kwargs)
-        self._wheel_radius = parse_option('chassis.wheel.radius.meter', float, 0, errors, **kwargs)
-        self._circum_m = 2 * math.pi * self._wheel_radius
-        self._gear_ratio = parse_option('chassis.hall.ticks.per.rotation', int, 0, errors, **kwargs)
-        self._forward_shift = parse_option('throttle.forward.shift', int, 0, errors, **kwargs)
-        self._backward_shift = parse_option('throttle.backward.shift', int, 0, errors, **kwargs)
-        self._forward_range = 0
-        self._backward_range = 0
-        _profile_name = parse_option('throttle.speed.profile', str, 0, errors, **kwargs)
-        if _profile_name in D_SPEED_PROFILES:
-            # Scale by whats left of the servo domain.
-            _forward_scale = 1. / min(1, (90 - self._throttle_zero - self._forward_shift))
-            _backward_scale = 1. / min(1, (90 - self._throttle_zero - self._backward_shift))
-            self._forward_range = (D_SPEED_PROFILES[_profile_name][0]) * _forward_scale
-            self._backward_range = (D_SPEED_PROFILES[_profile_name][1]) * _backward_scale
-        else:
-            errors.append(PropertyError('throttle.speed.profile', 'Not recognized', suggestions=D_SPEED_PROFILES.keys()))
-        self._errors = errors
-        if self._dry_run and self._subscriber is not None and self._publisher is not None:
-            self._publisher.unregister()
-            self._subscriber.unregister()
-        else:
-            logger.info("Starting ROS gate - wheel radius is {:2.2f}m and sensor tick ratio is {}.".format(
-                self._wheel_radius, self._gear_ratio)
-            )
-            if self._subscriber is None and self._publisher is None:
-                self._subscriber = rospy.Subscriber("roy_teleop/sensor/odometer", TwistStamped, self._update_odometer)
-                self._publisher = rospy.Publisher('roy_teleop/command/drive', Twist, queue_size=1)
-
-    def _update_odometer(self, message):
-        # The odometer publishes revolutions per second.
-        self._rps = float(message.twist.linear.y)
-
-    def publish(self, throttle=0., steering=0., reverse_gear=False):
-        # The microcontroller must know the shifts for true zero positions and thus adds the shift itself.
-        # The esc can only be set into reverse using the correct servo value.
-        # The negative reverse servo throttle should not be issued when the esc is already in reverse.
-        with self._lock:
-            throttle = max(-1., min(1., throttle))
-            steering = max(-1., min(1., steering))
-            servo_throttle = 0
-            if throttle < -.92 and reverse_gear:
-                servo_throttle = self._throttle_reverse
-            elif throttle < 0:
-                servo_throttle = self._backward_shift + int(math.floor(throttle * self._backward_range))
-            elif throttle > 0:
-                servo_throttle = self._forward_shift + int(math.ceil(throttle * self._forward_range))
-            # Fill and send.
-            twist = Twist()
-            twist.angular.x = self._steer_shift
-            twist.angular.y = 90 + int(90 * steering)
-            twist.linear.x = self._throttle_zero
-            twist.linear.y = 90 + servo_throttle
-            if self._dry_run:
-                if abs(throttle) > 1e-2:
-                    logger.info("Twist angular=({}, {}) and linear=({}, {}).".format(
-                        twist.angular.x, twist.angular.y,
-                        twist.linear.x, twist.linear.y
-                    ))
-            else:
-                self._publisher.publish(twist)
-
-    def get_odometer_value(self):
-        with self._lock:
-            # Convert to travel speed in meters per second.
             return (self._rps / self._gear_ratio) * self._circum_m
 
 
 class TwistHandler(object):
-    def __init__(self, **kwargs):
+    def __init__(self, gate, **kwargs):
         super(TwistHandler, self).__init__()
-        self._gate = ZMQGate(**kwargs)
+        self._gate = gate
         self._quit_event = multiprocessing.Event()
         self._hash = -1
         self._errors = []
         self._process_frequency = 10
         self._patience_micro = 100.
-        self._configure(**kwargs)
+        self.restart(**kwargs)
 
     def _configure(self, **kwargs):
         _errors = []
@@ -246,6 +145,9 @@ class TwistHandler(object):
 
     def quit(self):
         self._quit_event.set()
+
+    def update_rps(self, rps):
+        self._gate.update_odometer(rps)
 
     def send_config(self):
         self._gate.publish_config()

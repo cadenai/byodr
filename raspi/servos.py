@@ -84,6 +84,7 @@ def main():
             time.sleep(rate)
     except Exception as e:
         logger.error(e)
+        raise e
     finally:
         if steer_servo is not None:
             steer_servo.close()

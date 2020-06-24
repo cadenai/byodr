@@ -19,7 +19,7 @@ services:
     image: centipede2donald/byodr-ce:rover
     restart: always
     environment:
-      PI_MASTER_URI: 'tcp://raspberrypi:5555'
+      PI_MASTER_URI: 'tcp://raspberrypi'
   inference:
     image: centipede2donald/byodr-ce:inference
     restart: always

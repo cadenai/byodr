@@ -9,7 +9,7 @@ from ConfigParser import SafeConfigParser
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
-from core import TwistHandler, PTZCamera, GstSource
+from core import TwistHandler, PTZCamera, GstSource, ZMQGate
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -46,14 +46,15 @@ def get_parser(config_dir):
     return parser
 
 
-def create_all(ipc_server, image_publisher, config_dir, previous=(None, None, None)):
+def create_all(ipc_server, image_publisher, drive_publisher, config_dir, previous=(None, None, None)):
     parser = get_parser(config_dir)
     vehicle_cfg = dict(parser.items('vehicle'))
     camera_cfg = dict(parser.items('camera'))
     vehicle, ptz_camera, gst_source = previous
     _configured = any(map(lambda _x: _x is None, previous))
     if vehicle is None:
-        vehicle = TwistHandler(**vehicle_cfg)
+        gate = ZMQGate(drive_publisher)
+        vehicle = TwistHandler(gate, **vehicle_cfg)
     elif vehicle.is_reconfigured(**vehicle_cfg):
         vehicle.restart(**vehicle_cfg)
         _configured = True
@@ -87,17 +88,20 @@ def main():
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
+    drive_publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
 
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
-    r_pi_status = ReceiverThread(url=pi_master_uri, topic=b'ras/drive/status', event=quit_event)
-    threads = [pilot, teleop, ipc_chatter, ipc_server, r_pi_status]
+    r_pi_status = ReceiverThread(url='{}:5555'.format(pi_master_uri), topic=b'ras/drive/status', event=quit_event)
+    r_pi_odometer = ReceiverThread(url='{}:5556'.format(pi_master_uri), topic=b'ras/sensor/odometer', event=quit_event)
+
+    threads = [pilot, teleop, ipc_chatter, ipc_server, r_pi_status, r_pi_odometer]
     if quit_event.is_set():
         return 0
 
-    vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, args.config)
+    vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, drive_publisher, args.config)
     [t.start() for t in threads]
     _period = 1. / vehicle.get_process_frequency()
     while not quit_event.is_set():
@@ -107,17 +111,20 @@ def main():
         state_publisher.publish(vehicle.state())
         gst_source.check()
         ptz_camera.add(c_pilot, c_teleop)
+        pi_status = r_pi_status.pop_latest()
+        if pi_status is not None:
+            _configured = bool(pi_status.get('configured'))
+            if not _configured:
+                vehicle.send_config()
+        pi_odo = r_pi_odometer.pop_latest()
+        if pi_odo is not None:
+            vehicle.update_rps(pi_odo.get('rps'))
         chat = ipc_chatter.pop_latest()
         if chat and chat.get('command') == 'restart':
-            previous = (vehicle, ptz_camera, gst_source)
-            vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, args.config, previous=previous)
+            _prev = (vehicle, ptz_camera, gst_source)
+            vehicle, ptz_camera, gst_source = create_all(ipc_server, image_publisher, drive_publisher, args.config, previous=_prev)
             _period = 1. / vehicle.get_process_frequency()
         else:
-            pi_status = r_pi_status.pop_latest()
-            if pi_status is not None:
-                _configured = bool(pi_status.get('configured'))
-                if not _configured:
-                    vehicle.send_config()
             time.sleep(_period)
 
     logger.info("Waiting on handler to quit.")
