@@ -1,0 +1,31 @@
+version: '2'
+services:
+  cam1:
+    build:
+      dockerfile: vehicles/rover/Dockerfile
+    volumes:
+      - ../common:/common
+      - ../vehicles/rover:/app
+  nodews:
+    build:
+      dockerfile: teleop/nodews/Dockerfile
+  teleop:
+    volumes:
+      - ../common:/common
+      - ../teleop:/app
+  pilot:
+    volumes:
+      - ../pilot:/app
+  recorder:
+    volumes:
+      - ../recorder:/app
+  vehicle:
+    build:
+      dockerfile: vehicles/rover/Dockerfile
+    volumes:
+      - ../vehicles/rover:/app
+  inference:
+    build:
+      dockerfile: inference/Dockerfile.jp
+    volumes:
+      - ../inference:/app

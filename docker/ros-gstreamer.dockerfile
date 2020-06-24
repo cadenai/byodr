@@ -1,4 +1,4 @@
-# docker build -f docker/Dockerfile.ros_gstreamer -t centipede2donald/ros-melodic:python27-opencv32-gstreamer10 .
+# docker build -f <name> -t centipede2donald/ros-melodic:python27-opencv32-gstreamer10 .
 FROM ros:melodic
 
 ENV TZ=Europe/Amsterdam
@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-pip \
     python-setuptools \
     python-wheel \
+    python-zmq \
     wget
 
 RUN apt-get update && apt-get install -f -y \
@@ -30,5 +31,3 @@ RUN apt-get update && apt-get install -f -y \
     libgstreamer1.0-0 \
     python-gi \
  && rm -rf /var/lib/apt/lists/*
-
-RUN pip install "pyzmq >=18.1, <19.0"

@@ -1,28 +1,51 @@
 version: '2'
 services:
   cam1:
+    build:
+      context: ..
     image: centipede2donald/byodr-ce:rover
+    container_name: byodr_cam1
     restart: always
     command: python stream.py
     stop_signal: SIGKILL
+    volumes:
+      - ${DC_CONFIG_DIR}:/config
   nodews:
+    build:
+      context: ..
     image: centipede2donald/byodr-ce:nodews
+    container_name: byodr_nodews
     restart: always
+    stop_signal: SIGKILL
     depends_on:
       - "cam1"
     ports:
       - "9101:9101"
     environment:
       FEED_IP: 'byodr_cam1'
-    stop_signal: SIGKILL
+      IMG_WIDTH: 1280
+      IMG_HEIGHT: 720
+  teleop:
+    environment:
+      LD_PRELOAD: libgomp.so.1
+  pilot:
+    environment:
+      LD_PRELOAD: libgomp.so.1
+  recorder:
+    environment:
+      LD_PRELOAD: libgomp.so.1
   vehicle:
     image: centipede2donald/byodr-ce:rover
+    network_mode: "host"
     restart: always
     environment:
-      PI_MASTER_URI: 'tcp://raspberrypi'
+      LD_PRELOAD: libgomp.so.1
+      PI_MASTER_URI: ${DC_PI_MASTER_URI}  # 'tcp://raspberrypi'
   inference:
-    image: centipede2donald/byodr-ce:inference
+    image: centipede2donald/byodr-ce:inference-tegra
     restart: always
+    environment:
+      LD_PRELOAD: libgomp.so.1
     volumes:
       - '/usr/local/cuda:/usr/local/cuda'
       - '/usr/lib/aarch64-linux-gnu:/usr-extra'

@@ -1,4 +1,4 @@
-# docker build -f docker/Dockerfile.ros_serial -t centipede2donald/ros-melodic:rosserial .
+# docker build -f <name> -t centipede2donald/ros-melodic:rosserial .
 FROM ros:melodic
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

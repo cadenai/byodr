@@ -7,9 +7,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-opencv \
     python-pip \
     python-setuptools \
+    python-zmq \
  && rm -rf /var/lib/apt/lists/*
-
-RUN pip install "pyzmq >=18.1, <19.0"
 
 COPY ./common common/
 COPY ./inference app/

@@ -6,18 +6,15 @@ services:
       - ../teleop:/app
   pilot:
     volumes:
-      - ../common:/common
       - ../pilot:/app
   recorder:
     volumes:
-      - ../common:/common
       - ../recorder:/app
   vehicle:
     build:
       dockerfile: vehicles/carla09/Dockerfile
     image: centipede2donald/byodr-ce:carla-099
     volumes:
-      - ../common:/common
       - ../vehicles/carla09:/app
   inference:
     build:
@@ -26,7 +23,6 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:
-      - ../common:/common
       - ../inference:/app
 
 

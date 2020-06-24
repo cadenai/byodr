@@ -1,4 +1,4 @@
-# docker build -f docker/Dockerfile.tf_jp42 -t centipede2donald/nvidia-jetson:jp42-python27-opencv32-tensorflow113 .
+# docker build -f <name> -t centipede2donald/nvidia-jetson:jp42-python27-opencv32-tensorflow113 .
 FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
 ENV TZ=Europe/Amsterdam
