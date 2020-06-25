@@ -151,16 +151,23 @@ class JSONZmqClient(object):
     def __init__(self, urls, receive_timeout_ms=200):
         self._urls = urls if isinstance(urls, list) else [urls]
         self._receive_timeout = receive_timeout_ms
+        self._context = None
         self._socket = None
         self._create(self._urls)
 
     def _create(self, locations):
-        socket = zmq.Context().socket(zmq.REQ)
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
         socket.setsockopt(zmq.RCVHWM, 1)
         socket.setsockopt(zmq.RCVTIMEO, self._receive_timeout)
         socket.setsockopt(zmq.LINGER, 0)
         [socket.connect(location) for location in locations]
+        self._context = context
         self._socket = socket
+
+    def quit(self):
+        if self._context is not None:
+            self._context.destroy()
 
     def call(self, message):
         ret = {}

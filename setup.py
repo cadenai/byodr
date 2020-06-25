@@ -158,7 +158,6 @@ User={sd_service_user}
 Group={sd_service_group}
 Environment=DC_CONFIG_DIR={sd_config_dir}
 Environment=DC_RECORDER_SESSIONS={sd_sessions_dir}
-Environment=DC_PI_MASTER_URI={sd_pi_master_uri}
 TimeoutStartSec=0
 Restart=on-failure
 ExecStart=/usr/bin/docker-compose {sd_compose_files} up 
@@ -174,6 +173,7 @@ camera.user = User
 camera.password = HelloUser
 
 [vehicle] 
+ras.master.uri = tcp://raspberrypi
 ras.servo.steering.min_pulse_width.ms = 0.50
 ras.servo.steering.max_pulse_width.ms = 2.0
 ras.servo.motor.min_pulse_width.ms = 0.50
@@ -219,7 +219,7 @@ ras.throttle.domain.scale = 10
 
     @staticmethod
     def get_docker_env():
-        return {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': '', 'DC_PI_MASTER_URI': ''}
+        return {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}
 
     @staticmethod
     def get_systemd_service_name():

@@ -51,7 +51,7 @@ class HallRps(object):
 
 
 def main():
-    p_odo = JSONPublisher(url='tcp://0.0.0.0:5556', topic='ras/sensor/odometer')
+    p_odo = JSONPublisher(url='tcp://0.0.0.0:5560', topic='ras/sensor/odometer')
     s_hall = HallRps()
 
     rate = 0.02  # 50 Hz.

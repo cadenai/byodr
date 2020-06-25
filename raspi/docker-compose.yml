@@ -17,7 +17,6 @@ services:
     command: python servos.py
     environment:
       GPIOZERO_PIN_FACTORY: 'pigpio'
-      DRIVE_MASTER_URI: ${DC_DRIVE_MASTER_URI}  # tcp://nanoida:5555
   odometry:
     image: centipede2donald/byodr-ce:pigpio
     container_name: odometry

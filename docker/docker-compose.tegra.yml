@@ -40,7 +40,6 @@ services:
     restart: always
     environment:
       LD_PRELOAD: libgomp.so.1
-      PI_MASTER_URI: ${DC_PI_MASTER_URI}  # 'tcp://raspberrypi'
   inference:
     image: centipede2donald/byodr-ce:inference-tegra
     restart: always

@@ -75,10 +75,10 @@ def main():
     [t.start() for t in threads]
 
     publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
-    pilot_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock',
-                                       'ipc:///byodr/inference_c.sock',
-                                       'ipc:///byodr/vehicle_c.sock',
-                                       'ipc:///byodr/recorder_c.sock'])
+    zm_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock',
+                                    'ipc:///byodr/inference_c.sock',
+                                    'ipc:///byodr/vehicle_c.sock',
+                                    'ipc:///byodr/recorder_c.sock'])
     user_options = UserOptions(user_file)
     try:
         web_app = web.Application([
@@ -95,7 +95,7 @@ def main():
             (r"/api/user/options", ApiUserOptionsHandler,
              dict(user_options=user_options, fn_on_save=partial(on_options_save, publisher=publisher))),
             (r"/api/system/state", ApiSystemStateHandler,
-             dict(fn_list_start_messages=partial(list_process_start_messages, client=pilot_client))),
+             dict(fn_list_start_messages=partial(list_process_start_messages, client=zm_client))),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'
