@@ -66,8 +66,10 @@ class RasPi(object):
         self._event.set()
 
     def join(self):
-        self._status.join()
-        self._odometer.join()
+        if self._status is not None:
+            self._status.join()
+        if self._odometer is not None:
+            self._odometer.join()
 
     def restart(self):
         parser = get_parser(self._config_dir)
@@ -83,9 +85,6 @@ class RasPi(object):
             self._status.start()
             self._odometer.start()
             self._master_uri = _master_uri
-
-    def update(self, status_msg):
-        if not bool(status_msg.get('connected')):
             self._pi_client.call(dict(master='tcp://{}:5555'.format(socket.gethostname())))
 
     def pop_odometer(self):
@@ -169,7 +168,6 @@ class Rover(object):
         self.gst_source.check()
         pi_status = self.ras_pi.pop_status()
         if pi_status is not None:
-            self.ras_pi.update(pi_status)
             if not bool(pi_status.get('configured')):
                 self.vehicle.send_config()
         pi_odo = self.ras_pi.pop_odometer()

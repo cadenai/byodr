@@ -104,7 +104,7 @@ def main():
     ipc_server = LocalIPCServer(url='tcp://0.0.0.0:5550', event=quit_event, fn_callback=_on_host)
     p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
 
-    threads = [ipc_server, p_status]
+    threads = [ipc_server]
     [t.start() for t in threads]
 
     steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, shift=0, scale=0)
