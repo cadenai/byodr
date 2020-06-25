@@ -63,7 +63,7 @@ class TegraStateManager(object):
     _f_tegra_release = '/etc/nv_tegra_release'
     _f_cuda_version = '/usr/local/cuda/version.txt'
 
-    def __init__(self, build_dirname='build', log_prefix='installOrUpdate', default_application_dirname='byodr'):
+    def __init__(self, build_dirname='build', log_prefix='setup', default_application_dirname='byodr'):
         self.build_dirname = build_dirname
         self.log_filename = log_prefix + '.log'
         self.json_filename = log_prefix + '.json'
@@ -99,8 +99,6 @@ class TegraStateManager(object):
         # Inits.
         if 'application.directory' not in self.state.keys():
             self.state['application.directory'] = os.path.join(self.state['user.home'], self.default_application_dirname)
-        if 'pi.name.or.ip' not in self.state.keys():
-            self.state['pi.name.or.ip'] = 'raspberrypi'
 
     def get_application_directory(self):
         return self.state['application.directory']
@@ -117,9 +115,6 @@ class TegraStateManager(object):
     def set_application_directory(self, dirname):
         self.state['application.directory'] = dirname
 
-    def get_pi_master_uri(self):
-        return 'tcp://' + self.state['pi.name.or.ip']
-
     def __enter__(self):
         self.open_log = open(os.path.join(self.build_dirname, self.log_filename), mode='a')
         return self
@@ -128,7 +123,6 @@ class TegraStateManager(object):
         self.open_log.close()
         with open(os.path.join(self.build_dirname, self.json_filename), mode='w') as f:
             json.dump({'application.directory': self.state['application.directory']}, f)
-            json.dump({'pi.name.or.ip': self.state['pi.name.or.ip']}, f)
 
     def log(self, text, new_line=True):
         self.open_log.write(text)
@@ -231,7 +225,6 @@ ras.throttle.domain.scale = 10
             'sd_service_group': self.get_group(),
             'sd_config_dir': self.manager.get_config_directory(),
             'sd_sessions_dir': self.manager.get_sessions_directory(),
-            'sd_pi_master_uri': self.manager.get_pi_master_uri(),
             'sd_compose_files': ' '.join('-f {}'.format(name) for name in self.get_docker_files())
         }
         return TegraInstaller._systemd_service_template.format(**_m)
@@ -273,14 +266,103 @@ ras.throttle.domain.scale = 10
         return _run(['cat', config_file]).stdout
 
 
+class PiInstaller(object):
+    _systemd_system_directory = '/etc/systemd/system'
+    _systemd_service_name = 'byodr.service'
+    _systemd_service_template = '''
+[Unit]
+Description=Byodr CE Onboard Processes
+Requires=docker.service
+After=docker.service
+
+[Service]
+User={sd_service_user}
+Group={sd_service_group}
+TimeoutStartSec=0
+Restart=on-failure
+ExecStart=/usr/bin/docker-compose {sd_compose_files} up 
+ExecStop=/usr/bin/docker-compose {sd_compose_files} down -v
+
+[Install]
+WantedBy=multi-user.target
+'''
+
+    def __init__(self, script_location, build_dirname='build', log_prefix='setup'):
+        self.build_dirname = build_dirname
+        self._docker_compose_file = os.path.join(script_location, 'raspi', 'docker-compose.yml')
+        self.log_filename = log_prefix + '.log'
+        self.state = dict()
+        self.open_log = None
+        self._init_state()
+
+    def _init_state(self):
+        # Find the terminal user regardless of nested sudo.
+        _user = _run(['who', 'am', 'i']).stdout.split(' ')[0]
+        self.state['user.name'] = _user
+        self.state['user.group'] = _run(['id', '-gn', _user]).stdout.strip()
+        self.state['user.home'] = os.environ['HOME']
+
+    def get_state(self):
+        return self.state
+
+    def get_user(self):
+        return self.state['user.name']
+
+    def get_group(self):
+        return self.state['user.group']
+
+    @staticmethod
+    def use_application_directory():
+        return False
+
+    @staticmethod
+    def do_application_user():
+        return "Ok"
+
+    def __enter__(self):
+        self.open_log = open(os.path.join(self.build_dirname, self.log_filename), mode='a')
+        return self
+
+    def __exit__(self, *args):
+        self.open_log.close()
+
+    def log(self, text, new_line=True):
+        self.open_log.write(text)
+        if new_line:
+            self.open_log.write("\n")
+
+    def get_docker_files(self):
+        return [self._docker_compose_file]
+
+    @staticmethod
+    def get_docker_env():
+        return {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}
+
+    @staticmethod
+    def get_systemd_service_name():
+        return PiInstaller._systemd_service_name
+
+    def get_systemd_service_contents(self):
+        _m = {
+            'sd_service_user': self.get_user(),
+            'sd_service_group': self.get_group(),
+            'sd_compose_files': ' '.join('-f {}'.format(name) for name in self.get_docker_files())
+        }
+        return PiInstaller._systemd_service_template.format(**_m)
+
+
 def create_installer(script_location, build_dirname):
-    return TegraInstaller(script_location=script_location, build_dirname=build_dirname)
+    machine = _run(['uname', '-m']).stdout.strip()
+    if machine == 'armv7l':
+        return PiInstaller(script_location=script_location, build_dirname=build_dirname)
+    else:
+        return TegraInstaller(script_location=script_location, build_dirname=build_dirname)
 
 
 def main():
     # This script must be run as root.
     if os.environ['USER'] != 'root':
-        print("Please run this script as root, e.g. sudo ./{}".format(os.path.basename(__file__)))
+        print("Please run this script as root, sudo ./{}".format(os.path.basename(__file__)))
         exit(-1)
 
     _script_location = os.path.join(os.getcwd(), os.path.dirname(__file__))
