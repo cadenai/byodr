@@ -1,17 +1,17 @@
 import argparse
 import glob
 import logging
+import math
 import multiprocessing
 import os
 import signal
-import socket
 import time
 from ConfigParser import SafeConfigParser
 
-from byodr.utils import timestamp
+from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer, JSONZmqClient
 from byodr.utils.option import parse_option
-from core import TwistHandler, PTZCamera, GstSource, ZMQGate
+from core import PTZCamera, GstSource
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -48,131 +48,158 @@ def get_parser(config_dir):
     return parser
 
 
-class RasPi(object):
-    def __init__(self, config_dir):
-        self._config_dir = config_dir
+class PiProtocol(Configurable):
+    def __init__(self):
+        super(PiProtocol, self).__init__()
         self._event = multiprocessing.Event()
-        self._pi_client = None
         self._master_uri = None
+        self._pi_client = None
         self._status = None
         self._odometer = None
 
-    def start(self):
-        self.restart()
-
-    def quit(self):
-        if self._pi_client is not None:
-            self._pi_client.quit()
-        self._event.set()
-
-    def join(self):
-        if self._status is not None:
-            self._status.join()
-        if self._odometer is not None:
-            self._odometer.join()
-
-    def restart(self):
-        parser = get_parser(self._config_dir)
-        vehicle_cfg = dict(parser.items('vehicle'))
-        _master_uri = parse_option('ras.master.uri', str, 'none', [], **vehicle_cfg)
-        if self._master_uri != _master_uri:
-            logger.info("Using pi master uri '{}'.".format(_master_uri))
-            self.quit()
-            self.join()
-            self._pi_client = JSONZmqClient(urls='{}:5550'.format(_master_uri))
-            self._status = ReceiverThread(url='{}:5555'.format(_master_uri), topic=b'ras/drive/status', event=self._event)
-            self._odometer = ReceiverThread(url='{}:5560'.format(_master_uri), topic=b'ras/sensor/odometer', event=self._event)
-            self._status.start()
-            self._odometer.start()
-            self._master_uri = _master_uri
-            self._pi_client.call(dict(master='tcp://{}:5555'.format(socket.gethostname())))
+    def pop_status(self):
+        return None if self._status is None else self._status.pop_latest()
 
     def pop_odometer(self):
-        return self._odometer.pop_latest()
+        return None if self._odometer is None else self._odometer.pop_latest()
 
-    def pop_status(self):
-        return self._status.pop_latest()
+    def send_config(self, data):
+        if self._pi_client is not None and data is not None:
+            self._pi_client.call(dict(method='ras/servo/config', data=data))
+
+    def send_drive(self, throttle=0., steering=0., reverse_gear=False):
+        if self._pi_client is not None:
+            throttle = max(-1., min(1., throttle))
+            steering = max(-1., min(1., steering))
+            _reverse = 1 if reverse_gear else 0
+            self._pi_client.call(dict(method='ras/servo/drive', data=dict(steering=steering, throttle=throttle, reverse=_reverse)))
+
+    def is_reconfigured(self, **kwargs):
+        return self._master_uri != kwargs.get('ras.master.uri')
+
+    def internal_quit(self):
+        self._event.set()
+        if self._pi_client is not None:
+            self._pi_client.quit()
+
+    def internal_start(self, **kwargs):
+        errors = []
+        _master_uri = parse_option('ras.master.uri', str, 'none', errors, **kwargs)
+        logger.info("Using pi master uri '{}'.".format(_master_uri))
+        self._event = multiprocessing.Event()
+        self._pi_client = JSONZmqClient(urls='{}:5550'.format(_master_uri))
+        self._status = ReceiverThread(url='{}:5555'.format(_master_uri), topic=b'ras/drive/status', event=self._event)
+        self._odometer = ReceiverThread(url='{}:5560'.format(_master_uri), topic=b'ras/sensor/odometer', event=self._event)
+        self._status.start()
+        self._odometer.start()
+        self._master_uri = _master_uri
+        return errors
 
 
-class Rover(object):
-    def __init__(self, config_dir, drive_publisher, image_publisher, ipc_server):
+class Platform(Configurable):
+    def __init__(self):
+        super(Platform, self).__init__()
+        self._protocol = PiProtocol()
+        self._servo_config = None
+        self._rps = 0  # Hall sensor revolutions per second.
+        self._circum_m = 1
+        self._gear_ratio = 1
+
+    def state(self):
+        x, y = 0, 0
+        # Convert to travel speed in meters per second.
+        velocity = (self._rps / self._gear_ratio) * self._circum_m
+        return dict(x_coordinate=x,
+                    y_coordinate=y,
+                    heading=0,
+                    velocity=velocity,
+                    time=timestamp())
+
+    def drive(self, pilot, teleop):
+        pi_status = self._protocol.pop_status()
+        pi_odo = self._protocol.pop_odometer()
+        if pi_status is not None and not bool(pi_status.get('configured')):
+            self._protocol.send_config(self._servo_config)
+        if pi_odo is not None:
+            self._rps = pi_odo.get('rps')
+        if pilot is None:
+            self._protocol.send_drive()
+        else:
+            _reverse = teleop and teleop.get('arrow_down', 0)
+            self._protocol.send_drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse)
+
+    def internal_quit(self):
+        pass
+
+    def internal_start(self, **kwargs):
+        self._protocol.restart(**kwargs)
+        errors = []
+        self._circum_m = 2 * math.pi * parse_option('chassis.wheel.radius.meter', float, 0, errors, **kwargs)
+        self._gear_ratio = parse_option('chassis.hall.ticks.per.rotation', int, 0, errors, **kwargs)
+        c_steer = dict(pin=parse_option('ras.servo.steering.pin.nr', int, 0, errors, **kwargs),
+                       min_pw=parse_option('ras.servo.steering.min_pulse_width.ms', float, 0, errors, **kwargs),
+                       max_pw=parse_option('ras.servo.steering.max_pulse_width.ms', float, 0, errors, **kwargs),
+                       frame=parse_option('ras.servo.steering.frame_width.ms', float, 0, errors, **kwargs))
+        c_motor = dict(pin=parse_option('ras.servo.motor.pin.nr', int, 0, errors, **kwargs),
+                       min_pw=parse_option('ras.servo.motor.min_pulse_width.ms', float, 0, errors, **kwargs),
+                       max_pw=parse_option('ras.servo.motor.max_pulse_width.ms', float, 0, errors, **kwargs),
+                       frame=parse_option('ras.servo.motor.frame_width.ms', float, 0, errors, **kwargs))
+        c_throttle = dict(reverse=parse_option('ras.throttle.reverse.gear', int, 0, errors, **kwargs),
+                          forward_shift=parse_option('ras.throttle.domain.forward.shift', float, 0, errors, **kwargs),
+                          backward_shift=parse_option('ras.throttle.domain.backward.shift', float, 0, errors, **kwargs),
+                          scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **kwargs))
+        self._servo_config = dict(steering=c_steer, motor=c_motor, throttle=c_throttle)
+        self._protocol.send_config(self._servo_config)
+        return errors
+
+
+class Rover(Configurable):
+
+    def __init__(self, config_dir, image_publisher, ipc_server):
+        super(Rover, self).__init__()
         self._config_dir = config_dir
-        self._drive_publisher = drive_publisher
-        self._image_publisher = image_publisher
         self._ipc_server = ipc_server
-        self.ras_pi = RasPi(config_dir)
-        self.vehicle = None
-        self.camera = None
-        self.gst_source = None
+        self._process_frequency = 10
+        self._patience_micro = 100.
+        self._vehicle = Platform()
+        self._camera = PTZCamera()
+        self._gst_source = GstSource(image_publisher)
 
     def get_process_frequency(self):
-        return self.vehicle.get_process_frequency()
+        return self._process_frequency
 
     def get_patience_micro(self):
-        return self.vehicle.get_patience_micro()
+        return self._patience_micro
 
-    def get_vehicle_state(self):
-        return self.vehicle.state()
+    def internal_quit(self):
+        self._vehicle.quit()
+        self._camera.quit()
+        self._gst_source.quit()
 
-    def start(self):
-        self.restart()
-
-    def quit(self):
-        self.ras_pi.quit()
-        if self.vehicle is not None:
-            self.vehicle.quit()
-        if self.camera is not None:
-            self.camera.quit()
-        if self.gst_source is not None:
-            self.gst_source.quit()
-
-    def join(self):
-        self.quit()
-
-    def restart(self):
-        self.ras_pi.restart()
+    def internal_start(self):
+        errors = []
         parser = get_parser(self._config_dir)
         vehicle_cfg = dict(parser.items('vehicle'))
         camera_cfg = dict(parser.items('camera'))
-        previous = self.vehicle, self.camera, self.gst_source
-        vehicle, ptz_camera, gst_source = previous
-        _configured = any(map(lambda _x: _x is None, previous))
-        if vehicle is None:
-            gate = ZMQGate(self._drive_publisher)
-            vehicle = TwistHandler(gate, **vehicle_cfg)
-        elif vehicle.is_reconfigured(**vehicle_cfg):
-            vehicle.restart(**vehicle_cfg)
-            _configured = True
-        if ptz_camera is None:
-            ptz_camera = PTZCamera(**camera_cfg)
-        elif ptz_camera.is_reconfigured(**camera_cfg):
-            ptz_camera.restart(**camera_cfg)
-            _configured = True
-        if gst_source is None:
-            gst_source = GstSource(self._image_publisher, **camera_cfg)
-        elif gst_source.is_reconfigured(**camera_cfg):
-            gst_source.restart(**camera_cfg)
-            _configured = True
-        if _configured:
-            errors = []
-            [errors.extend(x.get_errors()) for x in (vehicle, ptz_camera, gst_source)]
+        self._process_frequency = parse_option('clock.hz', int, 10, errors, **vehicle_cfg)
+        self._patience_micro = parse_option('patience.ms', int, 200, errors, **vehicle_cfg) * 1000.
+        _parties = [self._vehicle, self._camera, self._gst_source]
+        _starts = sum([c.get_num_starts() for c in _parties])
+        self._vehicle.restart(**vehicle_cfg)
+        self._camera.restart(**camera_cfg)
+        self._gst_source.restart(**camera_cfg)
+        _restarted = sum([c.get_num_starts() for c in _parties]) > _starts
+        if _restarted:
+            [errors.extend(x.get_errors()) for x in _parties]
             self._ipc_server.register_start(errors)
-            _process_frequency = vehicle.get_process_frequency()
-            _patience_micro = vehicle.get_patience_micro()
-            logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
-        self.vehicle, self.camera, self.gst_source = vehicle, ptz_camera, gst_source
+            logger.info("Processing at {} Hz and a patience of {} ms.".format(self._process_frequency, self._patience_micro / 1000))
+        return errors
 
-    def update(self, c_pilot, c_teleop):
-        self.vehicle.drive(c_pilot, c_teleop)
-        self.camera.add(c_pilot, c_teleop)
-        self.gst_source.check()
-        pi_status = self.ras_pi.pop_status()
-        if pi_status is not None:
-            if not bool(pi_status.get('configured')):
-                self.vehicle.send_config()
-        pi_odo = self.ras_pi.pop_odometer()
-        if pi_odo is not None:
-            self.vehicle.update_rps(pi_odo.get('rps'))
+    def cycle(self, c_pilot, c_teleop):
+        self._vehicle.drive(c_pilot, c_teleop)
+        self._camera.add(c_pilot, c_teleop)
+        self._gst_source.check()
+        return self._vehicle.state()
 
 
 def main():
@@ -182,14 +209,12 @@ def main():
 
     state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
-    drive_publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/servo/drive')
 
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
-
-    rover = Rover(args.config, drive_publisher, image_publisher, ipc_server)
+    rover = Rover(args.config, image_publisher, ipc_server)
 
     threads = [pilot, teleop, ipc_chatter, ipc_server, rover]
     if quit_event.is_set():
@@ -198,13 +223,13 @@ def main():
     [t.start() for t in threads]
     _period = 1. / rover.get_process_frequency()
     while not quit_event.is_set():
-        state_publisher.publish(rover.get_vehicle_state())
         c_pilot = _latest_or_none(pilot, patience=rover.get_patience_micro())
         c_teleop = _latest_or_none(teleop, patience=rover.get_patience_micro())
-        rover.update(c_pilot, c_teleop)
+        _state = rover.cycle(c_pilot, c_teleop)
+        state_publisher.publish(_state)
         chat = ipc_chatter.pop_latest()
         if chat and chat.get('command') == 'restart':
-            rover.restart()
+            rover.restart(force=True)
             _period = 1. / rover.get_process_frequency()
         else:
             time.sleep(_period)

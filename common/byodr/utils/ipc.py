@@ -2,7 +2,6 @@ import collections
 import json
 import logging
 import threading
-from abc import abstractmethod
 
 import numpy as np
 import zmq
@@ -106,15 +105,25 @@ class JSONServerThread(threading.Thread):
         server.bind(url)
         self._server = server
         self._quit_event = event
+        self._queue = collections.deque(maxlen=1)
 
-    @abstractmethod
+    def on_message(self, message):
+        self._queue.appendleft(message)
+
+    def get_latest(self):
+        return self._queue[0] if bool(self._queue) else None
+
+    def pop_latest(self):
+        return self._queue.popleft() if bool(self._queue) else None
+
     def serve(self, request):
-        raise NotImplementedError()
+        return {}
 
     def run(self):
         while not self._quit_event.is_set():
             try:
                 message = json.loads(self._server.recv())
+                self.on_message(message)
                 self._server.send(json.dumps(self.serve(message)))
             except zmq.Again:
                 pass

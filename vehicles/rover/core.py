@@ -1,6 +1,5 @@
 import Queue
 import logging
-import math
 import multiprocessing
 import threading
 import time
@@ -10,157 +9,14 @@ import numpy as np
 import requests
 from requests.auth import HTTPDigestAuth
 
-from byodr.utils import timestamp
-from byodr.utils.option import hash_dict, parse_option
+from byodr.utils import Configurable
+from byodr.utils.option import parse_option
 from video import GstRawSource
 
 logger = logging.getLogger(__name__)
 
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
-
-# Safety - cap the range that is availble through user configuration.
-# Ranges are from the servo domain, i.e. 1/90 - the pair is for forwards and reverse.
-# The ranges do not have to be symmetrical - backwards may seem faster here but not in practice (depends on the esc settings).
-D_SPEED_PROFILES = {
-    'economy': (4, 8),
-    'standard': (5, 8),
-    'sport': (7, 10),
-    'performance': (10, 10)
-    # Yep, what's next?
-}
-
-
-class ZMQGate(object):
-
-    def __init__(self, publisher):
-        self._errors = []
-        self._hash = -1
-        self._rps = 0  # Hall sensor revolutions per second.
-        self._publisher = None
-        self._subscriber = None
-        self._lock = threading.Lock()
-        self._publisher = publisher
-
-    def restart(self, **kwargs):
-        with self._lock:
-            _hash = hash_dict(**kwargs)
-            if _hash != self._hash:
-                self._hash = _hash
-                self._start(**kwargs)
-
-    def get_errors(self):
-        with self._lock:
-            return self._errors
-
-    def _start(self, **kwargs):
-        errors = []
-        self._circum_m = 2 * math.pi * parse_option('chassis.wheel.radius.meter', float, 0, errors, **kwargs)
-        self._gear_ratio = parse_option('chassis.hall.ticks.per.rotation', int, 0, errors, **kwargs)
-        c_steer = dict(pin=parse_option('ras.servo.steering.pin.nr', int, 0, errors, **kwargs),
-                       min_pw=parse_option('ras.servo.steering.min_pulse_width.ms', float, 0, errors, **kwargs),
-                       max_pw=parse_option('ras.servo.steering.max_pulse_width.ms', float, 0, errors, **kwargs),
-                       frame=parse_option('ras.servo.steering.frame_width.ms', float, 0, errors, **kwargs))
-        c_motor = dict(pin=parse_option('ras.servo.motor.pin.nr', int, 0, errors, **kwargs),
-                       min_pw=parse_option('ras.servo.motor.min_pulse_width.ms', float, 0, errors, **kwargs),
-                       max_pw=parse_option('ras.servo.motor.max_pulse_width.ms', float, 0, errors, **kwargs),
-                       frame=parse_option('ras.servo.motor.frame_width.ms', float, 0, errors, **kwargs))
-        c_throttle = dict(reverse=parse_option('ras.throttle.reverse.gear', int, 0, errors, **kwargs),
-                          shift=parse_option('ras.throttle.domain.shift', float, 0, errors, **kwargs),
-                          scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **kwargs))
-        self._servo_config = dict(steering=c_steer, motor=c_motor, throttle=c_throttle)
-        self._errors = errors
-        if not errors:
-            self.publish_config()
-
-    def update_odometer(self, rps):
-        # The odometer publishes revolutions per second.
-        self._rps = rps
-
-    def publish_config(self):
-        self._publisher.publish(data=self._servo_config, topic='ras/servo/config')
-
-    def publish(self, throttle=0., steering=0., reverse_gear=False):
-        with self._lock:
-            throttle = max(-1., min(1., throttle))
-            steering = max(-1., min(1., steering))
-            _reverse = 1 if reverse_gear else 0
-            self._publisher.publish(dict(steering=steering, throttle=throttle, reverse=_reverse))
-
-    def get_odometer_value(self):
-        with self._lock:
-            # Convert to travel speed in meters per second.
-            return (self._rps / self._gear_ratio) * self._circum_m
-
-
-class TwistHandler(object):
-    def __init__(self, gate, **kwargs):
-        super(TwistHandler, self).__init__()
-        self._gate = gate
-        self._quit_event = multiprocessing.Event()
-        self._hash = -1
-        self._errors = []
-        self._process_frequency = 10
-        self._patience_micro = 100.
-        self.restart(**kwargs)
-
-    def _configure(self, **kwargs):
-        _errors = []
-        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
-        self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
-        self._errors = _errors
-        self._hash = hash_dict(**kwargs)
-
-    def _drive(self, steering=0, throttle=0, reverse_gear=False):
-        try:
-            if not self._quit_event.is_set():
-                self._gate.publish(steering=steering, throttle=throttle, reverse_gear=reverse_gear)
-        except Exception as e:
-            logger.error("{}".format(e))
-
-    def get_process_frequency(self):
-        return self._process_frequency
-
-    def get_patience_micro(self):
-        return self._patience_micro
-
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs)
-
-    def restart(self, **kwargs):
-        if not self._quit_event.is_set():
-            self._configure(**kwargs)
-            self._gate.restart(**kwargs)
-
-    def get_errors(self):
-        return self._errors + self._gate.get_errors()
-
-    def state(self):
-        x, y = 0, 0
-        return dict(x_coordinate=x,
-                    y_coordinate=y,
-                    heading=0,
-                    velocity=self._gate.get_odometer_value(),
-                    time=timestamp())
-
-    def quit(self):
-        self._quit_event.set()
-
-    def update_rps(self, rps):
-        self._gate.update_odometer(rps)
-
-    def send_config(self):
-        self._gate.publish_config()
-
-    def noop(self):
-        self._drive(steering=0, throttle=0)
-
-    def drive(self, pilot, teleop):
-        if pilot is None:
-            self.noop()
-        else:
-            _reverse = teleop and teleop.get('arrow_down', 0)
-            self._drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse)
 
 
 class CameraPtzThread(threading.Thread):
@@ -261,29 +117,23 @@ class CameraPtzThread(threading.Thread):
                 pass
 
 
-class PTZCamera(object):
-    def __init__(self, **kwargs):
-        self._errors = []
-        self._hash = -1
+class PTZCamera(Configurable):
+    def __init__(self):
+        super(PTZCamera, self).__init__()
         self._camera = None
-        self._lock = threading.Lock()
-        self.restart(**kwargs)
 
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs)
-
-    def restart(self, **kwargs):
+    def add(self, pilot, teleop):
         with self._lock:
-            _hash = hash_dict(**kwargs)
-            if _hash != self._hash:
-                self._hash = _hash
-                self._start(**kwargs)
+            if self._camera:
+                self._camera.add(pilot, teleop)
 
-    def get_errors(self):
-        with self._lock:
-            return self._errors
+    def internal_quit(self):
+        if self._camera:
+            self._camera.quit()
+            self._camera.join()
+            self._camera = None
 
-    def _start(self, **kwargs):
+    def internal_start(self, **kwargs):
         errors = []
         ptz_enabled = parse_option('camera.ptz.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
         if ptz_enabled:
@@ -312,51 +162,33 @@ class PTZCamera(object):
         # Already under lock.
         elif self._camera:
             self._camera.quit()
-        self._errors = errors
-
-    def add(self, pilot, teleop):
-        with self._lock:
-            if self._camera:
-                self._camera.add(pilot, teleop)
-
-    def quit(self):
-        with self._lock:
-            if self._camera:
-                self._camera.quit()
-                self._camera.join()
-                self._camera = None
+        return errors
 
 
-class GstSource(object):
-    def __init__(self, image_publisher, **kwargs):
-        self._errors = []
+class GstSource(Configurable):
+    def __init__(self, image_publisher):
+        super(GstSource, self).__init__()
         self._image_publisher = image_publisher
         self._camera_shape = None
         self._flipcode = None
         self._hash = -1
         self._source = None
-        self._lock = threading.Lock()
-        self.restart(**kwargs)
-
-    def get_errors(self):
-        return self._errors
-
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs)
-
-    def restart(self, **kwargs):
-        with self._lock:
-            _hash = hash_dict(**kwargs)
-            if _hash != self._hash:
-                self._hash = _hash
-                self._start(**kwargs)
 
     def _publish(self, _b):
         if self._camera_shape is not None:
             _img = np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(self._camera_shape)
             self._image_publisher.publish(cv2.flip(_img, self._flipcode) if self._flipcode is not None else _img)
 
-    def _start(self, **kwargs):
+    def check(self):
+        with self._lock:
+            if self._source:
+                self._source.check()
+
+    def internal_quit(self):
+        if self._source:
+            self._source.close()
+
+    def internal_start(self, **kwargs):
         _errors = []
         _server = parse_option('camera.ip', str, errors=_errors, **kwargs)
         _user = parse_option('camera.user', str, errors=_errors, **kwargs)
@@ -383,8 +215,6 @@ class GstSource(object):
         self._flipcode = None
         if _img_flip in ('both', 'vertical', 'horizontal'):
             self._flipcode = 0 if _img_flip == 'vertical' else 1 if _img_flip == 'horizontal' else -1
-
-        self._errors = _errors
         if len(_errors) == 0:
             # Do not use our method - already under lock.
             if self._source:
@@ -392,13 +222,4 @@ class GstSource(object):
             logger.info("Camera rtsp url = {}.".format(_rtsp_url))
             logger.info("Using image={} and flipcode={}".format(self._camera_shape, self._flipcode))
             self._source = GstRawSource(fn_callback=self._publish, command=_url)
-
-    def check(self):
-        with self._lock:
-            if self._source:
-                self._source.check()
-
-    def quit(self):
-        with self._lock:
-            if self._source:
-                self._source.close()
+        return _errors
