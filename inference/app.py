@@ -11,9 +11,9 @@ from functools import partial
 
 import numpy as np
 
-from byodr.utils import timestamp
+from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
-from byodr.utils.option import hash_dict, parse_option
+from byodr.utils.option import parse_option
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
 
@@ -29,10 +29,36 @@ def _interrupt():
     quit_event.set()
 
 
-class TFRunner(object):
-    def __init__(self, model_directory, **kwargs):
-        self._lock = multiprocessing.Lock()
-        self._hash = hash_dict(**kwargs)
+class TFRunner(Configurable):
+    def __init__(self, model_directory):
+        super(TFRunner, self).__init__()
+        self._model_directory = model_directory
+        self._gpu_id = 0
+        self._process_frequency = 10
+        self._steering_scale_left = 1
+        self._steering_scale_right = 1
+        self._penalty_filter = None
+        self._fn_obstacle_norm = None
+        self._fn_brake_critic_norm = None
+        self._fn_corridor_norm = None
+        self._fn_dave_image = None
+        self._fn_alex_image = None
+        self._driver = None
+        self._dagger = False
+        self._poi_fallback = 0
+        self._fallback = False
+
+    def get_gpu(self):
+        return self._gpu_id
+
+    def get_frequency(self):
+        return self._process_frequency
+
+    def internal_quit(self, restarting=False):
+        if self._driver is not None:
+            self._driver.deactivate()
+
+    def internal_start(self, **kwargs):
         _errors = []
         self._gpu_id = parse_option('gpu.id', int, 0, _errors, **kwargs)
         self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
@@ -53,27 +79,11 @@ class TFRunner(object):
         p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        self._driver = TFDriver(model_directory=model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
+        self._driver = TFDriver(model_directory=self._model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._dagger = p_conv_dropout > 0
         self._poi_fallback = parse_option('driver.autopilot.poi.fallback', float, 0, _errors, **kwargs)
-        self._errors = _errors
-        self._fallback = False
         self._driver.activate()
-
-    def get_gpu(self):
-        return self._gpu_id
-
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs)
-
-    def get_frequency(self):
-        return self._process_frequency
-
-    def get_errors(self):
-        return self._errors
-
-    def quit(self):
-        self._driver.deactivate()
+        return _errors
 
     def _dnn_steering(self, raw):
         return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
@@ -140,15 +150,13 @@ def create_runner(ipc_server, config_dir, models_dir, previous=None):
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + _glob(models_dir, '*.ini') + _glob(config_dir, '*.ini')]
     cfg = dict(parser.items('inference'))
-    _configured = False
+    _starts = 0 if previous is None else previous.get_num_starts()
     if previous is None:
-        previous = TFRunner(models_dir, **cfg)
-        _configured = True
-    elif previous.is_reconfigured(**cfg):
-        previous.quit()
-        previous = TFRunner(models_dir, **cfg)
-        _configured = True
-    if _configured:
+        previous = TFRunner(models_dir)
+        previous.start(**cfg)
+    else:
+        previous.restart(**cfg)
+    if previous.get_num_starts() > _starts:
         ipc_server.register_start(previous.get_errors())
         logger.info("Processing at {} Hz on gpu {}.".format(previous.get_frequency(), previous.get_gpu()))
     return previous

@@ -35,10 +35,13 @@ def create_controller(ipc_server, config_dir, previous=None):
     parser = SafeConfigParser()
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
     cfg = dict(parser.items('pilot'))
-    if previous is None or previous.is_reconfigured(**cfg):
-        if previous is not None:
-            previous.quit()
-        previous = CommandProcessor(**cfg)
+    _starts = 0 if previous is None else previous.get_num_starts()
+    if previous is None:
+        previous = CommandProcessor()
+        previous.start(**cfg)
+    else:
+        previous.restart(**cfg)
+    if previous.get_num_starts() > _starts:
         ipc_server.register_start(previous.get_errors())
         logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(previous.get_frequency(), previous.get_patience_ms()))
     return previous

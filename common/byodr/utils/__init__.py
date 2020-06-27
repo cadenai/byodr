@@ -34,7 +34,7 @@ class Configurable(object):
         return []
 
     @abstractmethod
-    def internal_quit(self):
+    def internal_quit(self, restarting=False):
         pass
 
     def get_errors(self):
@@ -52,14 +52,14 @@ class Configurable(object):
             self._hash = hash_dict(**kwargs)
             self._num_starts += 1
 
-    def quit(self):
+    def quit(self, restarting=False):
         with self._lock:
-            self.internal_quit()
+            self.internal_quit(restarting)
 
     def join(self):
         self.quit()
 
-    def restart(self, force=False, **kwargs):
-        if force or self.is_reconfigured(**kwargs):
-            self.quit()
+    def restart(self, **kwargs):
+        if self.is_reconfigured(**kwargs):
+            self.quit(restarting=True)
             self.start(**kwargs)

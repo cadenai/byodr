@@ -77,7 +77,7 @@ class PiProtocol(Configurable):
     def is_reconfigured(self, **kwargs):
         return self._master_uri != kwargs.get('ras.master.uri')
 
-    def internal_quit(self):
+    def internal_quit(self, restarting=False):
         self._event.set()
         if self._pi_client is not None:
             self._pi_client.quit()
@@ -128,8 +128,9 @@ class Platform(Configurable):
             _reverse = teleop and teleop.get('arrow_down', 0)
             self._protocol.send_drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse)
 
-    def internal_quit(self):
-        pass
+    def internal_quit(self, restarting=False):
+        if not restarting:
+            self._protocol.quit()
 
     def internal_start(self, **kwargs):
         self._protocol.restart(**kwargs)
@@ -150,7 +151,7 @@ class Platform(Configurable):
                           scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **kwargs))
         self._servo_config = dict(steering=c_steer, motor=c_motor, throttle=c_throttle)
         self._protocol.send_config(self._servo_config)
-        return errors
+        return errors + self._protocol.get_errors()
 
 
 class Rover(Configurable):
@@ -171,10 +172,14 @@ class Rover(Configurable):
     def get_patience_micro(self):
         return self._patience_micro
 
-    def internal_quit(self):
-        self._vehicle.quit()
-        self._camera.quit()
-        self._gst_source.quit()
+    def is_reconfigured(self, **kwargs):
+        return True
+
+    def internal_quit(self, restarting=False):
+        if not restarting:
+            self._vehicle.quit()
+            self._camera.quit()
+            self._gst_source.quit()
 
     def internal_start(self):
         errors = []
@@ -193,7 +198,7 @@ class Rover(Configurable):
             [errors.extend(x.get_errors()) for x in _parties]
             self._ipc_server.register_start(errors)
             logger.info("Processing at {} Hz and a patience of {} ms.".format(self._process_frequency, self._patience_micro / 1000))
-        return errors
+        return errors + self._vehicle.get_errors() + self._camera.get_errors() + self._gst_source.get_errors()
 
     def cycle(self, c_pilot, c_teleop):
         self._vehicle.drive(c_pilot, c_teleop)
@@ -229,7 +234,7 @@ def main():
         state_publisher.publish(_state)
         chat = ipc_chatter.pop_latest()
         if chat and chat.get('command') == 'restart':
-            rover.restart(force=True)
+            rover.restart()
             _period = 1. / rover.get_process_frequency()
         else:
             time.sleep(_period)

@@ -127,7 +127,7 @@ class PTZCamera(Configurable):
             if self._camera:
                 self._camera.add(pilot, teleop)
 
-    def internal_quit(self):
+    def internal_quit(self, restarting=False):
         if self._camera:
             self._camera.quit()
             self._camera.join()
@@ -171,7 +171,6 @@ class GstSource(Configurable):
         self._image_publisher = image_publisher
         self._camera_shape = None
         self._flipcode = None
-        self._hash = -1
         self._source = None
 
     def _publish(self, _b):
@@ -184,7 +183,7 @@ class GstSource(Configurable):
             if self._source:
                 self._source.check()
 
-    def internal_quit(self):
+    def internal_quit(self, restarting=False):
         if self._source:
             self._source.close()
 

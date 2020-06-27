@@ -8,9 +8,9 @@ import time
 import traceback
 from ConfigParser import SafeConfigParser
 
-from byodr.utils import timestamp
+from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
-from byodr.utils.option import parse_option, hash_dict
+from byodr.utils.option import parse_option
 from vehicle import CarlaHandler
 
 logger = logging.getLogger(__name__)
@@ -40,30 +40,29 @@ def _latest_or_none(receiver, patience):
     return candidate if _on_time else None
 
 
-class CarlaRunner(object):
-    def __init__(self, image_publisher, **kwargs):
-        self._hash = hash_dict(**kwargs)
+class CarlaRunner(Configurable):
+    def __init__(self, image_publisher):
+        super(CarlaRunner, self).__init__()
+        self._process_frequency = 10
+        self._patience_micro = 1000.
+        self._vehicle = CarlaHandler((lambda x: image_publisher.publish(x)))
+
+    def internal_quit(self, restarting=False):
+        if not restarting:
+            self._vehicle.quit()
+
+    def internal_start(self, **kwargs):
+        self._vehicle.restart(**kwargs)
         _errors = []
         self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
-        self._vehicle = CarlaHandler((lambda x: image_publisher.publish(x)), **kwargs)
-        self._errors = _errors + self._vehicle.get_errors()
-        self.start()
-
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs) or self._vehicle.is_reconfigured(**kwargs)
+        return _errors + self._vehicle.get_errors()
 
     def get_process_frequency(self):
         return self._process_frequency
 
     def get_patience_micro(self):
         return self._patience_micro
-
-    def get_errors(self):
-        return self._errors
-
-    def start(self):
-        self._vehicle.start()
 
     def state(self):
         return self._vehicle.state()
@@ -74,9 +73,6 @@ class CarlaRunner(object):
     def drive(self, cmd):
         self._vehicle.drive(cmd)
 
-    def quit(self):
-        self._vehicle.quit()
-
 
 def create_runner(ipc_server, config_dir, image_publisher, previous=None):
     # The end-user config overrides come last so all settings are modifiable.
@@ -84,15 +80,13 @@ def create_runner(ipc_server, config_dir, image_publisher, previous=None):
     [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
     cfg = dict(parser.items('vehicle'))
     cfg.update(dict(parser.items('platform')))
-    _configured = False
+    _starts = 0 if previous is None else previous.get_num_starts()
     if previous is None:
-        previous = CarlaRunner(image_publisher, **cfg)
-        _configured = True
-    elif previous.is_reconfigured(**cfg):
-        previous.quit()
-        previous = CarlaRunner(image_publisher, **cfg)
-        _configured = True
-    if _configured:
+        previous = CarlaRunner(image_publisher)
+        previous.start(**cfg)
+    else:
+        previous.restart(**cfg)
+    if previous.get_num_starts() > _starts:
         ipc_server.register_start(previous.get_errors())
         _process_frequency = previous.get_process_frequency()
         _patience_micro = previous.get_patience_micro()

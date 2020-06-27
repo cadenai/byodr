@@ -8,8 +8,8 @@ import cachetools
 import numpy as np
 import pid_controller.pid as pic
 
-from byodr.utils import timestamp
-from byodr.utils.option import parse_option, hash_dict
+from byodr.utils import timestamp, Configurable
+from byodr.utils.option import parse_option
 
 logger = logging.getLogger(__name__)
 
@@ -416,20 +416,35 @@ class PilotState(object):
         self.cruise_speed = 0
 
 
-class DriverManager(object):
-    def __init__(self, **kwargs):
-        self._errors = []
-        self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, self._errors, **kwargs)
-        self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, self._errors, **kwargs)
-        _steer_threshold = parse_option('driver.handler.steering.diff.threshold', float, 0, self._errors, **kwargs)
-        self._steering_stabilizer = IgnoreDifferences(threshold=_steer_threshold)
+class DriverManager(Configurable):
+    def __init__(self):
+        super(DriverManager, self).__init__()
+        self._principal_steer_scale = 0
+        self._cruise_speed_step = 0
+        self._steering_stabilizer = None
         self._pilot_state = PilotState()
         self._driver_cache = {}
-        self._errors.extend(self._fill_driver_cache(**kwargs))
         self._lock = multiprocessing.RLock()
         self._driver = None
         self._driver_ctl = None
+
+    def internal_quit(self, restarting=False):
+        for driver in self._driver_cache.values():
+            driver.deactivate()
+            driver.quit()
+
+    def internal_start(self, **kwargs):
+        _errors = []
+        self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
+        self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
+        _steer_threshold = parse_option('driver.handler.steering.diff.threshold', float, 0, _errors, **kwargs)
+        self._steering_stabilizer = IgnoreDifferences(threshold=_steer_threshold)
+        self._driver_cache.clear()
+        _errors.extend(self._fill_driver_cache(**kwargs))
+        self._driver = None
+        self._driver_ctl = None
         self.switch_ctl()
+        return _errors
 
     def _fill_driver_cache(self, **kwargs):
         _errors = []
@@ -457,9 +472,6 @@ class DriverManager(object):
             logger.error("Driver activation: {}".format(traceback.format_exc(e)))
         finally:
             self._lock.release()
-
-    def get_errors(self):
-        return self._errors
 
     def increase_cruise_speed(self):
         with self._lock:
@@ -513,25 +525,40 @@ class DriverManager(object):
             blob.steering = self._steering_stabilizer.calculate(blob.steering)
             return blob
 
-    def quit(self):
-        for driver in self._driver_cache.values():
-            driver.deactivate()
-            driver.quit()
 
+class CommandProcessor(Configurable):
+    def __init__(self):
+        super(CommandProcessor, self).__init__()
+        self._driver = DriverManager()
+        self._process_frequency = 10
+        self._patience_ms = 10
+        self._button_north_ctl = None
+        self._button_west_ctl = None
+        self._patience_micro = 1000.
+        self._cache = None
 
-class CommandProcessor(object):
-    def __init__(self, **kwargs):
-        self._hash = hash_dict(**kwargs)
-        self._driver = DriverManager(**kwargs)
-        self._errors = [] + self._driver.get_errors()
-        self._process_frequency = parse_option('clock.hz', int, 10, self._errors, **kwargs)
-        self._patience_ms = parse_option('patience.ms', int, 100, self._errors, **kwargs)
-        self._button_north_ctl = parse_option('controller.button.north.mode', str, 0, self._errors, **kwargs)
-        self._button_west_ctl = parse_option('controller.button.west.mode', str, 0, self._errors, **kwargs)
+    def get_patience_ms(self):
+        return self._patience_ms
+
+    def get_frequency(self):
+        return self._process_frequency
+
+    def internal_quit(self, restarting=False):
+        if not restarting:
+            self._driver.quit()
+
+    def internal_start(self, **kwargs):
+        _errors = []
+        self._driver.restart(**kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        self._patience_ms = parse_option('patience.ms', int, 100, _errors, **kwargs)
+        self._button_north_ctl = parse_option('controller.button.north.mode', str, 0, _errors, **kwargs)
+        self._button_west_ctl = parse_option('controller.button.west.mode', str, 0, _errors, **kwargs)
         self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
         self._cache = cachetools.TTLCache(maxsize=100, ttl=(self._patience_ms * 1e-3))
+        return _errors + self._driver.get_errors()
 
     def _cache_safe(self, key, func, *arguments):
         if self._cache.get(key) is None:
@@ -565,21 +592,6 @@ class CommandProcessor(object):
             self._cache_safe('turn ahead', lambda: self._driver.turn_instruction('intersection.ahead'))
         elif command.get('button_right', 0) == 1:
             self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
-
-    def get_patience_ms(self):
-        return self._patience_ms
-
-    def is_reconfigured(self, **kwargs):
-        return self._hash != hash_dict(**kwargs)
-
-    def get_frequency(self):
-        return self._process_frequency
-
-    def get_errors(self):
-        return self._errors
-
-    def quit(self):
-        self._driver.quit()
 
     def next_action(self, *args):
         _patience, _ts = self._patience_micro, timestamp()
