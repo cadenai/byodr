@@ -196,7 +196,6 @@ class GstSource(Configurable):
         _rtsp_port = parse_option('camera.rtsp.port', int, 0, errors=_errors, **kwargs)
         _rtsp_path = parse_option('camera.image.path', str, errors=_errors, **kwargs)
         _img_wh = parse_option('camera.image.shape', str, errors=_errors, **kwargs)
-        _img_flip = parse_option('camera.image.flip', str, errors=_errors, **kwargs)
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
         _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
@@ -212,14 +211,14 @@ class GstSource(Configurable):
         # flipcode = 0: flip vertically
         # flipcode > 0: flip horizontally
         # flipcode < 0: flip vertically and horizontally
-        self._flipcode = None
-        if _img_flip in ('both', 'vertical', 'horizontal'):
-            self._flipcode = 0 if _img_flip == 'vertical' else 1 if _img_flip == 'horizontal' else -1
+        # Must be done at stream source in order to be the same for all clients.
+        # if _img_flip in ('both', 'vertical', 'horizontal'):
+        #    self._flipcode = 0 if _img_flip == 'vertical' else 1 if _img_flip == 'horizontal' else -1
         if len(_errors) == 0:
             # Do not use our method - already under lock.
             if self._source:
                 self._source.close()
             logger.info("Camera rtsp url = {}.".format(_rtsp_url))
-            logger.info("Using image={} and flipcode={}".format(self._camera_shape, self._flipcode))
+            logger.info("Image shape={}.".format(self._camera_shape))
             self._source = GstRawSource(fn_callback=self._publish, command=_url)
         return _errors
