@@ -5,11 +5,16 @@ const express            = require('express');
 const RemoteTCPFeedRelay = require('./remotetcpfeed');
 const app                = express();
 
-const IMG_WIDTH = process.env.IMG_WIDTH || 1280;
-const IMG_HEIGHT = process.env.IMG_HEIGHT || 720;
-const FEED_IP = process.env.FEED_IP || 'localhost';
-const FEED_PORT = process.env.FEED_PORT || 5101;
-const SERVER_PORT = process.env.SERVER_PORT || 9101;
+var propertiesReader = require('properties-reader');
+// When duplicate names are found in the properties, the first one read will be replaced with the later one.
+var properties = propertiesReader('/app/config.ini');
+properties.append('/config/config.ini')
+
+const IMG_WIDTH = properties.get('camera.input.stream.image.width');
+const IMG_HEIGHT = properties.get('camera.input.stream.image.height');
+const FEED_IP = properties.get('camera.input.stream.feed.ip');
+const FEED_PORT = properties.get('camera.input.stream.feed.port');
+const SERVER_PORT = properties.get('camera.output.stream.server.port');
 
 const server  = http.createServer(app);
 

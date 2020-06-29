@@ -21,10 +21,8 @@ services:
       - "cam1"
     ports:
       - "9101:9101"
-    environment:
-      FEED_IP: 'byodr_cam1'
-      IMG_WIDTH: 1280
-      IMG_HEIGHT: 720
+    volumes:
+      - ${DC_CONFIG_DIR}:/config
   teleop:
     environment:
       LD_PRELOAD: libgomp.so.1
