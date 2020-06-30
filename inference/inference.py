@@ -185,7 +185,7 @@ class TFDriver(object):
                     self.tf_brake,
                     self.tf_brake_critic
                     ]
-            _ret = (0, 1, 1, [0, 0, 0, 0], 1)
+            _ret = (0, 1, 1, [0, 0, 0, 0], 1, 1)
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():

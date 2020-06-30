@@ -139,7 +139,7 @@ class LocalIPCServer(JSONServerThread):
         self._m_startup.append((timestamp(), errors))
 
     def serve_local(self, message):
-        raise NotImplementedError()
+        return {}
 
     def serve(self, message):
         try:

@@ -1,32 +1,17 @@
 import argparse
 import glob
 import logging
-import multiprocessing
 import os
-import signal
-import time
-import traceback
 from ConfigParser import SafeConfigParser
 from functools import partial
 
 import numpy as np
 
-from byodr.utils import timestamp, Configurable
+from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import parse_option
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
-
-logger = logging.getLogger(__name__)
-quit_event = multiprocessing.Event()
-
-signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
-signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
-
-
-def _interrupt():
-    logger.info("Received interrupt, quitting.")
-    quit_event.set()
 
 
 class TFRunner(Configurable):
@@ -133,33 +118,49 @@ class TFRunner(Configurable):
                     )
 
 
-def _glob(directory, pattern):
-    return glob.glob(os.path.join(directory, pattern))
+class InferenceApplication(Application):
+    def __init__(self, config_dir=os.getcwd(), models_dir=os.getcwd()):
+        super(InferenceApplication, self).__init__()
+        self._config_dir = config_dir
+        self._models_dir = models_dir
+        self._runner = TFRunner(models_dir)
+        self.publisher = None
+        self.ipc_server = None
+        self.ipc_chatter = None
+        self.pilot = None
+        self.camera = None
 
+    @staticmethod
+    def _glob(directory, pattern):
+        return glob.glob(os.path.join(directory, pattern))
 
-class IPCServer(LocalIPCServer):
-    def __init__(self, url, event, receive_timeout_ms=50):
-        super(IPCServer, self).__init__('inference', url, event, receive_timeout_ms)
+    def _config(self):
+        parser = SafeConfigParser()
+        # The end-user config overrides come last so all settings are modifiable.
+        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._models_dir, '*.ini') + self._glob(self._config_dir, '*.ini')]
+        return dict(parser.items('inference'))
 
-    def serve_local(self, message):
-        return {}
+    def setup(self):
+        if self.active():
+            _restarted = self._runner.restart(**self._config())
+            if _restarted:
+                self.ipc_server.register_start(self._runner.get_errors())
+                _frequency = self._runner.get_frequency()
+                self.set_hz(_frequency)
+                self.logger.info("Processing at {} Hz on gpu {}.".format(_frequency, self._runner.get_gpu()))
 
+    def finish(self):
+        self._runner.quit()
 
-def create_runner(ipc_server, config_dir, models_dir, previous=None):
-    # The end-user config overrides come last so all settings are modifiable.
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + _glob(models_dir, '*.ini') + _glob(config_dir, '*.ini')]
-    cfg = dict(parser.items('inference'))
-    _starts = 0 if previous is None else previous.get_num_starts()
-    if previous is None:
-        previous = TFRunner(models_dir)
-        previous.start(**cfg)
-    else:
-        previous.restart(**cfg)
-    if previous.get_num_starts() > _starts:
-        ipc_server.register_start(previous.get_errors())
-        logger.info("Processing at {} Hz on gpu {}.".format(previous.get_frequency(), previous.get_gpu()))
-    return previous
+    def step(self):
+        blob = self.pilot.get_latest()
+        image = self.camera.capture()[-1]
+        if image is not None:
+            instruction = 'intersection.ahead' if blob is None else blob.get('instruction')
+            self.publisher.publish(self._runner.forward(image=image, intention=instruction))
+        chat = self.ipc_chatter.pop_latest()
+        if chat and chat.get('command') == 'restart':
+            self.setup()
 
 
 def main():
@@ -168,41 +169,21 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = IPCServer(url='ipc:///byodr/inference_c.sock', event=quit_event)
-    threads = [pilot, camera, ipc_chatter, ipc_server]
+    application = InferenceApplication(config_dir=args.config, models_dir=args.models)
+    quit_event = application.quit_event
+    logger = application.logger
+
+    application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
+    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    application.camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
+    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+    application.ipc_server = LocalIPCServer(url='ipc:///byodr/inference_c.sock', name='inference', event=quit_event)
+    threads = [application.pilot, application.camera, application.ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 
     [t.start() for t in threads]
-    publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
-    try:
-        runner = create_runner(ipc_server, args.config, args.models)
-        max_duration = 1. / runner.get_frequency()
-        while not quit_event.is_set():
-            proc_start = time.time()
-            blob = pilot.get_latest()
-            image = camera.capture()[-1]
-            if image is not None:
-                instruction = 'intersection.ahead' if blob is None else blob.get('instruction')
-                publisher.publish(runner.forward(image=image, intention=instruction))
-            chat = ipc_chatter.pop_latest()
-            if chat and chat.get('command') == 'restart':
-                runner = create_runner(ipc_server, args.config, args.models, previous=runner)
-                max_duration = 1. / runner.get_frequency()
-            else:
-                _proc_sleep = max_duration - (time.time() - proc_start)
-                time.sleep(max(0., _proc_sleep))
-        # Main loop ran.
-        logger.info("Waiting on runner to quit.")
-        runner.quit()
-    except KeyboardInterrupt:
-        quit_event.set()
-    except Exception as e:
-        logger.error("{}".format(traceback.format_exc(e)))
-        quit_event.set()
+    application.run()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

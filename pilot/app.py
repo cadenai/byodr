@@ -1,99 +1,77 @@
 import argparse
 import glob
 import logging
-import multiprocessing
 import os
-import signal
-import time
-import traceback
 from ConfigParser import SafeConfigParser
 
+from byodr.utils import Application
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, LocalIPCServer
 from pilot import CommandProcessor
 
-logger = logging.getLogger(__name__)
-quit_event = multiprocessing.Event()
 
-signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
-signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
+class PilotApplication(Application):
+    def __init__(self, config_dir=os.getcwd()):
+        super(PilotApplication, self).__init__()
+        self._config_dir = config_dir
+        self._processor = CommandProcessor()
+        self.publisher = None
+        self.ipc_server = None
+        self.ipc_chatter = None
+        self.teleop = None
+        self.vehicle = None
+        self.inference = None
 
+    def _config(self):
+        parser = SafeConfigParser()
+        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        return dict(parser.items('pilot'))
 
-def _interrupt():
-    logger.info("Received interrupt, quitting.")
-    quit_event.set()
+    def setup(self):
+        if self.active():
+            _restarted = self._processor.restart(**self._config())
+            if _restarted:
+                self.ipc_server.register_start(self._processor.get_errors())
+                _frequency = self._processor.get_frequency()
+                self.set_hz(_frequency)
+                self.logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_frequency, self._processor.get_patience_ms()))
 
+    def finish(self):
+        self._processor.quit()
 
-class IPCServer(LocalIPCServer):
-    def __init__(self, url, event, receive_timeout_ms=50):
-        super(IPCServer, self).__init__('pilot', url, event, receive_timeout_ms)
-
-    def serve_local(self, message):
-        return {}
-
-
-def create_controller(ipc_server, config_dir, previous=None):
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
-    cfg = dict(parser.items('pilot'))
-    _starts = 0 if previous is None else previous.get_num_starts()
-    if previous is None:
-        previous = CommandProcessor()
-        previous.start(**cfg)
-    else:
-        previous.restart(**cfg)
-    if previous.get_num_starts() > _starts:
-        ipc_server.register_start(previous.get_errors())
-        logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(previous.get_frequency(), previous.get_patience_ms()))
-    return previous
+    def step(self):
+        commands = (self.teleop.get_latest(), self.vehicle.get_latest(), self.inference.get_latest())
+        action = self._processor.next_action(*commands)
+        if action:
+            self.publisher.publish(action)
+        chat = self.ipc_chatter.pop_latest()
+        if chat and chat.get('command') == 'restart':
+            self.setup()
 
 
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
-    config_dir = args.config
 
-    publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
-    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
-    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = IPCServer(url='ipc:///byodr/pilot_c.sock', event=quit_event)
-    threads = [teleop, vehicle, inference, ipc_chatter, ipc_server]
+    application = PilotApplication(config_dir=args.config)
+    quit_event = application.quit_event
+    logger = application.logger
+
+    application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
+    application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    application.vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    application.inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
+    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+    application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
+    threads = [application.teleop, application.vehicle, application.inference, application.ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 
     [t.start() for t in threads]
-    controller = create_controller(ipc_server, config_dir)
-    max_duration = 1. / controller.get_frequency()
-    # Teleop commands or states can be none or stale when not connected or slow - default to noop.
-    while not quit_event.is_set():
-        try:
-            # Synchronize per clock rate.
-            _ts = time.time()
-            commands = (teleop.get_latest(), vehicle.get_latest(), inference.get_latest())
-            action = controller.next_action(*commands)
-            if action:
-                publisher.publish(action)
-            chat = ipc_chatter.pop_latest()
-            if chat and chat.get('command') == 'restart':
-                controller = create_controller(ipc_server, config_dir, previous=controller)
-                max_duration = 1. / controller.get_frequency()
-            else:
-                # Allow our threads some cpu.
-                _proc_sleep = max_duration - (time.time() - _ts)
-                time.sleep(max(0., _proc_sleep))
-        except Exception as e:
-            logger.error("{}".format(traceback.format_exc(e)))
-            quit_event.set()
-        except KeyboardInterrupt:
-            quit_event.set()
+    application.run()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]
-
-    logger.info("Waiting on driver to quit.")
-    controller.quit()
 
 
 if __name__ == "__main__":

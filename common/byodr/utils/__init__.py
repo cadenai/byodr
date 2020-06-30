@@ -1,5 +1,8 @@
+import logging
 import multiprocessing
+import signal
 import time
+import traceback
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
@@ -60,6 +63,57 @@ class Configurable(object):
         self.quit()
 
     def restart(self, **kwargs):
-        if self.is_reconfigured(**kwargs):
-            self.quit(restarting=True)
+        _reconfigured = self.is_reconfigured(**kwargs)
+        if _reconfigured:
+            if self._num_starts > 0:
+                self.quit(restarting=True)
             self.start(**kwargs)
+        return _reconfigured
+
+
+class Application(object):
+    def __init__(self, run_hz=10):
+        self.quit_event = multiprocessing.Event()
+        self.logger = logging.getLogger(__name__)
+        signal.signal(signal.SIGINT, lambda sig, frame: self._interrupt())
+        signal.signal(signal.SIGTERM, lambda sig, frame: self._interrupt())
+        self._sleep = .100
+        self.set_hz(run_hz)
+
+    def _interrupt(self):
+        self.logger.info("Received interrupt, quitting.")
+        self.quit()
+
+    def set_hz(self, hz):
+        self._sleep = 1. / hz
+
+    def active(self):
+        return not self.quit_event.is_set()
+
+    def quit(self):
+        self.quit_event.set()
+
+    def setup(self):
+        pass
+
+    def step(self):
+        pass
+
+    def finish(self):
+        pass
+
+    def run(self):
+        self.setup()
+        try:
+            while self.active():
+                _start = time.time()
+                self.step()
+                _duration = (time.time() - _start)
+                time.sleep(max(0., self._sleep - _duration))
+        except Exception as e:
+            self.logger.error("{}".format(traceback.format_exc(e)))
+            self.quit()
+        except KeyboardInterrupt:
+            self.quit()
+        finally:
+            self.finish()

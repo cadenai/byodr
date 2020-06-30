@@ -58,6 +58,9 @@ class CarlaRunner(Configurable):
         self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
         return _errors + self._vehicle.get_errors()
 
+    def reset_agent(self):
+        self._vehicle.reset()
+
     def get_process_frequency(self):
         return self._process_frequency
 
@@ -119,8 +122,7 @@ def main():
             c_pilot = _latest_or_none(pilot, patience=_patience_micro)
             c_teleop = _latest_or_none(teleop, patience=_patience_micro)
             if c_teleop is not None and c_teleop.get('button_a', 0):
-                runner.quit()
-                runner.start()
+                runner.reset_agent()
             if c_pilot is not None:
                 runner.drive(c_pilot)
             else:

@@ -51,8 +51,8 @@ if (page_utils.get_stream_type() == 'mjpeg') {
 
         init: function(el_parent) {
             el_image = document.createElement("img");
-            el_image.style.width = '1152px';
-            el_image.style.height = '768px';
+            el_image.style.width = '1280px';
+            el_image.style.height = '720px';
             el_image.style.border = '1px solid white';
             el_image.style.borderRadius = '5px';
             el_parent.appendChild(el_image);

@@ -56,7 +56,7 @@ class CarlaHandler(Configurable):
         self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
         self._traffic_manager.global_percentage_speed_difference(65)
         self._vehicle_tick = self._world.on_tick(lambda x: self.tick(x))
-        self._reset()
+        self.reset()
         return _errors
 
     def _reset_agent_travel(self):
@@ -71,7 +71,7 @@ class CarlaHandler(Configurable):
             if sensor.is_alive:
                 sensor.destroy()
 
-    def _reset(self, attempt=0):
+    def reset(self, attempt=0):
         logger.info('Resetting ...')
         self._on_carla_autopilot = False
         self._on_reverse = False
@@ -85,7 +85,7 @@ class CarlaHandler(Configurable):
             self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
         except RuntimeError as e:
             if attempt < 4:
-                self._reset(attempt + 1)
+                self.reset(attempt + 1)
             else:
                 raise e
         logger.info("Spawn point is '{}'.".format(spawn_point))
