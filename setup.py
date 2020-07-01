@@ -251,8 +251,9 @@ ras.throttle.domain.scale = 10
         os.makedirs(self.manager.get_config_directory(), mode=0o775, exist_ok=True)
         os.makedirs(self.manager.get_sessions_directory(), mode=0o775, exist_ok=True)
         os.umask(_umask)
-        _run(['chmod', '-R', 'g+s', application_dir])
-        _run(['chown', '-R', '{}:{}'.format(user, ti.APP_GROUP_NAME), application_dir])
+        _run(['chown', '-R', '{}:{}'.format(user, ti.APP_GROUP_NAME), self.manager.get_config_directory()])
+        _run(['chown', '-R', '{}:{}'.format(user, ti.APP_GROUP_NAME), self.manager.get_sessions_directory()])
+        _run(['chmod', '-R', 'g+s', self.manager.get_sessions_directory()])
         return "The application directory is {}.".format(application_dir)
 
     def do_application_config_file(self):
