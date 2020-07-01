@@ -6,7 +6,6 @@ services:
       dockerfile: teleop/Dockerfile
     image: centipede2donald/byodr-ce:teleop
     container_name: byodr_teleop
-    restart: always
     ports:
       - "80:9100"
     volumes:
@@ -17,7 +16,6 @@ services:
       dockerfile: pilot/Dockerfile
     image: centipede2donald/byodr-ce:pilot
     container_name: byodr_pilot
-    restart: always
     volumes:
       - ${DC_CONFIG_DIR}:/config
     volumes_from:
@@ -28,7 +26,6 @@ services:
       dockerfile: recorder/Dockerfile
     image: centipede2donald/byodr-ce:recorder
     container_name: byodr_recorder
-    restart: always
     volumes:
       - ${DC_CONFIG_DIR}:/config
       - ${DC_RECORDER_SESSIONS}:/sessions

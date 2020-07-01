@@ -1,0 +1,17 @@
+version: '2'
+services:
+  teleop:
+    user: root
+    volumes:
+      - ../build/pytest_cache:/pytest_cache
+      - ../common:/common
+      - ../teleop:/app
+  pilot:
+    user: root
+    volumes:
+      - ../pilot:/app
+  recorder:
+    user: root
+    volumes:
+      - ../recorder:/app
+

@@ -24,12 +24,15 @@ services:
     volumes:
       - ${DC_CONFIG_DIR}:/config
   teleop:
+    restart: always
     environment:
       LD_PRELOAD: libgomp.so.1
   pilot:
+    restart: always
     environment:
       LD_PRELOAD: libgomp.so.1
   recorder:
+    restart: always
     environment:
       LD_PRELOAD: libgomp.so.1
   vehicle:
