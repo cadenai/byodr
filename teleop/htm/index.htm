@@ -177,7 +177,7 @@
                 <a id="video_stream_mjpeg" href="#" onclick="page_utils.set_stream_type('mjpeg'); location.reload();">mjpeg</a>
             </div>
             <div id="mjpeg_stream_controls" class="left">
-                <span id="mjpeg_quality_min_val">0</span>
+                <span id="mjpeg_quality_val">0</span>
                 <img id="caret_down" src='caret.png' onclick="mjpeg_caret_down();"/>
                 <img id="caret_up" src='caret.png' onclick="mjpeg_caret_up();"/>
                 <!-- <span id="frame_fps_text">fps:&nbsp;</span>
@@ -207,16 +207,16 @@
 </div>
 <script type="text/javascript">
 function mjpeg_refresh_page_values() {
-    $('span#mjpeg_quality_min_val').text(mjpeg_controller.min_jpeg_quality);
+    $('span#mjpeg_quality_val').text(mjpeg_controller.max_jpeg_quality);
 }
 
 function mjpeg_caret_up() {
-    mjpeg_controller.set_min_quality(mjpeg_controller.min_jpeg_quality + 5);
+    mjpeg_controller.set_max_quality(mjpeg_controller.max_jpeg_quality + 5);
     mjpeg_refresh_page_values();
 }
 
 function mjpeg_caret_down() {
-    mjpeg_controller.set_min_quality(mjpeg_controller.min_jpeg_quality - 5);
+    mjpeg_controller.set_max_quality(mjpeg_controller.max_jpeg_quality - 5);
     mjpeg_refresh_page_values();
 }
 

@@ -3,17 +3,17 @@ var mjpeg_controller = {
     target_fps: 16,
     display_resolution: 'default',
     jpeg_quality: 20,
-    min_jpeg_quality: 15,
-    max_jpeg_quality: 55,
+    min_jpeg_quality: 25,
+    max_jpeg_quality: 50,
 
     init: function() {
         var _fps = window.localStorage.getItem('mjpeg.target.fps');
         if (_fps != null) {
             this.target_fps = JSON.parse(_fps);
         }
-        var _qua = window.localStorage.getItem('mjpeg.quality.min');
-        if (_qua != null) {
-            this.min_jpeg_quality = JSON.parse(_qua);
+        var _quality_max = window.localStorage.getItem('mjpeg.quality.max');
+        if (_quality_max != null) {
+            this.set_max_quality(JSON.parse(_quality_max));
         }
     },
 
@@ -24,10 +24,16 @@ var mjpeg_controller = {
         }
     },
 
-    set_min_quality: function(val) {
-        if (val > 0 && val <= this.max_jpeg_quality) {
-            this.min_jpeg_quality = val;
-            window.localStorage.setItem('mjpeg.quality.min', JSON.stringify(val));
+    set_max_quality: function(val) {
+        if (val > 0 && val <= 100) {
+            this.max_jpeg_quality = val;
+            window.localStorage.setItem('mjpeg.quality.max', JSON.stringify(val));
+            // Modify the minimum quality in lockstep with the maximum.
+            _min = val / 2.0;
+            if (_min < 5) {
+                _min = 5;
+            }
+            this.min_jpeg_quality = _min;
         }
     },
 
