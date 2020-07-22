@@ -83,7 +83,7 @@ class TFRunner(Configurable):
         _alex_img = self._fn_alex_image(image)
         dagger = self._dagger
 
-        action_out, critic_out, surprise_out, internal_out, brake_out, brake_critic_out = \
+        action_out, critic_out, surprise_out, brake_out, brake_critic_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
@@ -99,7 +99,7 @@ class TFRunner(Configurable):
 
         # The decision points were made dependant on turn marked samples during training.
         _intention_index = maneuver_index(intention)
-        self._fallback = _intention_index == 0 or internal_out[_intention_index - 1] < self._poi_fallback
+        self._fallback = _intention_index == 0
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
@@ -113,7 +113,7 @@ class TFRunner(Configurable):
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
-                    internal=[float(x) for x in internal_out],
+                    internal=[float(0)],
                     time=timestamp()
                     )
 

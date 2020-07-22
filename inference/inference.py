@@ -103,7 +103,6 @@ class TFDriver(object):
         self.tf_steering = None
         self.tf_critic = None
         self.tf_surprise = None
-        self.tf_internal = None
         self.tf_brake = None
         self.tf_brake_critic = None
         self.sess = None
@@ -165,7 +164,6 @@ class TFDriver(object):
                 self.tf_steering = graph.get_tensor_by_name('fm/output/steering:0')
                 self.tf_critic = graph.get_tensor_by_name('fm/output/critic:0')
                 self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
-                self.tf_internal = graph.get_tensor_by_name('fm/output/internal:0')
                 self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
                 self.tf_brake_critic = graph.get_tensor_by_name('fs/output/critic:0')
 
@@ -181,11 +179,10 @@ class TFDriver(object):
             _ops = [self.tf_steering,
                     self.tf_critic,
                     self.tf_surprise,
-                    self.tf_internal,
                     self.tf_brake,
                     self.tf_brake_critic
                     ]
-            _ret = (0, 1, 1, [0, 0, 0, 0], 1, 1)
+            _ret = (0, 1, 1, 1, 1)
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
@@ -197,8 +194,8 @@ class TFDriver(object):
                     self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
-                    _action, _critic, _surprise, _internal, _brake, _brake_critic = self.sess.run(_ops, feed_dict=feeder)
-                    return _action, _critic, _surprise, map(lambda x: max(0, x), _internal), max(0, _brake), _brake_critic
+                    _action, _critic, _surprise, _brake, _brake_critic = self.sess.run(_ops, feed_dict=feeder)
+                    return _action, _critic, _surprise, max(0, _brake), _brake_critic
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
