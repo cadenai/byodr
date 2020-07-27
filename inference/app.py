@@ -30,7 +30,6 @@ class TFRunner(Configurable):
         self._fn_alex_image = None
         self._driver = None
         self._dagger = False
-        self._poi_fallback = 0
         self._fallback = False
 
     def get_gpu(self):
@@ -66,7 +65,6 @@ class TFRunner(Configurable):
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
         self._driver = TFDriver(model_directory=self._model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._dagger = p_conv_dropout > 0
-        self._poi_fallback = parse_option('driver.autopilot.poi.fallback', float, 0, _errors, **kwargs)
         self._driver.activate()
         return _errors
 
