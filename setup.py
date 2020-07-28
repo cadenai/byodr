@@ -140,6 +140,24 @@ class TegraInstaller(object):
     APP_GROUP_NAME = 'byodr'
 
     _systemd_system_directory = '/etc/systemd/system'
+
+    _systemd_usbrelay_name = 'usbrelay.service'
+    _systemd_usbrelay_template = '''
+[Unit]
+Description=Usb Relay Service
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --state enable
+ExecStop=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --state disable
+
+[Install]
+WantedBy=multi-user.target
+'''
+
     _systemd_service_name = 'byodr.service'
     _systemd_service_template = '''
 [Unit]
@@ -179,8 +197,9 @@ ras.throttle.domain.scale = 10
 '''
 
     def __init__(self, script_location, build_dirname='build'):
-        self._docker_compose_file1 = os.path.join(script_location, 'docker', 'docker-compose.yml')
-        self._docker_compose_file2 = os.path.join(script_location, 'docker', 'docker-compose.tegra.yml')
+        self._docker_files = [
+            os.path.join(script_location, 'docker', 'docker-compose.yml'),
+            os.path.join(script_location, 'docker', 'docker-compose.tegra.yml')]
         self.manager = TegraStateManager(build_dirname=build_dirname)
 
     def get_state(self):
@@ -208,27 +227,6 @@ ras.throttle.domain.scale = 10
 
     def log(self, text, new_line=True):
         self.manager.log(text, new_line)
-
-    def get_docker_files(self):
-        return [self._docker_compose_file1, self._docker_compose_file2]
-
-    @staticmethod
-    def get_docker_env():
-        return {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}
-
-    @staticmethod
-    def get_systemd_service_name():
-        return TegraInstaller._systemd_service_name
-
-    def get_systemd_service_contents(self):
-        _m = {
-            'sd_service_user': self.get_user(),
-            'sd_service_group': self.get_group(),
-            'sd_config_dir': self.manager.get_config_directory(),
-            'sd_sessions_dir': self.manager.get_sessions_directory(),
-            'sd_compose_files': ' '.join('-f {}'.format(name) for name in self.get_docker_files())
-        }
-        return TegraInstaller._systemd_service_template.format(**_m)
 
     def do_application_user(self):
         ti = TegraInstaller
@@ -267,6 +265,31 @@ ras.throttle.domain.scale = 10
             _run(['chown', '{}:{}'.format(user, ti.APP_GROUP_NAME), config_file])
         return _run(['cat', config_file]).stdout
 
+    def pull_docker_images(self, proceed, fn_output):
+        return pull_docker_images(proceed, self._docker_files, {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}, fn_output)
+
+    @staticmethod
+    def stop_and_remove_services():
+        _result = stop_and_remove_services(TegraInstaller._systemd_usbrelay_name)
+        return _result + '\n' + stop_and_remove_services(TegraInstaller._systemd_service_name)
+
+    def create_services(self):
+        _result = create_services(TegraInstaller._systemd_usbrelay_name, TegraInstaller._systemd_usbrelay_template)
+        _m = {
+            'sd_service_user': self.get_user(),
+            'sd_service_group': self.get_group(),
+            'sd_config_dir': self.manager.get_config_directory(),
+            'sd_sessions_dir': self.manager.get_sessions_directory(),
+            'sd_compose_files': ' '.join('-f {}'.format(name) for name in self._docker_files)
+        }
+        _contents = TegraInstaller._systemd_service_template.format(**_m)
+        return _result + '\n' + create_services(TegraInstaller._systemd_service_name, _contents)
+
+    @staticmethod
+    def start_services():
+        _result = start_services(TegraInstaller._systemd_usbrelay_name)
+        return _result + '\n' + start_services(TegraInstaller._systemd_service_name)
+
 
 class PiInstaller(object):
     _systemd_system_directory = '/etc/systemd/system'
@@ -291,7 +314,7 @@ WantedBy=multi-user.target
 
     def __init__(self, script_location, build_dirname='build', log_prefix='setup'):
         self.build_dirname = build_dirname
-        self._docker_compose_file = os.path.join(script_location, 'raspi', 'docker-compose.yml')
+        self._docker_files = [os.path.join(script_location, 'raspi', 'docker-compose.yml')]
         self.log_filename = log_prefix + '.log'
         self.state = dict()
         self.open_log = None
@@ -333,24 +356,25 @@ WantedBy=multi-user.target
         if new_line:
             self.open_log.write("\n")
 
-    def get_docker_files(self):
-        return [self._docker_compose_file]
+    def pull_docker_images(self, proceed, fn_output):
+        return pull_docker_images(proceed, self._docker_files, {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}, fn_output)
 
     @staticmethod
-    def get_docker_env():
-        return {'DC_CONFIG_DIR': '', 'DC_RECORDER_SESSIONS': ''}
+    def stop_and_remove_services():
+        return stop_and_remove_services(PiInstaller._systemd_service_name)
 
-    @staticmethod
-    def get_systemd_service_name():
-        return PiInstaller._systemd_service_name
-
-    def get_systemd_service_contents(self):
+    def create_services(self):
         _m = {
             'sd_service_user': self.get_user(),
             'sd_service_group': self.get_group(),
-            'sd_compose_files': ' '.join('-f {}'.format(name) for name in self.get_docker_files())
+            'sd_compose_files': ' '.join('-f {}'.format(name) for name in self._docker_files)
         }
-        return PiInstaller._systemd_service_template.format(**_m)
+        _contents = PiInstaller._systemd_service_template.format(**_m)
+        return create_services(PiInstaller._systemd_service_name, _contents)
+
+    @staticmethod
+    def start_services():
+        return start_services(PiInstaller._systemd_service_name)
 
 
 def create_installer(script_location, build_dirname):
@@ -418,21 +442,21 @@ def main():
 
         _answer = input()
         _docker_proceed = _answer == 'y'
-        _result = pull_docker_images(_docker_proceed, installer.get_docker_files(), installer.get_docker_env(), _fn_output)
+        _result = installer.pull_docker_images(_docker_proceed, _fn_output)
         installer.log(_result)
         print(_result)
 
-        print("\nDo you want to (re)create the system service?")
+        print("\nDo you want to (re)create the system services?")
         print("> ", end='')
         _answer = input()
         if _answer == 'y':
             print("\nRemoving systemd services.")
-            _result = stop_and_remove_services(installer.get_systemd_service_name())
+            _result = installer.stop_and_remove_services()
             installer.log(_result)
             print(_result)
 
             print("\nRecreating systemd services.")
-            _result = create_services(installer.get_systemd_service_name(), installer.get_systemd_service_contents())
+            _result = installer.create_services()
             installer.log(_result)
             print(_result)
 
@@ -440,12 +464,12 @@ def main():
             print("> ", end='')
             _answer = input()
             if _answer == 'y':
-                _result = start_services(installer.get_systemd_service_name())
+                _result = installer.start_services()
                 installer.log(_result)
                 print(_result)
 
     print("")
-    print("The installer finished and a log file can be found in the {} directory.".format(build_dirname))
+    print("The installer finished and a log file can be found in directory '{}'.".format(build_dirname))
     print("")
 
 
