@@ -183,17 +183,14 @@ WantedBy=multi-user.target
 [camera]
 camera.user = User
 camera.password = HelloUser
+camera.ptz.flip = tilt
 
 [vehicle] 
 ras.master.uri = tcp://raspberrypi
-ras.servo.steering.min_pulse_width.ms = 0.50
-ras.servo.steering.max_pulse_width.ms = 2.0
-ras.servo.motor.min_pulse_width.ms = 0.50
-ras.servo.motor.max_pulse_width.ms = 2.0
-ras.throttle.reverse.gear = -10
-ras.throttle.domain.forward.shift = 0
+ras.throttle.domain.forward.shift = 4
 ras.throttle.domain.backward.shift = 0
-ras.throttle.domain.scale = 10
+ras.throttle.domain.scale = 8
+ras.throttle.reverse.gear = -25
 '''
 
     def __init__(self, script_location, build_dirname='build'):

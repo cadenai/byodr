@@ -79,7 +79,7 @@ class CameraPtzThread(threading.Thread):
         prev = self._previous
         if type(operation) == tuple and operation[0] == 'set_home':
             x_count = prev[1] if type(prev) == tuple and prev[0] == 'set_home' else 0
-            if x_count >= 100 and operation[1]:
+            if x_count >= 40 and operation[1]:
                 logger.info("Saving ptz home position.")
                 self._previous = 'ptz_home_set'
                 ret = requests.put(self._url + '/homeposition', auth=self._auth)
@@ -254,11 +254,14 @@ class GpsPollerThread(threading.Thread):
                 client = ModbusTcpClient(self._host, port=self._port)
                 client.connect()
                 response = client.read_holding_registers(143, 4, unit=1)
-                decoder = BinaryPayloadDecoder.fromRegisters(response.registers, Endian.Big)
-                latitude = decoder.decode_32bit_float()
-                longitude = decoder.decode_32bit_float()
-                self._queue.appendleft((latitude, longitude))
-                time.sleep(.250)
+                if hasattr(response, 'registers'):
+                    decoder = BinaryPayloadDecoder.fromRegisters(response.registers, Endian.Big)
+                    latitude = decoder.decode_32bit_float()
+                    longitude = decoder.decode_32bit_float()
+                    self._queue.appendleft((latitude, longitude))
+                    time.sleep(.250)
+                else:
+                    time.sleep(10)
             except Exception as e:
                 logger.warning(e)
-                time.sleep(1)
+                time.sleep(10)
