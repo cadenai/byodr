@@ -1,4 +1,5 @@
 import Queue
+import collections
 import logging
 import multiprocessing
 import threading
@@ -7,6 +8,9 @@ import time
 import cv2
 import numpy as np
 import requests
+from pymodbus.client.sync import ModbusTcpClient
+from pymodbus.constants import Endian
+from pymodbus.payload import BinaryPayloadDecoder
 from requests.auth import HTTPDigestAuth
 
 from byodr.utils import Configurable
@@ -221,3 +225,40 @@ class GstSource(Configurable):
             logger.info("Image shape={}.".format(self._camera_shape))
             self._source = GstRawSource(fn_callback=self._publish, command=_url)
         return _errors
+
+
+class GpsPollerThread(threading.Thread):
+    """
+    https://wiki.teltonika-networks.com/view/RUT955_Modbus
+    https://wiki.teltonika-networks.com/view/RUT955_GPS_Protocols
+    https://community.victronenergy.com/questions/40965/wheres-my-boat-answers-rather-than-questions-gps-m.html
+    https://pymodbus.readthedocs.io/en/v1.3.2/examples/modbus-payload.html
+    """
+
+    def __init__(self, host='192.168.1.1', port='502'):
+        super(GpsPollerThread, self).__init__()
+        self._host = host
+        self._port = port
+        self._quit_event = multiprocessing.Event()
+        self._queue = collections.deque(maxlen=1)
+
+    def quit(self):
+        self._quit_event.set()
+
+    def get_latitude_longitude(self):
+        return self._queue[0] if len(self._queue) > 0 else None
+
+    def run(self):
+        while not self._quit_event.is_set():
+            try:
+                client = ModbusTcpClient(self._host, port=self._port)
+                client.connect()
+                response = client.read_holding_registers(143, 4, unit=1)
+                decoder = BinaryPayloadDecoder.fromRegisters(response.registers, Endian.Big)
+                latitude = decoder.decode_32bit_float()
+                longitude = decoder.decode_32bit_float()
+                self._queue.appendleft((latitude, longitude))
+                time.sleep(.250)
+            except Exception as e:
+                logger.warning(e)
+                time.sleep(1)

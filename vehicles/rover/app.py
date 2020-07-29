@@ -11,7 +11,7 @@ from ConfigParser import SafeConfigParser
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer, JSONZmqClient
 from byodr.utils.option import parse_option
-from core import PTZCamera, GstSource
+from core import PTZCamera, GstSource, GpsPollerThread
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -100,13 +100,15 @@ class Platform(Configurable):
     def __init__(self):
         super(Platform, self).__init__()
         self._protocol = PiProtocol()
+        self._gps_poller = GpsPollerThread()
         self._servo_config = None
         self._rps = 0  # Hall sensor revolutions per second.
         self._circum_m = 1
         self._gear_ratio = 1
 
     def state(self):
-        x, y = 0, 0
+        _gps = self._gps_poller.get_latitude_longitude()
+        x, y = 0, 0 if _gps is None else _gps
         # Convert to travel speed in meters per second.
         velocity = (self._rps / self._gear_ratio) * self._circum_m
         return dict(x_coordinate=x,
@@ -131,9 +133,12 @@ class Platform(Configurable):
     def internal_quit(self, restarting=False):
         if not restarting:
             self._protocol.quit()
+            self._gps_poller.quit()
 
     def internal_start(self, **kwargs):
         self._protocol.restart(**kwargs)
+        if not self._gps_poller.is_alive():
+            self._gps_poller.start()
         errors = []
         self._circum_m = 2 * math.pi * parse_option('chassis.wheel.radius.meter', float, 0, errors, **kwargs)
         self._gear_ratio = parse_option('chassis.hall.ticks.per.rotation', int, 0, errors, **kwargs)
