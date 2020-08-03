@@ -109,6 +109,7 @@ def main():
                 relay.on()
             else:
                 relay.off()
+                logger.warning("Motor relay OFF")
             c_config, c_drive = e_server.pop_config(), e_server.pop_drive()
             if c_config is not None:
                 steer_servo = _create_servo(steer_servo, c_config.get('steering'))

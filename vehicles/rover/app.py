@@ -13,7 +13,7 @@ from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, Local
 from byodr.utils.option import parse_option
 from byodr.utils.protocol import MessageStreamProtocol
 from core import PTZCamera, GstSource, GpsPollerThread
-from vehicles.rover.relay import SingleChannelUsbRelay
+from relay import SingleChannelUsbRelay
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -68,7 +68,7 @@ class PiProtocol(Configurable):
 
     def send_config(self, data):
         if self._pi_client is not None and data is not None:
-            self._pi_client.call(dict(method='ras/servo/config', data=data))
+            self._pi_client.call(dict(time=timestamp(), method='ras/servo/config', data=data))
 
     def send_drive(self, throttle=0., steering=0., reverse_gear=False):
         if self._pi_client is not None:
@@ -84,6 +84,7 @@ class PiProtocol(Configurable):
 
     def internal_quit(self, restarting=False):
         self._event.set()
+        self.reset_integrity()
         if self._pi_client is not None:
             self._pi_client.quit()
 
@@ -93,10 +94,14 @@ class PiProtocol(Configurable):
     def check_integrity_violations(self):
         return self._integrity.check()
 
+    def reset_integrity(self):
+        self._integrity.reset()
+
     def internal_start(self, **kwargs):
         errors = []
         _master_uri = parse_option('ras.master.uri', str, 'none', errors, **kwargs)
         logger.info("Using pi master uri '{}'.".format(_master_uri))
+        self.reset_integrity()
         self._event = multiprocessing.Event()
         self._pi_client = JSONZmqClient(urls='{}:5550'.format(_master_uri))
         self._status = ReceiverThread(url='{}:5555'.format(_master_uri),
@@ -131,6 +136,9 @@ class Platform(Configurable):
 
     def check_integrity_violations(self):
         return self._protocol.check_integrity_violations()
+
+    def reset_integrity(self):
+        self._protocol.reset_integrity()
 
     def drive(self, pilot, teleop):
         pi_status = self._protocol.pop_status()
@@ -186,6 +194,8 @@ class Rover(Configurable):
         self._camera = PTZCamera()
         self._gst_source = GstSource(image_publisher)
         self._relay = SingleChannelUsbRelay()
+        self._relay.attach()
+        self._relay.close()
 
     def get_process_frequency(self):
         return self._process_frequency
@@ -201,6 +211,7 @@ class Rover(Configurable):
             self._vehicle.quit()
             self._camera.quit()
             self._gst_source.quit()
+            self._relay.open()
 
     def internal_start(self):
         errors = []
@@ -225,6 +236,8 @@ class Rover(Configurable):
         if self._vehicle.check_integrity_violations() > 2:
             self._relay.open()
             self._relay.close()
+            logger.warn("Relay RESET")
+            self._vehicle.reset_integrity()
         else:
             self._vehicle.drive(c_pilot, c_teleop)
             self._camera.add(c_pilot, c_teleop)

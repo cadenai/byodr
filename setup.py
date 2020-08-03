@@ -140,24 +140,6 @@ class TegraInstaller(object):
     APP_GROUP_NAME = 'byodr'
 
     _systemd_system_directory = '/etc/systemd/system'
-
-    _systemd_usbrelay_name = 'usbrelay.service'
-    _systemd_usbrelay_template = '''
-[Unit]
-Description=Usb Relay Service
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-RemainAfterExit=true
-ExecStart=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --cmd close
-ExecStop=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --cmd open
-
-[Install]
-WantedBy=multi-user.target
-'''
-
     _systemd_service_name = 'byodr.service'
     _systemd_service_template = '''
 [Unit]
@@ -267,11 +249,9 @@ ras.throttle.reverse.gear = -25
 
     @staticmethod
     def stop_and_remove_services():
-        _result = stop_and_remove_services(TegraInstaller._systemd_usbrelay_name)
-        return _result + '\n' + stop_and_remove_services(TegraInstaller._systemd_service_name)
+        return stop_and_remove_services(TegraInstaller._systemd_service_name)
 
     def create_services(self):
-        _result = create_services(TegraInstaller._systemd_usbrelay_name, TegraInstaller._systemd_usbrelay_template)
         _m = {
             'sd_service_user': self.get_user(),
             'sd_service_group': self.get_group(),
@@ -280,12 +260,11 @@ ras.throttle.reverse.gear = -25
             'sd_compose_files': ' '.join('-f {}'.format(name) for name in self._docker_files)
         }
         _contents = TegraInstaller._systemd_service_template.format(**_m)
-        return _result + '\n' + create_services(TegraInstaller._systemd_service_name, _contents)
+        return create_services(TegraInstaller._systemd_service_name, _contents)
 
     @staticmethod
     def start_services():
-        _result = start_services(TegraInstaller._systemd_usbrelay_name)
-        return _result + '\n' + start_services(TegraInstaller._systemd_service_name)
+        return start_services(TegraInstaller._systemd_service_name)
 
 
 class PiInstaller(object):

@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     python-dev \
     python-numpy \
     python-pip \
+    python-cachetools \
     python-setuptools \
     python-wheel \
     python-pigpio \

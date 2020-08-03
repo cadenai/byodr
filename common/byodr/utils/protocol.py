@@ -47,12 +47,16 @@ class MessageStreamProtocol(object):
     def is_started(self):
         return self._started
 
+    def reset(self):
+        self._violation_cache.clear()
+        self._started = False
+
     def on_message(self, message_timestamp_micro):
         # This is our time in microseconds.
         local_time = timestamp()
-        if self._last_protocol_time is not None and local_time - self._last_protocol_time < self._max_delay_micro:
+        if self.is_started() and local_time - self._last_protocol_time > self._max_delay_micro:
             self._increment_violations()
-        elif self._last_message_time is not None and message_timestamp_micro - self._last_message_time < self._max_age_micro:
+        elif self.is_started() and message_timestamp_micro - self._last_message_time > self._max_age_micro:
             self._increment_violations()
         self._last_message_time = message_timestamp_micro
         self._last_protocol_time = local_time
@@ -60,6 +64,8 @@ class MessageStreamProtocol(object):
         return self._get_violations()
 
     def check(self):
-        if self._last_protocol_time is not None and timestamp() - self._last_protocol_time < self._max_delay_micro:
+        if not self.is_started():
+            return 0
+        if timestamp() - self._last_protocol_time > self._max_delay_micro:
             self._increment_violations()
         return self._get_violations()
