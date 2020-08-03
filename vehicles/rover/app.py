@@ -107,12 +107,10 @@ class Platform(Configurable):
         self._gear_ratio = 1
 
     def state(self):
-        _gps = self._gps_poller.get_latitude_longitude()
-        x, y = 0, 0 if _gps is None else _gps
         # Convert to travel speed in meters per second.
         velocity = (self._rps / self._gear_ratio) * self._circum_m
-        return dict(x_coordinate=x,
-                    y_coordinate=y,
+        return dict(x_coordinate=self._gps_poller.get_latitude(),
+                    y_coordinate=self._gps_poller.get_longitude(),
                     heading=0,
                     velocity=velocity,
                     time=timestamp())

@@ -55,7 +55,7 @@ class TFRunner(Configurable):
                                                down=_penalty_down_momentum,
                                                ceiling=_penalty_ceiling)
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
-        _brake_critic_scale_max = parse_option('driver.dnn.brake_critic.scale.max', float, 1e-6, _errors, **kwargs)
+        _brake_critic_scale_max = parse_option('driver.dnn.brake.critic.scale.max', float, 1e-6, _errors, **kwargs)
         _corridor_scale_max = parse_option('driver.dnn.steer.corridor.scale.max', float, 1e-6, _errors, **kwargs)
         self._fn_obstacle_norm = partial(self._norm_scale, min_=0, max_=_brake_scale_max)
         self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)

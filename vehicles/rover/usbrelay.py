@@ -5,7 +5,7 @@ import usb.util
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Open or close the spdt usb relay.')
-    parser.add_argument('--state', type=str, default='enable', help='Enable or disable the connected circuit.')
+    parser.add_argument('--cmd', type=str, required=True, help='Open or close the relay.')
     args = parser.parse_args()
 
     dev = usb.core.find(idVendor=0x1a86, idProduct=0x7523)
@@ -28,7 +28,9 @@ if __name__ == "__main__":
     open_relay_cmd = [0xA0, 0x01, 0x00, 0xA1]
     close_relay_cmd = [0xA0, 0x01, 0x01, 0xA2]
 
-    if args.state == 'enable':
+    if args.cmd == 'open':
+        ep.write(open_relay_cmd)
+    elif args.cmd == 'close':
         ep.write(close_relay_cmd)
     else:
-        ep.write(open_relay_cmd)
+        raise AssertionError("Invalid command string '{}'.".format(args.cmd))

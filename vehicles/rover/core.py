@@ -245,8 +245,11 @@ class GpsPollerThread(threading.Thread):
     def quit(self):
         self._quit_event.set()
 
-    def get_latitude_longitude(self):
-        return self._queue[0] if len(self._queue) > 0 else None
+    def get_latitude(self, default=0):
+        return self._queue[0][0] if len(self._queue) > 0 else default
+
+    def get_longitude(self, default=0):
+        return self._queue[0][1] if len(self._queue) > 0 else default
 
     def run(self):
         while not self._quit_event.is_set():
@@ -259,7 +262,7 @@ class GpsPollerThread(threading.Thread):
                     latitude = decoder.decode_32bit_float()
                     longitude = decoder.decode_32bit_float()
                     self._queue.appendleft((latitude, longitude))
-                    time.sleep(.250)
+                    time.sleep(.100)
                 else:
                     time.sleep(10)
             except Exception as e:

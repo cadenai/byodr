@@ -151,8 +151,8 @@ After=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --state enable
-ExecStop=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --state disable
+ExecStart=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --cmd close
+ExecStop=/usr/bin/docker run --rm --user root --privileged --entrypoint "/usr/bin/python" centipede2donald/byodr-ce:rover usbrelay.py --cmd open
 
 [Install]
 WantedBy=multi-user.target
@@ -189,7 +189,7 @@ camera.ptz.flip = tilt
 ras.master.uri = tcp://raspberrypi
 ras.throttle.domain.forward.shift = 4
 ras.throttle.domain.backward.shift = 0
-ras.throttle.domain.scale = 8
+ras.throttle.domain.scale = 10
 ras.throttle.reverse.gear = -25
 '''
 
