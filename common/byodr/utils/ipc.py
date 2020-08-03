@@ -38,7 +38,7 @@ class ImagePublisher(object):
 
 
 class ReceiverThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
+    def __init__(self, url, event, topic=b'', receive_timeout_ms=1, on_message=(lambda m: m)):
         super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.setsockopt(zmq.RCVHWM, 1)
@@ -49,6 +49,7 @@ class ReceiverThread(threading.Thread):
         self._subscriber = subscriber
         self._quit_event = event
         self._queue = collections.deque(maxlen=1)
+        self._on_message = on_message
 
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None
@@ -59,7 +60,9 @@ class ReceiverThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             try:
-                self._queue.appendleft(json.loads(self._subscriber.recv().split(':', 1)[1]))
+                _latest = json.loads(self._subscriber.recv().split(':', 1)[1])
+                self._queue.appendleft(_latest)
+                self._on_message(_latest)
             except zmq.Again:
                 pass
 

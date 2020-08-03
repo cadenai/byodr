@@ -4,10 +4,11 @@ import multiprocessing
 import signal
 import time
 
-from gpiozero import AngularServo
+from gpiozero import AngularServo, DigitalOutputDevice
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import JSONPublisher, JSONServerThread
+from byodr.utils.protocol import MessageStreamProtocol
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -23,9 +24,10 @@ def _interrupt():
     quit_event.set()
 
 
-class Receiver(JSONServerThread):
+class ReceivingServer(JSONServerThread):
     def __init__(self, url, event, receive_timeout_ms=50):
-        super(Receiver, self).__init__(url, event, receive_timeout_ms=receive_timeout_ms)
+        super(ReceivingServer, self).__init__(url, event, receive_timeout_ms=receive_timeout_ms)
+        self._integrity = MessageStreamProtocol()
         self._config_queue = collections.deque(maxlen=1)
         self._drive_queue = collections.deque(maxlen=1)
 
@@ -35,12 +37,31 @@ class Receiver(JSONServerThread):
     def pop_drive(self):
         return self._drive_queue.popleft() if bool(self._drive_queue) else None
 
+    def check_integrity_violations(self):
+        return self._integrity.check()
+
     def on_message(self, message):
-        super(Receiver, self).on_message(message)
+        super(ReceivingServer, self).on_message(message)
+        self._integrity.on_message(message.get('time'))
         if message.get('method') == 'ras/servo/config':
             self._config_queue.appendleft(message.get('data'))
         else:
             self._drive_queue.appendleft(message.get('data'))
+
+
+class SingleChannelRelay(object):
+    def __init__(self, pin):
+        self._device = DigitalOutputDevice(pin=pin)
+
+    def on(self):
+        self._device.on()
+
+    def off(self):
+        self._device.off()
+
+    def toggle(self):
+        self.off()
+        self.on()
 
 
 def _angular_servo(message):
@@ -73,7 +94,7 @@ def _throttle(config, servo, throttle, in_reverse):
 
 def main():
     p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
-    e_server = Receiver(url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
+    e_server = ReceivingServer(url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
 
     threads = [e_server]
     [t.start() for t in threads]
@@ -81,7 +102,13 @@ def main():
     steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
     try:
         rate = 0.04  # 25 Hz.
+        relay = SingleChannelRelay(pin=18)
         while not quit_event.is_set():
+            n_violations = e_server.check_integrity_violations()
+            if n_violations < 5:
+                relay.on()
+            else:
+                relay.off()
             c_config, c_drive = e_server.pop_config(), e_server.pop_drive()
             if c_config is not None:
                 steer_servo = _create_servo(steer_servo, c_config.get('steering'))
@@ -90,7 +117,8 @@ def main():
             if steer_servo is not None:
                 _steer(steer_servo, 0 if c_drive is None else c_drive.get('steering', 0))
             if motor_servo is not None:
-                throttle = 0 if c_drive is None else c_drive.get('throttle', 0)
+                _zero_throttle = c_drive is None or n_violations > 2
+                throttle = 0 if _zero_throttle else c_drive.get('throttle', 0)
                 in_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
                 _throttle(throttle_config, motor_servo, throttle, in_reverse)
             _configured = None not in (steer_servo, motor_servo)
