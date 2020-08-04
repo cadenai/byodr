@@ -103,9 +103,9 @@ def main():
     [t.start() for t in threads]
 
     steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
+    relay = SingleChannelRelay(pin=18)
     try:
         rate = 0.04  # 25 Hz.
-        relay = SingleChannelRelay(pin=18)
         relay.on()
         while not quit_event.is_set():
             n_violations = e_server.check_integrity_violations()
@@ -132,6 +132,7 @@ def main():
         logger.error(e)
         raise e
     finally:
+        relay.off()
         if steer_servo is not None:
             steer_servo.close()
         if motor_servo is not None:
