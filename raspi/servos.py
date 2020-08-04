@@ -24,34 +24,6 @@ def _interrupt():
     quit_event.set()
 
 
-class ReceivingServer(JSONServerThread):
-    def __init__(self, url, event, receive_timeout_ms=50):
-        super(ReceivingServer, self).__init__(url, event, receive_timeout_ms=receive_timeout_ms)
-        self._integrity = MessageStreamProtocol()
-        self._config_queue = collections.deque(maxlen=1)
-        self._drive_queue = collections.deque(maxlen=1)
-
-    def pop_config(self):
-        return self._config_queue.popleft() if bool(self._config_queue) else None
-
-    def pop_drive(self):
-        return self._drive_queue.popleft() if bool(self._drive_queue) else None
-
-    def check_integrity_violations(self):
-        return self._integrity.check()
-
-    def reset_integrity(self):
-        self._integrity.reset()
-
-    def on_message(self, message):
-        super(ReceivingServer, self).on_message(message)
-        self._integrity.on_message(message.get('time'))
-        if message.get('method') == 'ras/servo/config':
-            self._config_queue.appendleft(message.get('data'))
-        else:
-            self._drive_queue.appendleft(message.get('data'))
-
-
 class SingleChannelRelay(object):
     def __init__(self, pin):
         self._device = DigitalOutputDevice(pin=pin)
@@ -65,6 +37,39 @@ class SingleChannelRelay(object):
     def toggle(self):
         self.off()
         self.on()
+
+
+class Platform(JSONServerThread):
+    def __init__(self, relay, url, event, receive_timeout_ms=50):
+        super(Platform, self).__init__(url, event, receive_timeout_ms=receive_timeout_ms)
+        self._relay = relay
+        self._integrity = MessageStreamProtocol()
+        self._config_queue = collections.deque(maxlen=1)
+        self._drive_queue = collections.deque(maxlen=1)
+
+    def pop_config(self):
+        return self._config_queue.popleft() if bool(self._config_queue) else None
+
+    def pop_drive(self):
+        return self._drive_queue.popleft() if bool(self._drive_queue) else None
+
+    def check_integrity(self):
+        n_violations = self._integrity.check()
+        if n_violations > 10:
+            self._relay.off()
+            self._integrity.reset()
+            logger.warning("Motor relay OFF")
+        elif self._integrity.is_started():
+            self._relay.on()
+        return n_violations
+
+    def on_message(self, message):
+        super(Platform, self).on_message(message)
+        self._integrity.on_message(message.get('time'))
+        if message.get('method') == 'ras/servo/config':
+            self._config_queue.appendleft(message.get('data'))
+        else:
+            self._drive_queue.appendleft(message.get('data'))
 
 
 def _angular_servo(message):
@@ -96,23 +101,19 @@ def _throttle(config, servo, throttle, in_reverse):
 
 
 def main():
+    relay = SingleChannelRelay(pin=18)
+
     p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
-    e_server = ReceivingServer(url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
+    e_server = Platform(relay=relay, url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
 
     threads = [e_server]
     [t.start() for t in threads]
 
     steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
-    relay = SingleChannelRelay(pin=18)
     try:
         rate = 0.04  # 25 Hz.
-        relay.on()
         while not quit_event.is_set():
-            n_violations = e_server.check_integrity_violations()
-            if n_violations > 2:
-                relay.off()
-                e_server.reset_integrity()
-                logger.warning("Motor relay OFF")
+            n_violations = e_server.check_integrity()
             c_config, c_drive = e_server.pop_config(), e_server.pop_drive()
             if c_config is not None:
                 steer_servo = _create_servo(steer_servo, c_config.get('steering'))
@@ -121,7 +122,7 @@ def main():
             if steer_servo is not None:
                 _steer(steer_servo, 0 if c_drive is None else c_drive.get('steering', 0))
             if motor_servo is not None:
-                _zero_throttle = c_drive is None or n_violations > 2
+                _zero_throttle = c_drive is None or n_violations > 0
                 throttle = 0 if _zero_throttle else c_drive.get('throttle', 0)
                 in_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
                 _throttle(throttle_config, motor_servo, throttle, in_reverse)
