@@ -103,11 +103,10 @@ def main():
     try:
         rate = 0.04  # 25 Hz.
         relay = SingleChannelRelay(pin=18)
+        relay.on()
         while not quit_event.is_set():
             n_violations = e_server.check_integrity_violations()
-            if n_violations < 5:
-                relay.on()
-            else:
+            if n_violations > 2:
                 relay.off()
                 logger.warning("Motor relay OFF")
             c_config, c_drive = e_server.pop_config(), e_server.pop_drive()

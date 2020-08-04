@@ -235,9 +235,10 @@ class Rover(Configurable):
     def cycle(self, c_pilot, c_teleop):
         if self._vehicle.check_integrity_violations() > 2:
             self._relay.open()
-            self._relay.close()
-            logger.warn("Relay RESET")
-            self._vehicle.reset_integrity()
+            # A reset can be too fast for the dependant circuit to reboot.
+            # self._relay.close()
+            # self._vehicle.reset_integrity()
+            logger.warn("Relay Open")
         else:
             self._vehicle.drive(c_pilot, c_teleop)
             self._camera.add(c_pilot, c_teleop)
