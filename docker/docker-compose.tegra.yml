@@ -37,8 +37,8 @@ services:
       LD_PRELOAD: libgomp.so.1
   vehicle:
     image: centipede2donald/byodr-ce:rover
+    # Cannot read the usbrelay device symlink in docker-compose.
     privileged: true
-    user: root
     network_mode: "host"
     restart: always
     environment:

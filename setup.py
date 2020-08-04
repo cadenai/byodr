@@ -23,6 +23,22 @@ def do_build_directory(user, group, build_dirname):
     return "The build directory was created."
 
 
+def remove_udev_rules(fname):
+    if os.path.exists(fname):
+        _run(['rm', fname])
+        _run(['/etc/init.d/udev', 'reload'])
+    return "Removed {}.".format(fname)
+
+
+def create_udev_rules(fname, contents):
+    if os.path.exists(fname):
+        return "File {} exists.".format(fname)
+    with open(fname, mode='w') as f:
+        f.write(contents)
+        _run(['/etc/init.d/udev', 'reload'])
+        return "Created {}.".format(fname)
+
+
 def pull_docker_images(proceed, docker_files, environment, fn_callback):
     if proceed:
         _command = ['docker-compose'] + [y for x in map(lambda df: ['-f', df], docker_files) for y in x] + ['pull']
@@ -139,6 +155,11 @@ class TegraInstaller(object):
     APP_USER_NAME = 'byodr'
     APP_GROUP_NAME = 'byodr'
 
+    _udev_relay_rules_file = '/etc/udev/rules.d/99-byodr.rules'
+    _udev_relay_rules_contents = '''
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="7523", GROUP="{group}", MODE="0660", SYMLINK+="usbrelay", TAG+="systemd"
+'''.format(**{'idVendor': '{idVendor}', 'idProduct': '{idProduct}', 'group': APP_GROUP_NAME})
+
     _systemd_system_directory = '/etc/systemd/system'
     _systemd_service_name = 'byodr.service'
     _systemd_service_template = '''
@@ -249,9 +270,11 @@ ras.throttle.reverse.gear = -25
 
     @staticmethod
     def stop_and_remove_services():
-        return stop_and_remove_services(TegraInstaller._systemd_service_name)
+        result = remove_udev_rules(TegraInstaller._udev_relay_rules_file)
+        return result + '\n' + stop_and_remove_services(TegraInstaller._systemd_service_name)
 
     def create_services(self):
+        result = create_udev_rules(TegraInstaller._udev_relay_rules_file, TegraInstaller._udev_relay_rules_contents)
         _m = {
             'sd_service_user': self.get_user(),
             'sd_service_group': self.get_group(),
@@ -260,7 +283,7 @@ ras.throttle.reverse.gear = -25
             'sd_compose_files': ' '.join('-f {}'.format(name) for name in self._docker_files)
         }
         _contents = TegraInstaller._systemd_service_template.format(**_m)
-        return create_services(TegraInstaller._systemd_service_name, _contents)
+        return result + '\n' + create_services(TegraInstaller._systemd_service_name, _contents)
 
     @staticmethod
     def start_services():
