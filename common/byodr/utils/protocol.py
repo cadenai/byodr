@@ -64,8 +64,6 @@ class MessageStreamProtocol(object):
         return self._get_violations()
 
     def check(self):
-        if not self.is_started():
-            return 0
-        if timestamp() - self._last_protocol_time > self._max_delay_micro:
+        if self.is_started() and timestamp() - self._last_protocol_time > self._max_delay_micro:
             self._increment_violations()
         return self._get_violations()

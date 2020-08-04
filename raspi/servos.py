@@ -40,6 +40,9 @@ class ReceivingServer(JSONServerThread):
     def check_integrity_violations(self):
         return self._integrity.check()
 
+    def reset_integrity(self):
+        self._integrity.reset()
+
     def on_message(self, message):
         super(ReceivingServer, self).on_message(message)
         self._integrity.on_message(message.get('time'))
@@ -108,6 +111,7 @@ def main():
             n_violations = e_server.check_integrity_violations()
             if n_violations > 2:
                 relay.off()
+                e_server.reset_integrity()
                 logger.warning("Motor relay OFF")
             c_config, c_drive = e_server.pop_config(), e_server.pop_drive()
             if c_config is not None:

@@ -211,7 +211,8 @@ class Rover(Configurable):
             self._vehicle.quit()
             self._camera.quit()
             self._gst_source.quit()
-            self._relay.open()
+            # Leave the relay state as is - if open rely on the connected component to check its own integrity.
+            # self._relay.open()
 
     def internal_start(self):
         errors = []
@@ -235,9 +236,9 @@ class Rover(Configurable):
     def cycle(self, c_pilot, c_teleop):
         if self._vehicle.check_integrity_violations() > 2:
             self._relay.open()
-            # A reset can be too fast for the dependant circuit to reboot.
+            # A reset could be too fast for the dependant circuit to reboot.
             # self._relay.close()
-            # self._vehicle.reset_integrity()
+            self._vehicle.reset_integrity()
             logger.warn("Relay Open")
         else:
             self._vehicle.drive(c_pilot, c_teleop)
