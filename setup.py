@@ -79,7 +79,7 @@ class TegraStateManager(object):
     _f_tegra_release = '/etc/nv_tegra_release'
     _f_cuda_version = '/usr/local/cuda/version.txt'
 
-    def __init__(self, build_dirname='build', log_prefix='setup', default_application_dirname='byodr'):
+    def __init__(self, build_dirname='build', log_prefix='setup', default_application_dirname='byodrapp'):
         self.build_dirname = build_dirname
         self.log_filename = log_prefix + '.log'
         self.json_filename = log_prefix + '.json'
