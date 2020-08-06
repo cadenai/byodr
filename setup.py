@@ -185,7 +185,7 @@ WantedBy=multi-user.target
     _application_config_template = '''
 [camera]
 camera.user = user1
-camera.password = SomeOwlNetTableSpoon5
+camera.password = HaikuPlot876
 camera.ptz.flip = tilt
 
 [vehicle] 
