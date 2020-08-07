@@ -12,7 +12,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN dpkg -i cuda-repo-l4t-10-0-local-10.0.326_1.0-1_arm64.deb && \
     apt-key add /var/cuda-repo-10-0-local-10.0.326/*.pub && \
     apt-get update && \
-    apt-get install -y cuda-toolkit-10-0 cuda-tools-10-0 ./libcudnn7_7.6.3.28-1+cuda10.0_arm64.deb && \
+    apt-get install -y cuda-toolkit-10-0 ./libcudnn7_7.6.3.28-1+cuda10.0_arm64.deb && \
     rm -rf *.deb && \
     dpkg --remove cuda-repo-l4t-10-0-local-10.0.326 && \
     dpkg -P cuda-repo-l4t-10-0-local-10.0.326 && \
