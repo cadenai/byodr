@@ -1,0 +1,106 @@
+version: '2'
+volumes:
+  volume_zerotier:
+  volume_byodr:
+  volume_config:
+  volume_recorder:
+services:
+  zerotier:
+    image: bltavares/zerotier
+    container_name: zerotier-one
+    restart: always
+    network_mode: host
+    devices:
+      - '/dev/net/tun'
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    volumes:
+      - volume_zerotier:/var/lib/zerotier-one:rw
+  cam1:
+    image: centipede2donald/byodr-ce:rover
+    container_name: byodr_cam1
+    restart: always
+    command: python stream.py
+    stop_signal: SIGKILL
+    volumes:
+      - volume_config:/config:ro
+  nodews:
+    build:
+      context: ..
+      dockerfile: teleop/nodews/Dockerfile
+    image: centipede2donald/byodr-ce:nodews
+    container_name: byodr_nodews
+    restart: always
+    stop_signal: SIGKILL
+    depends_on:
+      - "cam1"
+    ports:
+      - "9101:9101"
+    volumes:
+      - volume_config:/config:ro
+  vehicle:
+    build:
+      context: ..
+      dockerfile: vehicles/rover/Dockerfile
+    image: centipede2donald/byodr-ce:rover
+    container_name: byodr_vehicle
+    restart: always
+    # network_mode: "host"
+    environment:
+      LD_PRELOAD: libgomp.so.1
+    volumes:
+      - volume_byodr:/byodr:rw
+      - volume_config:/config:ro
+  teleop:
+    build:
+      context: ..
+      dockerfile: teleop/Dockerfile
+    image: centipede2donald/byodr-ce:teleop
+    container_name: byodr_teleop
+    restart: always
+    ports:
+      - "80:9100"
+    environment:
+      LD_PRELOAD: libgomp.so.1
+    volumes:
+      - volume_byodr:/byodr:rw
+      - volume_config:/config:rw
+  pilot:
+    build:
+      context: ..
+      dockerfile: pilot/Dockerfile
+    image: centipede2donald/byodr-ce:pilot
+    container_name: byodr_pilot
+    restart: always
+    environment:
+      LD_PRELOAD: libgomp.so.1
+    volumes:
+      - volume_byodr:/byodr:rw
+      - volume_config:/config:ro
+  recorder:
+    build:
+      context: ..
+      dockerfile: recorder/Dockerfile
+    image: centipede2donald/byodr-ce:recorder
+    container_name: byodr_recorder
+    restart: always
+    environment:
+      LD_PRELOAD: libgomp.so.1
+    volumes:
+      - volume_byodr:/byodr:rw
+      - volume_config:/config:ro
+      - volume_recorder:/sessions:rw
+  inference:
+    build:
+      context: ..
+      dockerfile: inference/Dockerfile.jp
+    image: centipede2donald/byodr-ce:inference-tegra
+    container_name: byodr_inference
+    restart: always
+    privileged: true
+    environment:
+      LD_PRELOAD: libgomp.so.1
+    volumes:
+      - volume_byodr:/byodr:rw
+      - volume_config:/config:ro

@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import argparse
 import glob
 import logging
 import multiprocessing
@@ -8,6 +7,8 @@ import signal
 from ConfigParser import SafeConfigParser
 from functools import partial
 
+import argparse
+import shutil
 from tornado import web, ioloop
 
 from byodr.utils import timestamp
@@ -53,6 +54,8 @@ def main():
     _candidates = glob.glob(_pattern)
     if len(_candidates) == 0:
         user_file = os.path.join(args.config, 'config.ini')
+        if not os.path.exists(user_file):
+            shutil.copyfile('user_config.ini_template', user_file)
     else:
         user_file = _candidates[0]
         parser.read(user_file)

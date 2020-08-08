@@ -1,6 +1,9 @@
 version: '2'
 services:
   pigpiod:
+    build:
+      context: ..
+      dockerfile: raspi/pi-gpio.dockerfile
     image: centipede2donald/byodr-ce:pigpio
     container_name: pigpiod
     privileged: true
@@ -17,13 +20,13 @@ services:
     command: python servos.py
     environment:
       GPIOZERO_PIN_FACTORY: 'pigpio'
-  odometry:
-    image: centipede2donald/byodr-ce:pigpio
-    container_name: odometry
-    restart: always
-    depends_on:
-      - "pigpiod"
-    network_mode: "host"
-    command: python odometry.py
-    environment:
-      GPIOZERO_PIN_FACTORY: 'pigpio'
+#  odometry:
+#    image: centipede2donald/byodr-ce:pigpio
+#    container_name: odometry
+#    restart: always
+#    depends_on:
+#      - "pigpiod"
+#    network_mode: "host"
+#    command: python odometry.py
+#    environment:
+#      GPIOZERO_PIN_FACTORY: 'pigpio'

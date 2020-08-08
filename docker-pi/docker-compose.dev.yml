@@ -1,0 +1,9 @@
+version: '2'
+services:
+  servos:
+    build:
+      context: ..
+      dockerfile: raspi/pi-gpio.dockerfile
+    volumes:
+      - ../raspi:/app
+      - ../common:/common

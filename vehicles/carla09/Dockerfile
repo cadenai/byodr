@@ -11,10 +11,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 RUN python -m easy_install --no-deps /PythonAPI/carla/dist/carla-0.9.9-py2.7-linux-x86_64.egg
 
-RUN groupadd --gid 1990 --system byodr \
-  && useradd --uid 1990 --gid 1990 --system --create-home --shell /bin/bash byodr
+#RUN groupadd --gid 1990 --system byodr \
+#  && useradd --uid 1990 --gid 1990 --system --create-home --shell /bin/bash byodr
 
-USER byodr
+#USER byodr
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
