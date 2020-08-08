@@ -1,9 +1,10 @@
 import collections
 import json
 import logging
-import threading
+import os
 
 import numpy as np
+import threading
 import zmq
 
 from byodr.utils import timestamp
@@ -12,7 +13,9 @@ logger = logging.getLogger(__name__)
 
 
 class JSONPublisher(object):
-    def __init__(self, url, topic=''):
+    def __init__(self, url, topic='', clean_start=True):
+        if clean_start and url.startswith('ipc://') and os.path.exists(url[6:]):
+            os.remove(url[6:])
         publisher = zmq.Context().socket(zmq.PUB)
         publisher.bind(url)
         self._publisher = publisher
@@ -24,7 +27,9 @@ class JSONPublisher(object):
 
 
 class ImagePublisher(object):
-    def __init__(self, url, topic=''):
+    def __init__(self, url, topic='', clean_start=True):
+        if clean_start and url.startswith('ipc://') and os.path.exists(url[6:]):
+            os.remove(url[6:])
         publisher = zmq.Context().socket(zmq.PUB)
         publisher.bind(url)
         self._publisher = publisher

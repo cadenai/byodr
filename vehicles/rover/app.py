@@ -239,7 +239,7 @@ class Rover(Configurable):
             # A reset could be too fast for the dependant circuit to reboot.
             # self._relay.close()
             self._vehicle.reset_integrity()
-            logger.warn("Relay Open")
+            logger.warning("Relay Open")
         else:
             self._vehicle.drive(c_pilot, c_teleop)
             self._camera.add(c_pilot, c_teleop)
