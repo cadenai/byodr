@@ -9,11 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-zmq \
  && rm -rf /var/lib/apt/lists/*
 
+RUN pip install "jsoncomment >=0.3, <1.0"
+
 COPY ./common common/
 COPY ./inference app/
 WORKDIR /app
-
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Create the user as part of the video group.
 #RUN useradd --uid 1990 --gid 44 --system --create-home --shell /bin/bash byodr
