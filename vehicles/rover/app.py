@@ -1,19 +1,18 @@
-import argparse
 import glob
 import logging
-import math
 import multiprocessing
 import os
 import signal
-import time
 from ConfigParser import SafeConfigParser
+
+import argparse
+import math
+import time
 
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer, JSONZmqClient
 from byodr.utils.option import parse_option
-from byodr.utils.protocol import MessageStreamProtocol
 from core import PTZCamera, GstSource, GpsPollerThread
-from relay import SingleChannelUsbRelay
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -54,7 +53,6 @@ class PiProtocol(Configurable):
     def __init__(self):
         super(PiProtocol, self).__init__()
         self._event = multiprocessing.Event()
-        self._integrity = MessageStreamProtocol()
         self._master_uri = None
         self._pi_client = None
         self._status = None
@@ -84,30 +82,16 @@ class PiProtocol(Configurable):
 
     def internal_quit(self, restarting=False):
         self._event.set()
-        self.reset_integrity()
         if self._pi_client is not None:
             self._pi_client.quit()
-
-    def _status_message_received(self, msg):
-        self._integrity.on_message(msg.get('time'))
-
-    def check_integrity_violations(self):
-        return self._integrity.check()
-
-    def reset_integrity(self):
-        self._integrity.reset()
 
     def internal_start(self, **kwargs):
         errors = []
         _master_uri = parse_option('ras.master.uri', str, 'none', errors, **kwargs)
         logger.info("Using pi master uri '{}'.".format(_master_uri))
-        self.reset_integrity()
         self._event = multiprocessing.Event()
         self._pi_client = JSONZmqClient(urls='{}:5550'.format(_master_uri))
-        self._status = ReceiverThread(url='{}:5555'.format(_master_uri),
-                                      topic=b'ras/drive/status',
-                                      event=self._event,
-                                      on_message=self._status_message_received)
+        self._status = ReceiverThread(url='{}:5555'.format(_master_uri), topic=b'ras/drive/status', event=self._event)
         self._odometer = ReceiverThread(url='{}:5560'.format(_master_uri), topic=b'ras/sensor/odometer', event=self._event)
         self._status.start()
         self._odometer.start()
@@ -133,12 +117,6 @@ class Platform(Configurable):
                     heading=0,
                     velocity=velocity,
                     time=timestamp())
-
-    def check_integrity_violations(self):
-        return self._protocol.check_integrity_violations()
-
-    def reset_integrity(self):
-        self._protocol.reset_integrity()
 
     def drive(self, pilot, teleop):
         pi_status = self._protocol.pop_status()
@@ -193,9 +171,6 @@ class Rover(Configurable):
         self._vehicle = Platform()
         self._camera = PTZCamera()
         self._gst_source = GstSource(image_publisher)
-        self._relay = SingleChannelUsbRelay()
-        self._relay.attach()
-        self._relay.close()
 
     def get_process_frequency(self):
         return self._process_frequency
@@ -211,8 +186,6 @@ class Rover(Configurable):
             self._vehicle.quit()
             self._camera.quit()
             self._gst_source.quit()
-            # Leave the relay state as is - if open rely on the connected component to check its own integrity.
-            # self._relay.open()
 
     def internal_start(self):
         errors = []
@@ -234,16 +207,9 @@ class Rover(Configurable):
         return errors + self._vehicle.get_errors() + self._camera.get_errors() + self._gst_source.get_errors()
 
     def cycle(self, c_pilot, c_teleop):
-        if self._vehicle.check_integrity_violations() > 2:
-            self._relay.open()
-            # A reset could be too fast for the dependant circuit to reboot.
-            # self._relay.close()
-            self._vehicle.reset_integrity()
-            logger.warning("Relay Open")
-        else:
-            self._vehicle.drive(c_pilot, c_teleop)
-            self._camera.add(c_pilot, c_teleop)
-            self._gst_source.check()
+        self._vehicle.drive(c_pilot, c_teleop)
+        self._camera.add(c_pilot, c_teleop)
+        self._gst_source.check()
         return self._vehicle.state()
 
 

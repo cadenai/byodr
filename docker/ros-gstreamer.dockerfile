@@ -1,8 +1,7 @@
 # docker build -f <name> -t centipede2donald/ros-melodic:python27-opencv32-gstreamer10 .
 FROM ros:melodic
 
-ENV TZ=Europe/Amsterdam
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
