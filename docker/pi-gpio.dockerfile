@@ -1,3 +1,6 @@
+# Must be run from directory root so the python common directory is included in the build context.
+# docker build -f raspi/pi-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.10.0 .
+
 FROM raspbian/stretch
 
 RUN apt-get update && apt-get install -y \
@@ -21,9 +24,3 @@ RUN git clone https://github.com/joan2937/pigpio.git \
     && make install
 
 COPY ./common common/
-COPY ./raspi app/
-WORKDIR /app
-
-ENV PYTHONPATH "${PYTHONPATH}:/common"
-
-CMD ["sudo", "/pigpio/pigpiod", "-gl"]

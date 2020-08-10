@@ -112,10 +112,12 @@ def monitor(arguments):
             logger.warning("Relay Open")
         time.sleep(_period)
 
+    # Leave the relay state as is - if open rely on the connected component to check its own integrity.
+    # _relay.open()
     _status.join()
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description='Spdt usb relay.')
     subparsers = parser.add_subparsers(help='Methods.')
 
@@ -123,7 +125,7 @@ if __name__ == "__main__":
     parser_a.add_argument('--cmd', type=str, required=True, help='Open or close the relay.')
     parser_a.set_defaults(func=execute)
 
-    parser_b = subparsers.add_parser('monitor', help='Open or close the relay depending on the availability of a service.')
+    parser_b = subparsers.add_parser('monitor', help='Open or close the relay depending on the availability of a service and topic.')
     parser_b.add_argument('--config', type=str, default='/config', help='Config directory path.')
     parser_b.add_argument('--topic', type=str, default='ras/drive/status', help='Topic to monitor.')
     parser_b.add_argument('--hz', type=int, default=20, help='Check frequency.')
@@ -131,3 +133,9 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args.func(args)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(format=log_format)
+    logging.getLogger().setLevel(logging.INFO)
+    main()

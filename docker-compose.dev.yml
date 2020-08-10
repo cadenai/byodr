@@ -1,8 +1,10 @@
 version: '2'
 services:
+  relay:
+    volumes:
+      - ./common:/common
+      - ./vehicles/rover:/app
   cam1:
-    build:
-      dockerfile: vehicles/rover/Dockerfile
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app
