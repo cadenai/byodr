@@ -14,6 +14,8 @@ services:
       dockerfile: Dockerfile
     image: centipede2donald/byodr-ce:servos
     container_name: servos
+    privileged: true
+    user: root
     restart: always
     depends_on:
       - "pigpiod"

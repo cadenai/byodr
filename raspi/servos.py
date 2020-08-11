@@ -2,13 +2,15 @@ import collections
 import logging
 import multiprocessing
 import signal
+import traceback
 
 import time
-from gpiozero import AngularServo, DigitalOutputDevice
+from gpiozero import AngularServo
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import JSONPublisher, JSONServerThread
 from byodr.utils.protocol import MessageStreamProtocol
+from byodr.utils.usbrelay import DoubleChannelUsbRelay
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -22,21 +24,6 @@ signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-
-
-class SingleChannelRelay(object):
-    def __init__(self, pin):
-        self._device = DigitalOutputDevice(pin=pin)
-
-    def on(self):
-        self._device.on()
-
-    def off(self):
-        self._device.off()
-
-    def toggle(self):
-        self.off()
-        self.on()
 
 
 class Platform(JSONServerThread):
@@ -56,11 +43,11 @@ class Platform(JSONServerThread):
     def check_integrity(self):
         n_violations = self._integrity.check()
         if n_violations > 10:
-            self._relay.off()
+            self._relay.open()
             self._integrity.reset()
             logger.warning("Motor relay OFF")
         elif self._integrity.is_started():
-            self._relay.on()
+            self._relay.close()
         return n_violations
 
     def on_message(self, message):
@@ -102,7 +89,8 @@ def _throttle(config, servo, throttle, in_reverse):
 
 def main():
     try:
-        relay = SingleChannelRelay(pin=18)
+        relay = DoubleChannelUsbRelay()
+        relay.attach()
 
         p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
         e_server = Platform(relay=relay, url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
@@ -131,7 +119,7 @@ def main():
                 p_status.publish(data=dict(time=timestamp(), configured=int(_configured)))
                 time.sleep(rate)
         finally:
-            relay.off()
+            relay.open()
             if steer_servo is not None:
                 steer_servo.close()
             if motor_servo is not None:
@@ -140,7 +128,7 @@ def main():
         logger.info("Waiting on threads to stop.")
         [t.join() for t in threads]
     except Exception as e:
-        logger.error(e)
+        logger.error(traceback.format_exc(e))
         exit(-1)
 
 

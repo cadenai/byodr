@@ -56,7 +56,6 @@ services:
     image: centipede2donald/byodr-ce:rover
     container_name: byodr_vehicle
     restart: always
-    # network_mode: "host"
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
