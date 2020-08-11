@@ -1,4 +1,5 @@
 [camera]
+camera.ip = 192.168.1.64
 camera.user = user1
 camera.password = HaikuPlot876
 camera.ptz.flip = tilt
@@ -24,7 +25,7 @@ driver.autopilot.filter.momentum.up = 1.0
 driver.autopilot.filter.momentum.down = 0.20
 
 [vehicle]
-ras.master.uri = tcp://raspberrypi
+ras.master.uri = tcp://192.168.1.32
 ras.throttle.domain.forward.shift = 4
 ras.throttle.domain.backward.shift = 0
 ras.throttle.domain.scale = 10

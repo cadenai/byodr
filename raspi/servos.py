@@ -2,8 +2,8 @@ import collections
 import logging
 import multiprocessing
 import signal
-import time
 
+import time
 from gpiozero import AngularServo, DigitalOutputDevice
 
 from byodr.utils import timestamp
@@ -101,46 +101,47 @@ def _throttle(config, servo, throttle, in_reverse):
 
 
 def main():
-    relay = SingleChannelRelay(pin=18)
-
-    p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
-    e_server = Platform(relay=relay, url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
-
-    threads = [e_server]
-    [t.start() for t in threads]
-
-    steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
     try:
-        rate = 0.04  # 25 Hz.
-        while not quit_event.is_set():
-            n_violations = e_server.check_integrity()
-            c_config, c_drive = e_server.pop_config(), e_server.pop_drive()
-            if c_config is not None:
-                steer_servo = _create_servo(steer_servo, c_config.get('steering'))
-                motor_servo = _create_servo(motor_servo, c_config.get('motor'))
-                throttle_config = c_config.get('throttle')
+        relay = SingleChannelRelay(pin=18)
+
+        p_status = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
+        e_server = Platform(relay=relay, url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
+
+        threads = [e_server]
+        [t.start() for t in threads]
+
+        steer_servo, motor_servo, throttle_config = None, None, dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
+        try:
+            rate = 0.04  # 25 Hz.
+            while not quit_event.is_set():
+                n_violations = e_server.check_integrity()
+                c_config, c_drive = e_server.pop_config(), e_server.pop_drive()
+                if c_config is not None:
+                    steer_servo = _create_servo(steer_servo, c_config.get('steering'))
+                    motor_servo = _create_servo(motor_servo, c_config.get('motor'))
+                    throttle_config = c_config.get('throttle')
+                if steer_servo is not None:
+                    _steer(steer_servo, 0 if c_drive is None else c_drive.get('steering', 0))
+                if motor_servo is not None:
+                    _zero_throttle = c_drive is None or n_violations > 0
+                    throttle = 0 if _zero_throttle else c_drive.get('throttle', 0)
+                    in_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
+                    _throttle(throttle_config, motor_servo, throttle, in_reverse)
+                _configured = None not in (steer_servo, motor_servo)
+                p_status.publish(data=dict(time=timestamp(), configured=int(_configured)))
+                time.sleep(rate)
+        finally:
+            relay.off()
             if steer_servo is not None:
-                _steer(steer_servo, 0 if c_drive is None else c_drive.get('steering', 0))
+                steer_servo.close()
             if motor_servo is not None:
-                _zero_throttle = c_drive is None or n_violations > 0
-                throttle = 0 if _zero_throttle else c_drive.get('throttle', 0)
-                in_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
-                _throttle(throttle_config, motor_servo, throttle, in_reverse)
-            _configured = None not in (steer_servo, motor_servo)
-            p_status.publish(data=dict(time=timestamp(), configured=int(_configured)))
-            time.sleep(rate)
+                motor_servo.close()
+
+        logger.info("Waiting on threads to stop.")
+        [t.join() for t in threads]
     except Exception as e:
         logger.error(e)
-        raise e
-    finally:
-        relay.off()
-        if steer_servo is not None:
-            steer_servo.close()
-        if motor_servo is not None:
-            motor_servo.close()
-
-    logger.info("Waiting on threads to stop.")
-    [t.join() for t in threads]
+        exit(-1)
 
 
 if __name__ == "__main__":

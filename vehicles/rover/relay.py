@@ -67,6 +67,46 @@ class SingleChannelUsbRelay(object):
             self._endpoint.write([0xA0, 0x01, 0x01, 0xA2])
 
 
+class DoubleChannelUsbRelay(object):
+    def __init__(self, vendor=0x16c0, product=0x05df):
+        self._vendor = vendor
+        self._product = product
+        self._device_on = [
+            [0xFF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            [0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        ]
+        self._device_off = [
+            [0xFC, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+            [0xFC, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+        ]
+        self._channel0_on = "".join(chr(n) for n in [0xFF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self._channel1_on = "".join(chr(n) for n in [0xFF, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self._channel0_off = "".join(chr(n) for n in [0xFC, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self._channel1_off = "".join(chr(n) for n in [0xFC, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+        self._device = None
+
+    def attach(self):
+        self._device = usb.core.find(idVendor=self._vendor, idProduct=self._product)
+        if self._device is None:
+            logger.error("Device vendor={} product={} not found.".format(self._vendor, self._product))
+            return
+
+        try:
+            if self._device.is_kernel_driver_active(0):
+                self._device.detach_kernel_driver(0)
+            self._device.set_configuration()
+        except Exception as e:
+            logger.error(e)
+
+    def open(self, channel=0):
+        if self._device is not None:
+            self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_off[channel]), 1000)
+
+    def close(self, channel=0):
+        if self._device is not None:
+            self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_on[channel]), 1000)
+
+
 def execute(arguments):
     _device = SingleChannelUsbRelay()
     _device.attach()
@@ -86,12 +126,13 @@ def monitor(arguments):
     [cfg_parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
     vehicle_cfg = dict(cfg_parser.items('vehicle'))
 
+    _channel = arguments.channel
     _topic = arguments.topic
     _master_uri = parse_option('ras.master.uri', str, 'none', [], **vehicle_cfg)
     _url = '{}:5555'.format(_master_uri)
     logger.info("Using status url '{}' and topic '{}'.".format(_url, _topic))
 
-    _relay = SingleChannelUsbRelay()
+    _relay = DoubleChannelUsbRelay()
     _relay.attach()
     _integrity = MessageStreamProtocol()
 
@@ -101,11 +142,11 @@ def monitor(arguments):
     _status = ReceiverThread(url=_url, topic=b'' + _topic, event=quit_event, on_message=_receive)
     _status.start()
 
-    _relay.close()
+    _relay.close(channel=_channel)
     _period = 1. / arguments.hz
     while not quit_event.is_set():
         if _integrity.check() > 2:
-            _relay.open()
+            _relay.open(channel=_channel)
             # A reset could be too fast for the dependant circuit to reboot.
             # self._relay.close()
             _integrity.reset()
@@ -127,6 +168,7 @@ def main():
 
     parser_b = subparsers.add_parser('monitor', help='Open or close the relay depending on the availability of a service and topic.')
     parser_b.add_argument('--config', type=str, default='/config', help='Config directory path.')
+    parser_b.add_argument('--channel', type=int, default=0, help='Relay channel id.')
     parser_b.add_argument('--topic', type=str, default='ras/drive/status', help='Topic to monitor.')
     parser_b.add_argument('--hz', type=int, default=20, help='Check frequency.')
     parser_b.set_defaults(func=monitor)
