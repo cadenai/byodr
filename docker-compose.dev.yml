@@ -1,5 +1,7 @@
 version: '2'
 services:
+  zerotier:
+    image: rwgrim/docker-noop:latest
   relay:
     volumes:
       - ./common:/common
@@ -18,6 +20,7 @@ services:
       - ./teleop:/app
   pilot:
     volumes:
+      - ./build/pytest_cache:/pytest_cache
       - ./common:/common
       - ./pilot:/app
   recorder:

@@ -9,6 +9,6 @@ RUN pip install "pymodbus >=2.3.0, <3.0" && \
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
-COPY ./servos.py app/
+COPY ./ app/
 
 WORKDIR /app
