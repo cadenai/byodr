@@ -1,13 +1,12 @@
+import argparse
 import glob
 import logging
+import math
 import multiprocessing
 import os
 import signal
-from ConfigParser import SafeConfigParser
-
-import argparse
-import math
 import time
+from ConfigParser import SafeConfigParser
 
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer, JSONZmqClient
@@ -33,14 +32,6 @@ def _latest_or_none(receiver, patience):
     _time = 0 if candidate is None else candidate.get('time')
     _on_time = (timestamp() - _time) < patience
     return candidate if _on_time else None
-
-
-class IPCServer(LocalIPCServer):
-    def __init__(self, url, event, receive_timeout_ms=50):
-        super(IPCServer, self).__init__('platform', url, event, receive_timeout_ms)
-
-    def serve_local(self, message):
-        return {}
 
 
 def get_parser(config_dir):
@@ -224,7 +215,7 @@ def main():
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
+    ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
     rover = Rover(args.config, image_publisher, ipc_server)
 
     threads = [pilot, teleop, ipc_chatter, ipc_server, rover]

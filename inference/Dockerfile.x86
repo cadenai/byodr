@@ -15,13 +15,8 @@ COPY ./common common/
 COPY ./inference app/
 WORKDIR /app
 
-# Create the user as part of the video group.
-#RUN useradd --uid 1990 --gid 44 --system --create-home --shell /bin/bash byodr
-
 COPY ./build/*optimized.pb /models/
 COPY ./build/*.ini /models/
-
-#USER byodr
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 

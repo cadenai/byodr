@@ -2,9 +2,9 @@ import collections
 import json
 import logging
 import os
+import threading
 
 import numpy as np
-import threading
 import zmq
 
 from byodr.utils import timestamp

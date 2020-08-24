@@ -3,32 +3,21 @@ import collections
 import copy
 import glob
 import logging
-import multiprocessing
 import os
-import signal
 import threading
 import time
-import traceback
 from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
 
+from byodr.utils import Application
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
 from store import Event
 
 logger = logging.getLogger(__name__)
-quit_event = multiprocessing.Event()
-
-signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
-signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
-
-
-def _interrupt():
-    logger.info("Received interrupt, quitting.")
-    quit_event.set()
 
 
 def to_event(ts, blob, vehicle, image):
@@ -176,30 +165,56 @@ class EventHandler(threading.Thread):
                 pass
 
 
-class IPCServer(LocalIPCServer):
-    def __init__(self, url, event, receive_timeout_ms=50):
-        super(IPCServer, self).__init__('recorder', url, event, receive_timeout_ms)
+class RecorderApplication(Application):
+    def __init__(self, config_dir=os.getcwd(), sessions_dir=os.getcwd()):
+        super(RecorderApplication, self).__init__()
+        self._config_dir = config_dir
+        self._sessions_dir = sessions_dir
+        self._handler = None
+        self.publisher = None
+        self.ipc_server = None
+        self.ipc_chatter = None
+        self.camera = None
+        self.pilot = None
+        self.vehicle = None
+        self._last_publish = time.time()
+        self._publish_duration = 0
 
-    def serve_local(self, message):
-        return {}
+    def _config(self):
+        parser = SafeConfigParser()
+        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        return dict(parser.items('recorder'))
 
+    def get_process_frequency(self):
+        return 0 if self._handler is None else self._handler.get_process_frequency()
 
-def create_handler(ipc_server, config_dir, sessions_dir, previous=None):
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
-    cfg = dict(parser.items('recorder'))
-    _configured = False
-    if previous is None:
-        previous = EventHandler(sessions_dir, **cfg)
-        _configured = True
-    elif previous.is_reconfigured(**cfg):
-        previous.quit()
-        previous = EventHandler(sessions_dir, **cfg)
-        _configured = True
-    if _configured:
-        ipc_server.register_start(previous.get_errors())
-        logger.info("Processing at {} Hz publishing at {} Hz.".format(previous.get_process_frequency(), previous.get_publish_frequency()))
-    return previous
+    def setup(self):
+        if self._handler is not None:
+            self._handler.quit()
+        if self.active():
+            self._handler = EventHandler(self._sessions_dir, **self._config())
+            self.ipc_server.register_start(self._handler.get_errors())
+            _process_hz = self._handler.get_process_frequency()
+            _publish_hz = self._handler.get_publish_frequency()
+            self.set_hz(_process_hz)
+            self._publish_duration = 1. / _publish_hz
+            self.logger.info("Processing at {} Hz publishing at {} Hz.".format(_process_hz, _publish_hz))
+
+    def finish(self):
+        self._handler.quit()
+
+    def step(self):
+        m_pilot = self.pilot.get_latest()
+        m_vehicle = self.vehicle.get_latest()
+        image_md, image = self.camera.capture()
+        if None not in (m_pilot, m_vehicle, image_md):
+            self._handler.record(m_pilot, m_vehicle, image_md, image)
+        if time.time() - self._last_publish > self._publish_duration:
+            self.publisher.publish(self._handler.state())
+            self._last_publish = time.time()
+        chat = self.ipc_chatter.pop_latest()
+        if chat and chat.get('command') == 'restart':
+            self.setup()
 
 
 def main():
@@ -211,47 +226,22 @@ def main():
     sessions_dir = os.path.expanduser(args.sessions)
     assert os.path.exists(sessions_dir), "Cannot use sessions directory '{}'".format(sessions_dir)
 
-    camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = IPCServer(url='ipc:///byodr/recorder_c.sock', event=quit_event)
-    handler = create_handler(ipc_server, args.config, sessions_dir)
-    threads = [camera, pilot, vehicle, handler, ipc_chatter, ipc_server]
+    application = RecorderApplication(config_dir=args.config, sessions_dir=sessions_dir)
+    quit_event = application.quit_event
+
+    application.publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
+    application.camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
+    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    application.vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+    application.ipc_server = LocalIPCServer(url='ipc:///byodr/recorder_c.sock', name='recorder', event=quit_event)
+
+    threads = [application.camera, application.pilot, application.vehicle, application.ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 
-    state_publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
     [t.start() for t in threads]
-    max_process_duration = 1. / handler.get_process_frequency()
-    max_publish_duration = 1. / handler.get_publish_frequency()
-    try:
-        _last_publish = time.time()
-        while not quit_event.is_set():
-            proc_start = time.time()
-            m_pilot = pilot.get_latest()
-            m_vehicle = vehicle.get_latest()
-            image_md, image = camera.capture()
-            if None not in (m_pilot, m_vehicle, image_md):
-                handler.record(m_pilot, m_vehicle, image_md, image)
-            if time.time() - _last_publish > max_publish_duration:
-                state_publisher.publish(handler.state())
-                _last_publish = time.time()
-            chat = ipc_chatter.pop_latest()
-            if chat and chat.get('command') == 'restart':
-                handler = create_handler(ipc_server, args.config, sessions_dir, previous=handler)
-                max_process_duration = 1. / handler.get_process_frequency()
-                max_publish_duration = 1. / handler.get_publish_frequency()
-            else:
-                _proc_sleep = max_process_duration - (time.time() - proc_start)
-                time.sleep(max(0., _proc_sleep))
-        logger.info("Waiting on handler to quit.")
-        handler.quit()
-    except KeyboardInterrupt:
-        quit_event.set()
-    except StandardError as e:
-        logger.error("{}".format(traceback.format_exc(e)))
-        quit_event.set()
+    application.run()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

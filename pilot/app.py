@@ -26,6 +26,9 @@ class PilotApplication(Application):
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
         return dict(parser.items('pilot'))
 
+    def get_process_frequency(self):
+        return self._processor.get_frequency()
+
     def setup(self):
         if self.active():
             _restarted = self._processor.restart(**self._config())

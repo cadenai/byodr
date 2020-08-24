@@ -25,14 +25,6 @@ def _interrupt():
     quit_event.set()
 
 
-class IPCServer(LocalIPCServer):
-    def __init__(self, url, event, receive_timeout_ms=50):
-        super(IPCServer, self).__init__('platform', url, event, receive_timeout_ms)
-
-    def serve_local(self, message):
-        return {}
-
-
 def _latest_or_none(receiver, patience):
     candidate = receiver.get_latest()
     _time = 0 if candidate is None else candidate.get('time')
@@ -108,7 +100,7 @@ def main():
     teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = IPCServer(url='ipc:///byodr/vehicle_c.sock', event=quit_event)
+    ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
     threads = [teleop, pilot, ipc_server]
     if quit_event.is_set():
         return 0
