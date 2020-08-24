@@ -1,16 +1,18 @@
 import os
 from ConfigParser import SafeConfigParser
 
-from app import RecorderApplication
-from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer, QueueCamera
+from app import RoverApplication, RoverHandler
+from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer
+from core import GstSource
 
 
 def create_application(config_dir):
-    application = RecorderApplication(config_dir=config_dir)
-    application.publisher = CollectPublisher()
-    application.camera = QueueCamera()
+    image_publisher = CollectPublisher()
+    rover = RoverHandler(gst_source=GstSource(image_publisher))
+    application = RoverApplication(handler=rover, config_dir=config_dir)
+    application.state_publisher = CollectPublisher()
     application.pilot = QueueReceiver()
-    application.vehicle = QueueReceiver()
+    application.teleop = QueueReceiver()
     application.ipc_chatter = QueueReceiver()
     application.ipc_server = CollectServer()
     return application
@@ -33,8 +35,8 @@ def test_create_and_setup(tmpdir):
         previous_process_frequency = app.get_process_frequency()
         new_process_frequency = previous_process_frequency + 10
         _parser = SafeConfigParser()
-        _parser.add_section('recorder')
-        _parser.set('recorder', 'clock.hz', str(new_process_frequency))
+        _parser.add_section('vehicle')
+        _parser.set('vehicle', 'clock.hz', str(new_process_frequency))
         with open(os.path.join(directory, 'test_config.ini'), 'wb') as f:
             _parser.write(f)
         #

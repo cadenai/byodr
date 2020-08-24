@@ -19,6 +19,7 @@ class GstRawSource(object):
         self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=2 drop=true"
         self.closed = True
         self._callback_time = None
+        self.video_pipe = None
 
     def _setup(self):
         self.video_pipe = Gst.parse_launch(self.command)
@@ -70,6 +71,7 @@ class GstRawSource(object):
             self.open()
 
     def close(self):
-        self.video_pipe.set_state(Gst.State.NULL)
+        if self.video_pipe is not None:
+            self.video_pipe.set_state(Gst.State.NULL)
         self.closed = True
         logger.info("Source closed.")

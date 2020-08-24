@@ -87,6 +87,13 @@ class Application(object):
         self.logger.info("Received interrupt, quitting.")
         self.quit()
 
+    @staticmethod
+    def _latest_or_none(receiver, patience):
+        candidate = receiver.get_latest()
+        _time = 0 if candidate is None else candidate.get('time')
+        _on_time = (timestamp() - _time) < patience
+        return candidate if _on_time else None
+
     def set_hz(self, hz):
         self._sleep = 1. / hz
 

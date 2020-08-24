@@ -193,6 +193,7 @@ class RecorderApplication(Application):
             self._handler.quit()
         if self.active():
             self._handler = EventHandler(self._sessions_dir, **self._config())
+            self._handler.start()
             self.ipc_server.register_start(self._handler.get_errors())
             _process_hz = self._handler.get_process_frequency()
             _publish_hz = self._handler.get_publish_frequency()

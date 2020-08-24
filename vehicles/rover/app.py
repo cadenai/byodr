@@ -4,40 +4,16 @@ import logging
 import math
 import multiprocessing
 import os
-import signal
-import time
 from ConfigParser import SafeConfigParser
 
+from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer, JSONZmqClient
 from byodr.utils.option import parse_option
-from core import PTZCamera, GstSource, GpsPollerThread
+from core import GpsPollerThread, GstSource, PTZCamera
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
-
-quit_event = multiprocessing.Event()
-
-signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
-signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
-
-
-def _interrupt():
-    logger.info("Received interrupt, quitting.")
-    quit_event.set()
-
-
-def _latest_or_none(receiver, patience):
-    candidate = receiver.get_latest()
-    _time = 0 if candidate is None else candidate.get('time')
-    _on_time = (timestamp() - _time) < patience
-    return candidate if _on_time else None
-
-
-def get_parser(config_dir):
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
-    return parser
 
 
 class PiProtocol(Configurable):
@@ -151,17 +127,14 @@ class Platform(Configurable):
         return errors + self._protocol.get_errors()
 
 
-class Rover(Configurable):
-
-    def __init__(self, config_dir, image_publisher, ipc_server):
-        super(Rover, self).__init__()
-        self._config_dir = config_dir
-        self._ipc_server = ipc_server
+class RoverHandler(Configurable):
+    def __init__(self, gst_source, platform=None, ptz_camera=None):
+        super(RoverHandler, self).__init__()
+        self._gst_source = gst_source
+        self._vehicle = Platform() if platform is None else platform
+        self._camera = PTZCamera() if ptz_camera is None else ptz_camera
         self._process_frequency = 10
         self._patience_micro = 100.
-        self._vehicle = Platform()
-        self._camera = PTZCamera()
-        self._gst_source = GstSource(image_publisher)
 
     def get_process_frequency(self):
         return self._process_frequency
@@ -178,23 +151,13 @@ class Rover(Configurable):
             self._camera.quit()
             self._gst_source.quit()
 
-    def internal_start(self):
+    def internal_start(self, **kwargs):
         errors = []
-        parser = get_parser(self._config_dir)
-        vehicle_cfg = dict(parser.items('vehicle'))
-        camera_cfg = dict(parser.items('camera'))
-        self._process_frequency = parse_option('clock.hz', int, 10, errors, **vehicle_cfg)
-        self._patience_micro = parse_option('patience.ms', int, 200, errors, **vehicle_cfg) * 1000.
-        _parties = [self._vehicle, self._camera, self._gst_source]
-        _starts = sum([c.get_num_starts() for c in _parties])
-        self._vehicle.restart(**vehicle_cfg)
-        self._camera.restart(**camera_cfg)
-        self._gst_source.restart(**camera_cfg)
-        _restarted = sum([c.get_num_starts() for c in _parties]) > _starts
-        if _restarted:
-            [errors.extend(x.get_errors()) for x in _parties]
-            self._ipc_server.register_start(errors)
-            logger.info("Processing at {} Hz and a patience of {} ms.".format(self._process_frequency, self._patience_micro / 1000))
+        self._process_frequency = parse_option('clock.hz', int, 10, errors, **kwargs)
+        self._patience_micro = parse_option('patience.ms', int, 200, errors, **kwargs) * 1000.
+        self._vehicle.restart(**kwargs)
+        self._camera.restart(**kwargs)
+        self._gst_source.restart(**kwargs)
         return errors + self._vehicle.get_errors() + self._camera.get_errors() + self._gst_source.get_errors()
 
     def cycle(self, c_pilot, c_teleop):
@@ -204,37 +167,73 @@ class Rover(Configurable):
         return self._vehicle.state()
 
 
+class RoverApplication(Application):
+    def __init__(self, handler, config_dir=os.getcwd()):
+        super(RoverApplication, self).__init__()
+        self._config_dir = config_dir
+        self._handler = handler
+        self.state_publisher = None
+        self.pilot = None
+        self.teleop = None
+        self.ipc_chatter = None
+        self.ipc_server = None
+
+    def _config(self):
+        parser = SafeConfigParser()
+        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('vehicle'))
+        cfg.update(dict(parser.items('camera')))
+        return cfg
+
+    def get_process_frequency(self):
+        return 0 if self._handler is None else self._handler.get_process_frequency()
+
+    def setup(self):
+        if self.active():
+            _restarted = self._handler.restart(**self._config())
+            if _restarted:
+                self.ipc_server.register_start(self._handler.get_errors())
+                _frequency = self._handler.get_process_frequency()
+                self.set_hz(_frequency)
+                self.logger.info("Processing at {} Hz.".format(_frequency))
+
+    def finish(self):
+        self._handler.quit()
+
+    def step(self):
+        rover, pilot, teleop, publisher = self._handler, self.pilot, self.teleop, self.state_publisher
+        c_pilot = self._latest_or_none(pilot, patience=rover.get_patience_micro())
+        c_teleop = self._latest_or_none(teleop, patience=rover.get_patience_micro())
+        _state = rover.cycle(c_pilot, c_teleop)
+        publisher.publish(_state)
+        chat = self.ipc_chatter.pop_latest()
+        if chat and chat.get('command') == 'restart':
+            self.setup()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Rover main.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
+    rover = RoverHandler(gst_source=GstSource(image_publisher))
 
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
-    rover = Rover(args.config, image_publisher, ipc_server)
+    application = RoverApplication(handler=rover, config_dir=args.config)
+    quit_event = application.quit_event
 
-    threads = [pilot, teleop, ipc_chatter, ipc_server, rover]
+    application.state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
+    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+    application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
+
+    threads = [application.pilot, application.teleop, application.ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 
     [t.start() for t in threads]
-    _period = 1. / rover.get_process_frequency()
-    while not quit_event.is_set():
-        c_pilot = _latest_or_none(pilot, patience=rover.get_patience_micro())
-        c_teleop = _latest_or_none(teleop, patience=rover.get_patience_micro())
-        _state = rover.cycle(c_pilot, c_teleop)
-        state_publisher.publish(_state)
-        chat = ipc_chatter.pop_latest()
-        if chat and chat.get('command') == 'restart':
-            rover.restart()
-            _period = 1. / rover.get_process_frequency()
-        else:
-            time.sleep(_period)
+    application.run()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

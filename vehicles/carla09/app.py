@@ -5,19 +5,12 @@ import os
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
-from byodr.utils import timestamp, Configurable
+from byodr.utils import Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
 from byodr.utils.option import parse_option
 from vehicle import CarlaHandler
 
 logger = logging.getLogger(__name__)
-
-
-def _latest_or_none(receiver, patience):
-    candidate = receiver.get_latest()
-    _time = 0 if candidate is None else candidate.get('time')
-    _on_time = (timestamp() - _time) < patience
-    return candidate if _on_time else None
 
 
 class CarlaRunner(Configurable):
@@ -91,8 +84,8 @@ class CarlaApplication(Application):
 
     def step(self):
         runner, pilot, teleop, ipc_chatter, ipc_server = self._runner, self.pilot, self.teleop, self.ipc_chatter, self.ipc_server
-        c_pilot = _latest_or_none(pilot, patience=(runner.get_patience_micro()))
-        c_teleop = _latest_or_none(teleop, patience=(runner.get_patience_micro()))
+        c_pilot = self._latest_or_none(pilot, patience=(runner.get_patience_micro()))
+        c_teleop = self._latest_or_none(teleop, patience=(runner.get_patience_micro()))
         if c_teleop is not None and c_teleop.get('button_a', 0):
             runner.reset_agent()
         if c_pilot is not None:
