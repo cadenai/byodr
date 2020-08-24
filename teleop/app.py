@@ -1,16 +1,16 @@
 #!/usr/bin/env python
+import argparse
 import glob
 import logging
 import multiprocessing
 import os
+import shutil
 import signal
 from ConfigParser import SafeConfigParser
-from functools import partial
 
-import argparse
-import shutil
 from tornado import web, ioloop
 
+from byodr.utils import Application
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, JSONZmqClient
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, ApiSystemStateHandler
@@ -32,12 +32,37 @@ def _interrupt():
     io_loop.stop()
 
 
-def on_options_save(publisher):
-    publisher.publish(dict(time=timestamp(), command='restart'), topic='aav/teleop/chatter')
+class TeleopApplication(Application):
+    def __init__(self, event, config_dir=os.getcwd()):
+        super(TeleopApplication, self).__init__(quit_event=event)
+        self._config_dir = config_dir
+        self._display_speed_scale = 0
+        self._user_config_file = os.path.join(self._config_dir, 'config.ini')
+        self._check_user_config()
 
+    def _check_user_config(self):
+        # One user configuration file is optional and can be used to persist settings.
+        _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
+        if len(_candidates) == 0:
+            shutil.copyfile('user_config.ini_template', self._user_config_file)
+        else:
+            self._user_config_file = _candidates[0]
 
-def list_process_start_messages(client):
-    return client.call(dict(request='system/startup/list'))
+    def _config(self):
+        parser = SafeConfigParser()
+        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        return dict(parser.items('teleop'))
+
+    def get_user_config_file(self):
+        return self._user_config_file
+
+    def get_display_speed_scale(self):
+        return self._display_speed_scale
+
+    def setup(self):
+        if self.active():
+            self._display_speed_scale = float(self._config().get('display.speed.scale'))
+            self.logger.info("Speed scale = {}.".format(self._display_speed_scale))
 
 
 def main():
@@ -46,25 +71,8 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    # Read the internal configuration first.
-    parser = SafeConfigParser()
-    parser.read('config.ini')
-    # One user configuration file is optional and can be used to persist settings.
-    _pattern = os.path.join(args.config, '*.ini')
-    _candidates = glob.glob(_pattern)
-    if len(_candidates) == 0:
-        user_file = os.path.join(args.config, 'config.ini')
-        if not os.path.exists(user_file):
-            shutil.copyfile('user_config.ini_template', user_file)
-    else:
-        user_file = _candidates[0]
-        parser.read(user_file)
-        if len(_candidates) > 1:
-            logger.warning("Found {} files for '{}' but using only one.".format(len(_candidates), _pattern))
-    # Convert for ease of use.
-    cfg = dict(parser.items('teleop'))
-
-    _display_speed_scale = float(cfg.get('display.speed.scale'))
+    application = TeleopApplication(event=quit_event, config_dir=args.config)
+    application.setup()
 
     pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
@@ -82,13 +90,20 @@ def main():
                                     'ipc:///byodr/inference_c.sock',
                                     'ipc:///byodr/vehicle_c.sock',
                                     'ipc:///byodr/recorder_c.sock'])
-    user_options = UserOptions(user_file)
+
+    def on_options_save():
+        publisher.publish(dict(time=timestamp(), command='restart'), topic='aav/teleop/chatter')
+        application.setup()
+
+    def list_process_start_messages():
+        return zm_client.call(dict(request='system/startup/list'))
+
     try:
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket,
              dict(fn_control=(lambda x: publisher.publish(x)))),
             (r"/ws/log", MessageServerSocket,
-             dict(speed_scale=_display_speed_scale,
+             dict(speed_scale=application.get_display_speed_scale(),
                   fn_state=(lambda: (pilot.get_latest(),
                                      vehicle.get_latest(),
                                      inference.get_latest(),
@@ -96,9 +111,9 @@ def main():
             (r"/ws/cam", CameraMJPegSocket,
              dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/api/user/options", ApiUserOptionsHandler,
-             dict(user_options=user_options, fn_on_save=partial(on_options_save, publisher=publisher))),
+             dict(user_options=(UserOptions(application.get_user_config_file())), fn_on_save=on_options_save)),
             (r"/api/system/state", ApiSystemStateHandler,
-             dict(fn_list_start_messages=partial(list_process_start_messages, client=zm_client))),
+             dict(fn_list_start_messages=list_process_start_messages)),
             (r"/(.*)", web.StaticFileHandler, {
                 'path': os.path.join(os.path.sep, 'app', 'htm'),
                 'default_filename': 'index.htm'

@@ -1,28 +1,16 @@
 import argparse
 import glob
 import logging
-import multiprocessing
 import os
-import signal
-import time
-import traceback
 from ConfigParser import SafeConfigParser
 
+from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
 from byodr.utils.option import parse_option
 from vehicle import CarlaHandler
 
 logger = logging.getLogger(__name__)
-quit_event = multiprocessing.Event()
-
-signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
-signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
-
-
-def _interrupt():
-    logger.info("Received interrupt, quitting.")
-    quit_event.set()
 
 
 def _latest_or_none(receiver, patience):
@@ -69,24 +57,52 @@ class CarlaRunner(Configurable):
         self._vehicle.drive(cmd)
 
 
-def create_runner(ipc_server, config_dir, image_publisher, previous=None):
-    # The end-user config overrides come last so all settings are modifiable.
-    parser = SafeConfigParser()
-    [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
-    cfg = dict(parser.items('vehicle'))
-    cfg.update(dict(parser.items('platform')))
-    _starts = 0 if previous is None else previous.get_num_starts()
-    if previous is None:
-        previous = CarlaRunner(image_publisher)
-        previous.start(**cfg)
-    else:
-        previous.restart(**cfg)
-    if previous.get_num_starts() > _starts:
-        ipc_server.register_start(previous.get_errors())
-        _process_frequency = previous.get_process_frequency()
-        _patience_micro = previous.get_patience_micro()
-        logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
-    return previous
+class CarlaApplication(Application):
+    def __init__(self, image_publisher, config_dir=os.getcwd()):
+        super(CarlaApplication, self).__init__()
+        self._image_publisher = image_publisher
+        self._config_dir = config_dir
+        self._runner = CarlaRunner(image_publisher)
+        self.publisher = None
+        self.teleop = None
+        self.pilot = None
+        self.ipc_server = None
+        self.ipc_chatter = None
+
+    def _config(self):
+        parser = SafeConfigParser()
+        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('vehicle'))
+        cfg.update(dict(parser.items('platform')))
+        return cfg
+
+    def setup(self):
+        if self.active():
+            _restarted = self._runner.restart(**self._config())
+            if _restarted:
+                self.ipc_server.register_start(self._runner.get_errors())
+                _process_frequency = self._runner.get_process_frequency()
+                _patience_micro = self._runner.get_patience_micro()
+                self.set_hz(_process_frequency)
+                self.logger.info("Processing at {} Hz and a patience of {} ms.".format(_process_frequency, _patience_micro / 1000))
+
+    def finish(self):
+        self._runner.quit()
+
+    def step(self):
+        runner, pilot, teleop, ipc_chatter, ipc_server = self._runner, self.pilot, self.teleop, self.ipc_chatter, self.ipc_server
+        c_pilot = _latest_or_none(pilot, patience=(runner.get_patience_micro()))
+        c_teleop = _latest_or_none(teleop, patience=(runner.get_patience_micro()))
+        if c_teleop is not None and c_teleop.get('button_a', 0):
+            runner.reset_agent()
+        if c_pilot is not None:
+            runner.drive(c_pilot)
+        else:
+            runner.noop()
+        self.publisher.publish(runner.state())
+        chat = self.ipc_chatter.pop_latest()
+        if chat and chat.get('command') == 'restart':
+            self.setup()
 
 
 def main():
@@ -94,45 +110,21 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
+    application = CarlaApplication(image_publisher=image_publisher, config_dir=args.config)
+    quit_event = application.quit_event
 
-    teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-    ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
-    threads = [teleop, pilot, ipc_server]
+    application.publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
+    application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+    application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
+    threads = [application.teleop, application.pilot, application.ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 
     [t.start() for t in threads]
-    try:
-        runner = create_runner(ipc_server, args.config, image_publisher)
-        _period = 1. / runner.get_process_frequency()
-        _patience_micro = runner.get_patience_micro()
-        while not quit_event.is_set():
-            c_pilot = _latest_or_none(pilot, patience=_patience_micro)
-            c_teleop = _latest_or_none(teleop, patience=_patience_micro)
-            if c_teleop is not None and c_teleop.get('button_a', 0):
-                runner.reset_agent()
-            if c_pilot is not None:
-                runner.drive(c_pilot)
-            else:
-                runner.noop()
-            chat = ipc_chatter.pop_latest()
-            if chat and chat.get('command') == 'restart':
-                runner = create_runner(ipc_server, args.config, image_publisher, previous=runner)
-                _period = 1. / runner.get_process_frequency()
-                _patience_micro = runner.get_patience_micro()
-            state_publisher.publish(runner.state())
-            time.sleep(_period)
-        logger.info("Waiting on carla to quit.")
-        runner.quit()
-    except KeyboardInterrupt:
-        quit_event.set()
-    except Exception as e:
-        logger.error("{}".format(traceback.format_exc(e)))
-        quit_event.set()
+    application.run()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

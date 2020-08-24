@@ -1,6 +1,7 @@
 FROM centipede2donald/ubuntu-bionic:python27-opencv32
 
-RUN pip install "tornado >=4.4, <5.0"
+RUN pip install "tornado >=4.4, <5.0" && \
+  pip install "pytest"
 
 COPY ./common common/
 COPY ./teleop app/

@@ -138,6 +138,9 @@ class InferenceApplication(Application):
         [parser.read(_f) for _f in ['config.ini'] + self._glob(self._models_dir, '*.ini') + self._glob(self._config_dir, '*.ini')]
         return dict(parser.items('inference'))
 
+    def get_process_frequency(self):
+        return self._runner.get_frequency()
+
     def setup(self):
         if self.active():
             _restarted = self._runner.restart(**self._config())

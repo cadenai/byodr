@@ -72,13 +72,16 @@ class Configurable(object):
 
 
 class Application(object):
-    def __init__(self, run_hz=10):
-        self.quit_event = multiprocessing.Event()
+    def __init__(self, run_hz=10, quit_event=None):
         self.logger = logging.getLogger(__name__)
-        signal.signal(signal.SIGINT, lambda sig, frame: self._interrupt())
-        signal.signal(signal.SIGTERM, lambda sig, frame: self._interrupt())
         self._sleep = .100
         self.set_hz(run_hz)
+        if quit_event is None:
+            self.quit_event = multiprocessing.Event()
+            signal.signal(signal.SIGINT, lambda sig, frame: self._interrupt())
+            signal.signal(signal.SIGTERM, lambda sig, frame: self._interrupt())
+        else:
+            self.quit_event = quit_event
 
     def _interrupt(self):
         self.logger.info("Received interrupt, quitting.")
