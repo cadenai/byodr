@@ -113,8 +113,8 @@ class Application(object):
         pass
 
     def run(self):
-        self.setup()
         try:
+            self.setup()
             while self.active():
                 _start = time.time()
                 self.step()

@@ -8,9 +8,21 @@ class QueueReceiver(object):
         :param queue_max_size: Max length of the queue.
         """
         self._queue = collections.deque(maxlen=queue_max_size)
+        self._listeners = []
+        self._started = False
+
+    def start(self):
+        self._started = True
+
+    def is_started(self):
+        return self._started
+
+    def add_listener(self, c):
+        self._listeners.append(c)
 
     def add(self, m):
         self._queue.appendleft(m)
+        map(lambda x: x(m), self._listeners)
 
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None
@@ -29,6 +41,13 @@ class QueueCamera(object):
         :param queue_max_size: Max length of the queue.
         """
         self._queue = collections.deque(maxlen=queue_max_size)
+        self._started = False
+
+    def start(self):
+        self._started = True
+
+    def is_started(self):
+        return self._started
 
     def add(self, meta_data, image):
         self._queue.appendleft((meta_data, image))

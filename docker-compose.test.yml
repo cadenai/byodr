@@ -12,6 +12,17 @@ services:
   nodews:
     image: rwgrim/docker-noop:latest
     restart: 'no'
+  raspi:
+    build:
+      context: .
+      dockerfile: raspi/Dockerfile
+    image: centipede2donald/byodr-ce:servos
+    user: root
+    restart: 'no'
+    command: ["python", "-m", "pytest", "-vvv", "tests.py"]
+    volumes:
+      - ./common:/common
+      - ./raspi:/app
   vehicle:
     restart: 'no'
     command: ["python", "-m", "pytest", "-vvv", "tests.py"]

@@ -117,11 +117,11 @@ class TFRunner(Configurable):
 
 
 class InferenceApplication(Application):
-    def __init__(self, config_dir=os.getcwd(), models_dir=os.getcwd()):
+    def __init__(self, runner=None, config_dir=os.getcwd(), models_dir=os.getcwd()):
         super(InferenceApplication, self).__init__()
         self._config_dir = config_dir
         self._models_dir = models_dir
-        self._runner = TFRunner(models_dir)
+        self._runner = TFRunner(models_dir) if runner is None else runner
         self.publisher = None
         self.ipc_server = None
         self.ipc_chatter = None

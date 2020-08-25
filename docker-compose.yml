@@ -24,6 +24,7 @@ services:
     privileged: true
     command: ["python", "relay.py", "monitor"]
     volumes:
+      - volume_byodr:/byodr:rw
       - volume_config:/config:ro
   cam1:
     image: centipede2donald/byodr-ce:rover

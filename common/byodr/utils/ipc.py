@@ -43,7 +43,7 @@ class ImagePublisher(object):
 
 
 class ReceiverThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', receive_timeout_ms=1, on_message=(lambda m: m)):
+    def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
         super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.setsockopt(zmq.RCVHWM, 1)
@@ -54,7 +54,10 @@ class ReceiverThread(threading.Thread):
         self._subscriber = subscriber
         self._quit_event = event
         self._queue = collections.deque(maxlen=1)
-        self._on_message = on_message
+        self._listeners = []
+
+    def add_listener(self, c):
+        self._listeners.append(c)
 
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None
@@ -67,7 +70,7 @@ class ReceiverThread(threading.Thread):
             try:
                 _latest = json.loads(self._subscriber.recv().split(':', 1)[1])
                 self._queue.appendleft(_latest)
-                self._on_message(_latest)
+                map(lambda x: x(_latest), self._listeners)
             except zmq.Again:
                 pass
 
@@ -114,9 +117,14 @@ class JSONServerThread(threading.Thread):
         self._server = server
         self._quit_event = event
         self._queue = collections.deque(maxlen=1)
+        self._listeners = []
+
+    def add_listener(self, c):
+        self._listeners.append(c)
 
     def on_message(self, message):
         self._queue.appendleft(message)
+        map(lambda x: x(message), self._listeners)
 
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None

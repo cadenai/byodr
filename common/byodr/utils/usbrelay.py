@@ -76,10 +76,25 @@ class DoubleChannelUsbRelay(object):
         except Exception as e:
             logger.error(e)
 
+    def is_attached(self):
+        return self._device is not None
+
     def open(self, channel=0):
-        if self._device is not None:
-            self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_off[channel]), 1000)
+        assert self.is_attached(), "The device is not attached."
+        self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_off[channel]), 1000)
 
     def close(self, channel=0):
-        if self._device is not None:
-            self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_on[channel]), 1000)
+        assert self.is_attached(), "The device is not attached."
+        self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_on[channel]), 1000)
+
+
+class StaticChannelRelayHolder(object):
+    def __init__(self, relay, channel=0):
+        self._relay = relay
+        self._channel = channel
+
+    def open(self):
+        self._relay.open(self._channel)
+
+    def close(self):
+        self._relay.close(self._channel)

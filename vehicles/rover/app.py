@@ -10,7 +10,7 @@ from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer, JSONZmqClient
 from byodr.utils.option import parse_option
-from core import GpsPollerThread, GstSource, PTZCamera
+from core import GpsPollerThread, PTZCamera, GstSource
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -168,10 +168,11 @@ class RoverHandler(Configurable):
 
 
 class RoverApplication(Application):
-    def __init__(self, handler, config_dir=os.getcwd()):
+    def __init__(self, handler=None, config_dir=os.getcwd()):
         super(RoverApplication, self).__init__()
         self._config_dir = config_dir
         self._handler = handler
+        self.image_publisher = None
         self.state_publisher = None
         self.pilot = None
         self.teleop = None
@@ -189,6 +190,8 @@ class RoverApplication(Application):
         return 0 if self._handler is None else self._handler.get_process_frequency()
 
     def setup(self):
+        if self._handler is None:
+            self._handler = RoverHandler(gst_source=GstSource(self.image_publisher))
         if self.active():
             _restarted = self._handler.restart(**self._config())
             if _restarted:
@@ -216,12 +219,10 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
-    rover = RoverHandler(gst_source=GstSource(image_publisher))
-
-    application = RoverApplication(handler=rover, config_dir=args.config)
+    application = RoverApplication(config_dir=args.config)
     quit_event = application.quit_event
 
+    application.image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
     application.state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)

@@ -1,3 +1,4 @@
+import argparse
 import glob
 import logging
 import multiprocessing
@@ -5,13 +6,11 @@ import os
 import signal
 from ConfigParser import SafeConfigParser
 
-import argparse
-import time
-
-from byodr.utils.ipc import ReceiverThread
+from byodr.utils import Application
+from byodr.utils.ipc import ReceiverThread, LocalIPCServer
 from byodr.utils.option import parse_option
 from byodr.utils.protocol import MessageStreamProtocol
-from byodr.utils.usbrelay import SingleChannelUsbRelay, DoubleChannelUsbRelay
+from byodr.utils.usbrelay import SingleChannelUsbRelay, DoubleChannelUsbRelay, StaticChannelRelayHolder
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -40,42 +39,89 @@ def execute(arguments):
         raise AssertionError("Invalid command string '{}'.".format(_cmd))
 
 
+class MonitorReceiverThreadFactory(object):
+    def __init__(self, topic=''):
+        self._topic = topic
+
+    def create(self, **kwargs):
+        errors = []
+        _master_uri = parse_option('ras.master.uri', str, 'none', errors, **kwargs)
+        return errors, ReceiverThread(url=('{}:5555'.format(_master_uri)), topic=b'' + self._topic, event=quit_event)
+
+
+class MonitorApplication(Application):
+    def __init__(self, relay, receiver_factory, hz=10, config_dir=os.getcwd()):
+        super(MonitorApplication, self).__init__()
+        self._config_dir = config_dir
+        self._process_frequency = hz
+        self._relay = relay
+        self._integrity = MessageStreamProtocol()
+        self._receiver_factory = receiver_factory
+        self._receiver = None
+        self.ipc_chatter = None
+        self.ipc_server = None
+
+    def _config(self):
+        parser = SafeConfigParser()
+        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        return dict(parser.items('vehicle'))
+
+    def _on_receive(self, msg):
+        self._integrity.on_message(msg.get('time'))
+
+    def setup(self):
+        if self._receiver is not None:
+            self._receiver.quit()
+        if self.active():
+            _errors, self._receiver = self._receiver_factory.create(**self._config())
+            self._receiver.add_listener(self._on_receive)
+            self._receiver.start()
+            self._integrity.reset()
+            self.ipc_server.register_start(_errors)
+            self.logger.info("Processing at {} Hz.".format(self._process_frequency))
+
+    def finish(self):
+        if self._receiver is not None:
+            self._receiver.quit()
+
+    def step(self):
+        n_violations = self._integrity.check()
+        if n_violations < -5:
+            self._relay.close()
+        elif n_violations > 2:
+            self._relay.open()
+            self._integrity.reset()
+            logger.warning("Relay Opened")
+        chat = self.ipc_chatter.pop_latest()
+        if chat and chat.get('command') == 'restart':
+            self.setup()
+
+
 def monitor(arguments):
-    cfg_parser = SafeConfigParser()
-    config_dir = arguments.config
-    [cfg_parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(config_dir, '*.ini'))]
-    vehicle_cfg = dict(cfg_parser.items('vehicle'))
-
-    _channel = arguments.channel
-    _topic = arguments.topic
-    _master_uri = parse_option('ras.master.uri', str, 'none', [], **vehicle_cfg)
-    _url = '{}:5555'.format(_master_uri)
-    logger.info("Using status url '{}' and topic '{}'.".format(_url, _topic))
-
     _relay = DoubleChannelUsbRelay()
     _relay.attach()
-    _integrity = MessageStreamProtocol()
+    assert _relay.is_attached(), "The device is not attached."
 
-    def _receive(msg):
-        _integrity.on_message(msg.get('time'))
+    try:
 
-    _status = ReceiverThread(url=_url, topic=b'' + _topic, event=quit_event, on_message=_receive)
-    _status.start()
+        _holder = StaticChannelRelayHolder(relay=_relay, channel=arguments.channel)
+        _receiver_factory = MonitorReceiverThreadFactory(topic=arguments.topic)
 
-    _relay.close(channel=_channel)
-    _period = 1. / arguments.hz
-    while not quit_event.is_set():
-        if _integrity.check() > 2:
-            _relay.open(channel=_channel)
-            # A reset could be too fast for the dependant circuit to reboot.
-            # self._relay.close()
-            _integrity.reset()
-            logger.warning("Relay Open")
-        time.sleep(_period)
+        application = MonitorApplication(relay=_holder, receiver_factory=_receiver_factory, hz=arguments.hz, config_dir=arguments.config)
+        application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
+        application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='relay', event=quit_event)
 
-    # Leave the relay state as is - if open rely on the connected component to check its own integrity.
-    # _relay.open()
-    _status.join()
+        threads = [application.ipc_chatter, application.ipc_server]
+        if quit_event.is_set():
+            return 0
+
+        [t.start() for t in threads]
+        application.run()
+
+        logger.info("Waiting on threads to stop.")
+        [t.join() for t in threads]
+    finally:
+        _relay.open()
 
 
 def main():

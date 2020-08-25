@@ -1,15 +1,14 @@
 import os
 from ConfigParser import SafeConfigParser
 
-from app import RoverApplication, RoverHandler
+from app import RoverApplication
+from byodr.utils import timestamp
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer
-from core import GstSource
+from relay import MonitorApplication
 
 
-def create_application(config_dir):
-    image_publisher = CollectPublisher()
-    rover = RoverHandler(gst_source=GstSource(image_publisher))
-    application = RoverApplication(handler=rover, config_dir=config_dir)
+def set_rover_publishers_receivers(application):
+    application.image_publisher = CollectPublisher()
     application.state_publisher = CollectPublisher()
     application.pilot = QueueReceiver()
     application.teleop = QueueReceiver()
@@ -18,9 +17,9 @@ def create_application(config_dir):
     return application
 
 
-def test_create_and_setup(tmpdir):
+def test_rover_create_and_setup(tmpdir):
     directory = str(tmpdir.realpath())
-    app = create_application(directory)
+    app = set_rover_publishers_receivers(RoverApplication(config_dir=directory))
     ipc_chatter, ipc_server = app.ipc_chatter, app.ipc_server
     try:
         # The default settings must result in a workable instance.
@@ -48,3 +47,63 @@ def test_create_and_setup(tmpdir):
         assert app.get_process_frequency() == new_process_frequency
     finally:
         app.finish()
+
+
+class MyMonitorReceiverThreadFactory(object):
+    def __init__(self, queue):
+        self._queue = queue
+
+    def create(self, **kwargs):
+        return [], self._queue
+
+
+class MyMonitorRelay(object):
+    def __init__(self):
+        self._open = True
+
+    def is_open(self):
+        return self._open
+
+    def open(self):
+        self._open = True
+
+    def close(self):
+        self._open = False
+
+
+def test_monitor_relay(tmpdir):
+    config_directory = str(tmpdir.realpath())
+    receiver = QueueReceiver()
+    relay = MyMonitorRelay()
+    assert relay.is_open(), "The test assumes a normally opened relay."
+
+    application = MonitorApplication(relay=relay,
+                                     receiver_factory=(MyMonitorReceiverThreadFactory(queue=receiver)),
+                                     config_dir=config_directory)
+    application.ipc_chatter = QueueReceiver()
+    application.ipc_server = CollectServer()
+    application.setup()
+    assert receiver.is_started()
+
+    # At the first step the relay must not be closed as there is no reliable communication with the receiver yet.
+    application.step()
+    assert relay.is_open()
+
+    # Send the first messages to initiate valid communication.
+    [receiver.add(dict(time=timestamp())) for _ in range(10)]
+    application.step()
+    assert not relay.is_open()
+    receiver.clear()
+
+    # Simulate communication violations.
+    for i in range(5):
+        receiver.add(dict(time=timestamp() + i * 1e6))
+        application.step()
+    assert relay.is_open()
+    receiver.clear()
+
+    # And resuming.
+    [receiver.add(dict(time=timestamp())) for _ in range(10)]
+    application.step()
+    assert not relay.is_open()
+    receiver.clear()

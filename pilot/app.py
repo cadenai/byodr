@@ -10,10 +10,10 @@ from pilot import CommandProcessor
 
 
 class PilotApplication(Application):
-    def __init__(self, config_dir=os.getcwd()):
+    def __init__(self, processor=None, config_dir=os.getcwd()):
         super(PilotApplication, self).__init__()
         self._config_dir = config_dir
-        self._processor = CommandProcessor()
+        self._processor = CommandProcessor() if processor is None else processor
         self.publisher = None
         self.ipc_server = None
         self.ipc_chatter = None
