@@ -107,3 +107,6 @@ def test_monitor_relay(tmpdir):
     application.step()
     assert not relay.is_open()
     receiver.clear()
+
+    application.finish()
+    assert relay.is_open()

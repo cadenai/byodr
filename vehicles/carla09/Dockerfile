@@ -1,6 +1,6 @@
 FROM carlasim/carla:0.9.9 AS builder
 
-FROM centipede2donald/ubuntu-bionic:python27-opencv32
+FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
 
 RUN pip install -r https://raw.githubusercontent.com/carla-simulator/carla/0.9.9/PythonAPI/carla/requirements.txt
 

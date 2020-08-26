@@ -90,6 +90,7 @@ class ChassisApplication(Application):
         self.platform.add_listener(self._on_message)
 
     def finish(self):
+        self._relay.open()
         self._chassis.quit()
 
     def step(self):

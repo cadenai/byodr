@@ -1,4 +1,4 @@
-FROM centipede2donald/ubuntu-bionic:python27-opencv32
+FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
 
 RUN pip install "tornado >=4.4, <5.0" && \
   pip install "pytest"

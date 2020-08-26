@@ -81,8 +81,7 @@ class MonitorApplication(Application):
             self.logger.info("Processing at {} Hz.".format(self._process_frequency))
 
     def finish(self):
-        if self._receiver is not None:
-            self._receiver.quit()
+        self._relay.open()
 
     def step(self):
         n_violations = self._integrity.check()

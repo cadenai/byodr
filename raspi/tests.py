@@ -58,3 +58,6 @@ def test_relay():
     [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
     application.step()
     assert not relay.is_open()
+
+    application.finish()
+    assert relay.is_open()
