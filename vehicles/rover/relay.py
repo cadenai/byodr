@@ -10,7 +10,7 @@ from byodr.utils import Application
 from byodr.utils.ipc import ReceiverThread, LocalIPCServer
 from byodr.utils.option import parse_option
 from byodr.utils.protocol import MessageStreamProtocol
-from byodr.utils.usbrelay import SingleChannelUsbRelay, DoubleChannelUsbRelay, StaticChannelRelayHolder
+from byodr.utils.usbrelay import SingleChannelUsbRelay, StaticChannelRelayHolder, SearchUsbRelayFactory
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -97,12 +97,10 @@ class MonitorApplication(Application):
 
 
 def monitor(arguments):
-    _relay = DoubleChannelUsbRelay()
-    _relay.attach()
+    _relay = SearchUsbRelayFactory().get_relay()
     assert _relay.is_attached(), "The device is not attached."
 
     try:
-
         _holder = StaticChannelRelayHolder(relay=_relay, channel=arguments.channel)
         _receiver_factory = MonitorReceiverThreadFactory(topic=arguments.topic)
 

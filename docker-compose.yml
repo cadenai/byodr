@@ -18,20 +18,24 @@ services:
     volumes:
       - volume_zerotier:/var/lib/zerotier-one:rw
   relay:
-    image: centipede2donald/byodr-ce:rover
+    build:
+      context: .
+      dockerfile: vehicles/rover/rover_relay.dockerfile
+    image: centipede2donald/byodr-ce:rover_relay
     container_name: byodr_relay
     restart: always
     privileged: true
-    command: ["python", "relay.py", "monitor"]
     volumes:
       - volume_byodr:/byodr:rw
       - volume_config:/config:ro
   cam1:
-    image: centipede2donald/byodr-ce:rover
+    build:
+      context: .
+      dockerfile: vehicles/rover/rover_cam.dockerfile
+    image: centipede2donald/byodr-ce:rover_cam1
     container_name: byodr_cam1
     restart: always
     network_mode: "host"
-    command: ["python", "stream.py"]
     stop_signal: SIGKILL
     volumes:
       - volume_config:/config:ro
@@ -53,8 +57,8 @@ services:
   vehicle:
     build:
       context: .
-      dockerfile: vehicles/rover/Dockerfile
-    image: centipede2donald/byodr-ce:rover
+      dockerfile: vehicles/rover/rover_vehicle.dockerfile
+    image: centipede2donald/byodr-ce:rover_vehicle
     container_name: byodr_vehicle
     restart: always
     environment:

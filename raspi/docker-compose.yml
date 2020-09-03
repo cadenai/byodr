@@ -12,7 +12,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: centipede2donald/byodr-ce:servos
+    image: centipede2donald/byodr-ce:pi_servos
     container_name: servos
     privileged: true
     user: root

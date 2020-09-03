@@ -5,9 +5,11 @@ services:
     restart: 'no'
     command: ["/bin/true"]
   relay:
-    image: rwgrim/docker-noop:latest
     restart: 'no'
-    command: ["/bin/true"]
+    command: ["python", "-m", "pytest", "-vvv", "tests_relay.py"]
+    volumes:
+      - ./common:/common
+      - ./vehicles/rover:/app
   cam1:
     image: rwgrim/docker-noop:latest
     restart: 'no'
@@ -29,7 +31,7 @@ services:
       - ./raspi:/app
   vehicle:
     restart: 'no'
-    command: ["python", "-m", "pytest", "-vvv", "tests.py"]
+    command: ["python", "-m", "pytest", "-vvv", "tests_rover.py"]
     volumes:
       - ./common:/common
       - ./vehicles/rover:/app

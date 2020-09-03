@@ -6,7 +6,7 @@ from gpiozero import AngularServo
 from byodr.utils import timestamp, Application
 from byodr.utils.ipc import JSONPublisher, JSONServerThread
 from byodr.utils.protocol import MessageStreamProtocol
-from byodr.utils.usbrelay import DoubleChannelUsbRelay
+from byodr.utils.usbrelay import SearchUsbRelayFactory
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -114,8 +114,7 @@ class ChassisApplication(Application):
 
 
 def main():
-    relay = DoubleChannelUsbRelay()
-    relay.attach()
+    relay = SearchUsbRelayFactory().get_relay()
     assert relay.is_attached(), "The device is not attached."
 
     try:
