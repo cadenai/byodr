@@ -49,7 +49,7 @@ def test_relay():
     assert not relay.is_open()
 
     # Simulate communication violations.
-    for i in range(5):
+    for i in range(10):
         platform.send(dict(time=timestamp() + i * 1e6, method='ras/servo/drive', data=drive_command))
         application.step()
     assert relay.is_open()

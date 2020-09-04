@@ -46,6 +46,10 @@ def test_monitor_relay(tmpdir):
     application.setup()
     assert receiver.is_started()
 
+    # Setup again to simulate reconfiguration.
+    application.setup()
+    assert receiver.is_started()
+
     # At the first step the relay must not be closed as there is no reliable communication with the receiver yet.
     application.step()
     assert relay.is_open()
@@ -57,7 +61,7 @@ def test_monitor_relay(tmpdir):
     receiver.clear()
 
     # Simulate communication violations.
-    for i in range(5):
+    for i in range(10):
         receiver.add(dict(time=timestamp() + i * 1e6))
         application.step()
     assert relay.is_open()
