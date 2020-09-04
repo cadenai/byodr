@@ -33,6 +33,11 @@ class QueueReceiver(object):
     def clear(self):
         self._queue.clear()
 
+    def quit(self):
+        self.clear()
+        self._listeners = []
+        self._started = False
+
 
 class QueueCamera(object):
     def __init__(self, queue_max_size=100):
