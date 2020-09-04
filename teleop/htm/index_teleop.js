@@ -119,7 +119,6 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         var el_inference_penalty = $('span#inference_penalty');
         var el_inference_surprise = $('span#inference_surprise');
         var el_inference_critic = $('span#inference_critic');
-        var el_inference_fallback = $('span#inference_fallback');
         // var el_state_recorder = $('span#state_recorder');
         var el_max_speed_container = $('div#max_speed');
         var el_max_speed = $('div#max_speed_value');
@@ -133,12 +132,7 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         el_pilot_throttle.text(command.thr.toFixed(2));
         el_inference_penalty.text(command.debug3.toFixed(2));
         el_inference_surprise.text(command.debug4.toFixed(2));
-        el_inference_critic.text(command.debug7);
-        var txt_fallback = 'a';
-        if (command.debug6 == 1) {
-            txt_fallback = 'b';
-        }
-        el_inference_fallback.text(txt_fallback);
+        el_inference_critic.text(command.debug2.toFixed(2));
         // el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
         // max_speed is the maximum speed
         // speed is the desired speed
