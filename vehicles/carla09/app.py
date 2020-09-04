@@ -2,6 +2,7 @@ import argparse
 import glob
 import logging
 import os
+import shutil
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
@@ -62,6 +63,13 @@ class CarlaApplication(Application):
         self.ipc_server = None
         self.ipc_chatter = None
 
+    def _check_user_file(self):
+        # One user configuration file is optional and can be used to persist settings.
+        _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
+        if len(_candidates) == 0:
+            shutil.copyfile('user.template.ini', os.path.join(self._config_dir, 'config.ini'))
+            logger.info("Create a new user configuration file from template.")
+
     def _config(self):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
@@ -71,6 +79,7 @@ class CarlaApplication(Application):
 
     def setup(self):
         if self.active():
+            self._check_user_file()
             _restarted = self._runner.restart(**self._config())
             if _restarted:
                 self.ipc_server.register_start(self._runner.get_errors())

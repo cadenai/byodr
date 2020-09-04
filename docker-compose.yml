@@ -76,7 +76,7 @@ services:
       LD_PRELOAD: libgomp.so.1
     volumes:
       - volume_byodr_sockets:/byodr:rw
-      - volume_byodr_config:/config:ro
+      - volume_byodr_config:/config:rw
   teleop:
     build:
       context: .

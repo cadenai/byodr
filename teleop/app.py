@@ -4,7 +4,6 @@ import glob
 import logging
 import multiprocessing
 import os
-import shutil
 import signal
 from ConfigParser import SafeConfigParser
 
@@ -38,14 +37,10 @@ class TeleopApplication(Application):
         self._config_dir = config_dir
         self._display_speed_scale = 0
         self._user_config_file = os.path.join(self._config_dir, 'config.ini')
-        self._check_user_config()
 
     def _check_user_config(self):
-        # One user configuration file is optional and can be used to persist settings.
         _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
-        if len(_candidates) == 0:
-            shutil.copyfile('user_config.ini_template', self._user_config_file)
-        else:
+        if len(_candidates) > 0:
             self._user_config_file = _candidates[0]
 
     def _config(self):
@@ -61,6 +56,7 @@ class TeleopApplication(Application):
 
     def setup(self):
         if self.active():
+            self._check_user_config()
             self._display_speed_scale = float(self._config().get('display.speed.scale'))
             self.logger.info("Speed scale = {}.".format(self._display_speed_scale))
 

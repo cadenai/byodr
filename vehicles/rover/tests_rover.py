@@ -1,3 +1,4 @@
+import glob
 import os
 from ConfigParser import SafeConfigParser
 
@@ -20,8 +21,12 @@ def test_rover_create_and_setup(tmpdir):
     app = set_rover_publishers_receivers(RoverApplication(config_dir=directory))
     ipc_chatter, ipc_server = app.ipc_chatter, app.ipc_server
     try:
-        # The default settings must result in a workable instance.
+        # The application writes a new user configuration file if none exists at the configuration location.
+        assert len(glob.glob(os.path.join(directory, 'config.ini'))) == 0
         app.setup()
+        assert len(glob.glob(os.path.join(directory, 'config.ini'))) == 1
+
+        # The settings must result in a workable instance.
         assert len(ipc_server.collect()) == 1
         assert not bool(ipc_server.get_latest())
         assert app.get_process_frequency() != 0

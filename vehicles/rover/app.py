@@ -4,6 +4,7 @@ import logging
 import math
 import multiprocessing
 import os
+import shutil
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
@@ -179,6 +180,13 @@ class RoverApplication(Application):
         self.ipc_chatter = None
         self.ipc_server = None
 
+    def _check_user_file(self):
+        # One user configuration file is optional and can be used to persist settings.
+        _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
+        if len(_candidates) == 0:
+            shutil.copyfile('user.template.ini', os.path.join(self._config_dir, 'config.ini'))
+            logger.info("Create a new user configuration file from template.")
+
     def _config(self):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
@@ -193,6 +201,7 @@ class RoverApplication(Application):
         if self._handler is None:
             self._handler = RoverHandler(gst_source=GstSource(self.image_publisher))
         if self.active():
+            self._check_user_file()
             _restarted = self._handler.restart(**self._config())
             if _restarted:
                 self.ipc_server.register_start(self._handler.get_errors())
