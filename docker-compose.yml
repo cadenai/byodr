@@ -1,9 +1,10 @@
 version: '2'
 volumes:
-  volume_zerotier:
-  volume_byodr:
-  volume_config:
-  volume_recorder:
+  volume_zerotier_config:
+  volume_ftpd_config:
+  volume_byodr_config:
+  volume_byodr_sockets:
+  volume_byodr_sessions:
 services:
   zerotier:
     image: bltavares/zerotier
@@ -16,7 +17,17 @@ services:
       - SYS_ADMIN
       - NET_ADMIN
     volumes:
-      - volume_zerotier:/var/lib/zerotier-one:rw
+      - volume_zerotier_config:/var/lib/zerotier-one:rw
+  ftpd:
+    image: gists/pure-ftpd
+    container_name: pure-ftpd
+    restart: always
+    ports:
+      - "21:21"
+      - "30000-30009:30000-30009"
+    volumes:
+      - volume_ftpd_config:/etc/pureftpd:rw
+      - volume_byodr_sessions:/home/ftpuser:rw
   relay:
     build:
       context: .
@@ -24,10 +35,10 @@ services:
     image: centipede2donald/byodr-ce:rover_relay
     container_name: byodr_relay
     restart: always
-    privileged: true
+    privileged: true  # Access to usb devices without udev rules.
     volumes:
-      - volume_byodr:/byodr:rw
-      - volume_config:/config:ro
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
   cam1:
     build:
       context: .
@@ -38,7 +49,7 @@ services:
     network_mode: "host"
     stop_signal: SIGKILL
     volumes:
-      - volume_config:/config:ro
+      - volume_byodr_config:/config:ro
   nodews:
     build:
       context: .
@@ -53,7 +64,7 @@ services:
     ports:
       - "9101:9101"
     volumes:
-      - volume_config:/config:ro
+      - volume_byodr_config:/config:ro
   vehicle:
     build:
       context: .
@@ -64,8 +75,8 @@ services:
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
-      - volume_byodr:/byodr:rw
-      - volume_config:/config:ro
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
   teleop:
     build:
       context: .
@@ -78,8 +89,8 @@ services:
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
-      - volume_byodr:/byodr:rw
-      - volume_config:/config:rw
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:rw
   pilot:
     build:
       context: .
@@ -90,8 +101,8 @@ services:
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
-      - volume_byodr:/byodr:rw
-      - volume_config:/config:ro
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
   recorder:
     build:
       context: .
@@ -102,9 +113,9 @@ services:
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
-      - volume_byodr:/byodr:rw
-      - volume_config:/config:ro
-      - volume_recorder:/sessions:rw
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
+      - volume_byodr_sessions:/sessions:rw
   inference:
     build:
       context: .
@@ -116,5 +127,5 @@ services:
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
-      - volume_byodr:/byodr:rw
-      - volume_config:/config:ro
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro

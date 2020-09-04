@@ -1,0 +1,52 @@
+version: '2'
+services:
+  zerotier:
+    image: rwgrim/docker-noop:latest
+    restart: 'no'
+    command: ["/bin/true"]
+  relay:
+    restart: 'no'
+    command: ["/bin/true"]
+  cam1:
+    image: rwgrim/docker-noop:latest
+    restart: 'no'
+    command: ["/bin/true"]
+  nodews:
+    image: rwgrim/docker-noop:latest
+    restart: 'no'
+    command: ["/bin/true"]
+  vehicle:
+    build:
+      context: .
+      dockerfile: vehicles/carla09/Dockerfile
+    image: centipede2donald/byodr-ce:carla-099
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./vehicles/carla09:/app
+  teleop:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./teleop:/app
+  pilot:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./pilot:/app
+  recorder:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./recorder:/app
+  inference:
+    build:
+      context: .
+      dockerfile: inference/Dockerfile.x86
+    image: centipede2donald/byodr-ce:inference-carla
+    restart: 'no'
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ./common:/common
+      - ./inference:/app
