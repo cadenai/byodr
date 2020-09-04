@@ -1,6 +1,7 @@
 import collections
 import json
 import logging
+import multiprocessing
 import os
 import threading
 
@@ -43,7 +44,7 @@ class ImagePublisher(object):
 
 
 class ReceiverThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
+    def __init__(self, url, event=None, topic=b'', receive_timeout_ms=1):
         super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.setsockopt(zmq.RCVHWM, 1)
@@ -52,7 +53,7 @@ class ReceiverThread(threading.Thread):
         subscriber.connect(url)
         subscriber.setsockopt(zmq.SUBSCRIBE, topic)
         self._subscriber = subscriber
-        self._quit_event = event
+        self._quit_event = multiprocessing.Event() if event is None else event
         self._queue = collections.deque(maxlen=1)
         self._listeners = []
 
@@ -64,6 +65,9 @@ class ReceiverThread(threading.Thread):
 
     def pop_latest(self):
         return self._queue.popleft() if bool(self._queue) else None
+
+    def quit(self):
+        self._quit_event.set()
 
     def run(self):
         while not self._quit_event.is_set():
