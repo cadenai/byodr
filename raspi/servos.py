@@ -95,7 +95,7 @@ class ChassisApplication(Application):
 
     def step(self):
         n_violations = self._integrity.check()
-        if n_violations > 2:
+        if n_violations > 5:
             self._relay.open()
             self._integrity.reset()
             logger.warning("Relay Opened")
