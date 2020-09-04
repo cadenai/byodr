@@ -46,7 +46,7 @@ class MonitorReceiverThreadFactory(object):
     def create(self, **kwargs):
         errors = []
         _master_uri = parse_option('ras.master.uri', str, 'none', errors, **kwargs)
-        return errors, ReceiverThread(url=('{}:5555'.format(_master_uri)), topic=b'' + self._topic, event=quit_event)
+        return errors, ReceiverThread(url=('{}:5555'.format(_master_uri)), topic=b'' + self._topic)
 
 
 class MonitorApplication(Application):
@@ -82,12 +82,14 @@ class MonitorApplication(Application):
 
     def finish(self):
         self._relay.open()
+        if self._receiver is not None:
+            self._receiver.quit()
 
     def step(self):
         n_violations = self._integrity.check()
         if n_violations < -5:
             self._relay.close()
-        elif n_violations > 2:
+        elif n_violations > 5:
             self._relay.open()
             self._integrity.reset()
             logger.warning("Relay Opened")
