@@ -9,8 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-zmq \
  && rm -rf /var/lib/apt/lists/*
 
-RUN pip install "jsoncomment >=0.3, <1.0" && \
-  pip install "pytest"
+RUN pip install "jsoncomment==0.3.3" && \
+  pip install "pytest==4.6.11"
 
 COPY ./common common/
 COPY ./inference app/

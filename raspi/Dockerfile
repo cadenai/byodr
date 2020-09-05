@@ -4,9 +4,9 @@ RUN apt-get update && apt-get install -y \
     usbutils \
  && rm -rf /var/lib/apt/lists/*
 
-RUN pip install "pymodbus >=2.3.0, <3.0" && \
-    pip install "pyusb >=1.0.2, <2.0" && \
-    pip install "pytest"
+RUN pip install "pymodbus==2.3.0" && \
+    pip install "pyusb==1.0.2" && \
+    pip install "pytest==4.6.11"
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 

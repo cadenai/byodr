@@ -1,8 +1,8 @@
 FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
 
-RUN pip install "jsoncomment >=0.3, <1.0" && \
-  pip install "pyusb >=1.0.2, <2.0" && \
-  pip install "pytest"
+RUN pip install "jsoncomment==0.3.3" && \
+  pip install "pyusb==1.0.2" && \
+  pip install "pytest==4.6.11"
 
 
 COPY ./common common/
