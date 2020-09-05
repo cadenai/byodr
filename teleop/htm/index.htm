@@ -155,13 +155,13 @@
         }
     </style>
     <script src="jquery-3.4.1.min.js"></script>
-    <script src="performance-polyfill.js?v=0.10"></script>
-	<script src="http-live-player.js?v=0.10"></script>
-	<script src="index_utils.js?v=0.11"></script>
-	<script src="index_gamepad.js?v=0.10"></script>
-	<script src="index_teleop.js?v=0.13"></script>
-	<script src="index_mjpeg.js?v=0.13"></script>
-	<script src="index_h264.js?v=0.11"></script>
+    <script src="performance-polyfill.js?v=0.20"></script>
+	<script src="http-live-player.js?v=0.20"></script>
+	<script src="index_utils.js?v=0.20"></script>
+	<script src="index_gamepad.js?v=0.20"></script>
+	<script src="index_teleop.js?v=0.20"></script>
+	<script src="index_mjpeg.js?v=0.20"></script>
+	<script src="index_h264.js?v=0.20"></script>
 </head>
 <body>
 <div id="container" class="centered">
@@ -170,7 +170,7 @@
         <div id="console_warning" class="message">Controller asleep or not detected - please check the connection and press a button.</div>
         <div id="bar">
             <div id="home_menu" class="left">
-                <a href="/user_options.htm"><img id="home_menu_icon" src='index-menu.png'/></a>
+                <a href="/user_options.htm?v=0.20"><img id="home_menu_icon" src='index-menu.png?v=0.20'/></a>
             </div>
             <div id="stream_links" class="left">
                 <a id="video_stream_h264" href="#" onclick="page_utils.set_stream_type('h264'); location.reload();">h264</a><br/>
@@ -178,8 +178,8 @@
             </div>
             <div id="mjpeg_stream_controls" class="left">
                 <span id="mjpeg_quality_val">0</span>
-                <img id="caret_down" src='caret.png' onclick="mjpeg_caret_down();"/>
-                <img id="caret_up" src='caret.png' onclick="mjpeg_caret_up();"/>
+                <img id="caret_down" src='caret.png?v=0.20' onclick="mjpeg_caret_down();"/>
+                <img id="caret_up" src='caret.png?v=0.20' onclick="mjpeg_caret_up();"/>
                 <!-- <span id="frame_fps_text">fps:&nbsp;</span>
                 <span id="frame_fps">0</span> -->
             </div>
@@ -231,6 +231,7 @@ $(function () {
         $('a#video_stream_h264').addClass('active');
         $('div#mjpeg_stream_controls').hide();
     }
+    window.history.pushState({}, 'application_index_loaded', '/');
 });
 </script>
 </body>

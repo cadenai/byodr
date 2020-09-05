@@ -151,13 +151,13 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
             view.command_turn = command.turn;
             switch(command.turn) {
                 case "intersection.left":
-                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.11');
+                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.20');
                     break;
                 case "intersection.right":
-                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.11');
+                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.20');
                     break;
                 case "intersection.ahead":
-                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.11');
+                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.20');
                     break;
                 default:
                     el_turn_arrow.attr('src', '');
@@ -171,11 +171,11 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         if (view.command_ctl != str_command_ctl) {
             view.command_ctl = str_command_ctl;
             if (can_continue && is_on_autopilot) {
-                el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.11');
+                el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.20');
             } else if (can_continue) {
-                el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.11');
+                el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.20');
             } else {
-                el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.11');
+                el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.20');
             }
             if (is_on_autopilot) {
                 el_max_speed_container.show();
