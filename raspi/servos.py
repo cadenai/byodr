@@ -98,7 +98,6 @@ class ChassisApplication(Application):
         if n_violations > 5:
             self._relay.open()
             self._integrity.reset()
-            logger.warning("Relay Opened")
             return
 
         if n_violations < -5:

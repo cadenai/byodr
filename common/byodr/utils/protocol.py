@@ -22,13 +22,12 @@ class MessageStreamProtocol(object):
     """
 
     def __init__(self, max_age_ms=200, max_delay_ms=250):
-        # There is no distinction in violation types for now.
-        self._n_violations = 0L
         self._max_age_micro = max_age_ms * 1000.
         self._max_delay_micro = max_delay_ms * 1000.
-        self._last_message_time = None
-        self._last_protocol_time = None
-        self._started = False
+        # There is no distinction in violation types for now.
+        self._n_violations = 0L
+        self._last_message_time = 0
+        self._last_protocol_time = 0
 
     def _violation(self):
         self._n_violations = 1 if self._n_violations <= 0 else self._n_violations + 1
@@ -36,27 +35,24 @@ class MessageStreamProtocol(object):
     def _success(self):
         self._n_violations -= 1
 
-    def is_started(self):
-        return self._started
-
     def reset(self):
         self._n_violations = 0L
-        self._started = False
+        self._last_message_time = 0
+        self._last_protocol_time = 0
 
     def on_message(self, message_timestamp_micro):
         # This is our time in microseconds.
         local_time = timestamp()
-        if self.is_started() and local_time - self._last_protocol_time > self._max_delay_micro:
+        if local_time - self._last_protocol_time > self._max_delay_micro:
             self._violation()
-        elif self.is_started() and message_timestamp_micro - self._last_message_time > self._max_age_micro:
+        elif message_timestamp_micro - self._last_message_time > self._max_age_micro:
             self._violation()
         else:
             self._success()
         self._last_message_time = message_timestamp_micro
         self._last_protocol_time = local_time
-        self._started = True
 
     def check(self):
-        if self.is_started() and timestamp() - self._last_protocol_time > self._max_delay_micro:
+        if timestamp() - self._last_protocol_time > self._max_delay_micro:
             self._violation()
         return self._n_violations

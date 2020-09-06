@@ -74,6 +74,7 @@ class Configurable(object):
 class Application(object):
     def __init__(self, run_hz=10, quit_event=None):
         self.logger = logging.getLogger(__name__)
+        self._hz = run_hz
         self._sleep = .100
         self.set_hz(run_hz)
         if quit_event is None:
@@ -94,7 +95,11 @@ class Application(object):
         _on_time = (timestamp() - _time) < patience
         return candidate if _on_time else None
 
+    def get_hz(self):
+        return self._hz
+
     def set_hz(self, hz):
+        self._hz = hz
         self._sleep = 1. / hz
 
     def active(self):

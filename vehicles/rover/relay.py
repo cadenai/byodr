@@ -51,7 +51,7 @@ class MonitorReceiverThreadFactory(object):
 
 class MonitorApplication(Application):
     def __init__(self, relay, receiver_factory, hz=10, config_dir=os.getcwd()):
-        super(MonitorApplication, self).__init__()
+        super(MonitorApplication, self).__init__(run_hz=hz)
         self._config_dir = config_dir
         self._process_frequency = hz
         self._relay = relay
@@ -89,10 +89,11 @@ class MonitorApplication(Application):
         n_violations = self._integrity.check()
         if n_violations < -5:
             self._relay.close()
+        elif n_violations > 200:
+            # ZeroMQ ipc over tcp does not allow connection timeouts to be set - while the timeout is too high.
+            self.setup()  # Resets the protocol.
         elif n_violations > 5:
             self._relay.open()
-            self._integrity.reset()
-            logger.warning("Relay Opened")
         chat = self.ipc_chatter.pop_latest()
         if chat and chat.get('command') == 'restart':
             self.setup()
