@@ -29,12 +29,12 @@ def test_rover_create_and_setup(tmpdir):
         # The settings must result in a workable instance.
         assert len(ipc_server.collect()) == 1
         assert not bool(ipc_server.get_latest())
-        assert app.get_process_frequency() != 0
+        assert app.get_hz() > 0
 
         #
         # Change the configuration and request a restart.
         # Write a new config file.
-        previous_process_frequency = app.get_process_frequency()
+        previous_process_frequency = app.get_hz()
         new_process_frequency = previous_process_frequency + 10
         _parser = SafeConfigParser()
         _parser.add_section('vehicle')
@@ -47,6 +47,6 @@ def test_rover_create_and_setup(tmpdir):
         app.step()
         assert len(ipc_server.collect()) == 2
         assert not bool(ipc_server.get_latest())
-        assert app.get_process_frequency() == new_process_frequency
+        assert app.get_hz() == new_process_frequency
     finally:
         app.finish()

@@ -1,12 +1,21 @@
 import time
 
 from byodr.utils import timestamp
-from byodr.utils.testing import QueueReceiver, CollectServer
+from byodr.utils.testing import QueueReceiver, CollectServer, CollectJSONClient
 from byodr.utils.usbrelay import SearchUsbRelayFactory
 from relay import MonitorApplication
 
 
-class MyMonitorReceiverThreadFactory(object):
+class MyJSONClientFactory(object):
+    def __init__(self, client):
+        self._client = client
+
+    # noinspection PyUnusedLocal
+    def create(self, url):
+        return self._client
+
+
+class MyStatusReceiverThreadFactory(object):
     def __init__(self, queue):
         self._queue = queue
         self._n_create_calls = 0
@@ -15,9 +24,9 @@ class MyMonitorReceiverThreadFactory(object):
         return self._n_create_calls
 
     # noinspection PyUnusedLocal
-    def create(self, **kwargs):
+    def create(self, uri):
         self._n_create_calls += 1
-        return [], self._queue
+        return self._queue
 
 
 class MyMonitorRelay(object):
@@ -42,27 +51,30 @@ def test_relay_factory():
 
 def test_monitor_relay(tmpdir):
     config_directory = str(tmpdir.realpath())
-    receiver = QueueReceiver()
     relay = MyMonitorRelay()
+    json_client = CollectJSONClient()
+    receiver = QueueReceiver()
+    client_factory = MyJSONClientFactory(client=json_client)
+    status_factory = MyStatusReceiverThreadFactory(queue=receiver)
     assert relay.is_open(), "The test assumes a normally opened relay."
 
-    process_frequency = 8
-    receiver_factory = MyMonitorReceiverThreadFactory(queue=receiver)
-    application = MonitorApplication(hz=process_frequency,
-                                     relay=relay,
-                                     receiver_factory=receiver_factory,
+    application = MonitorApplication(relay=relay,
+                                     client_factory=client_factory,
+                                     status_factory=status_factory,
                                      config_dir=config_directory)
+    application.pilot = QueueReceiver()
+    application.teleop = QueueReceiver()
     application.ipc_chatter = QueueReceiver()
     application.ipc_server = CollectServer()
     application.setup()
-    assert application.get_hz() == process_frequency
+    assert application.get_hz() > 0
     assert receiver.is_started()
-    assert receiver_factory.get_num_create_calls() == 1
+    assert status_factory.get_num_create_calls() == 1
 
     # Setup again to simulate reconfiguration.
     application.setup()
     assert receiver.is_started()
-    assert receiver_factory.get_num_create_calls() == 2
+    assert status_factory.get_num_create_calls() == 2
 
     # At the first step the relay must not be closed as there is no reliable communication with the receiver yet.
     application.step()
@@ -97,7 +109,7 @@ def test_monitor_relay(tmpdir):
     [application.step() for _ in range(200)]
     assert relay.is_open()
     assert receiver.is_started()
-    assert receiver_factory.get_num_create_calls() == 3
+    assert status_factory.get_num_create_calls() == 3
     receiver.clear()
 
     # Reinitiate valid communication.

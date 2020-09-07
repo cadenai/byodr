@@ -6,8 +6,8 @@ import os
 import signal
 from ConfigParser import SafeConfigParser
 
-from byodr.utils import Application
-from byodr.utils.ipc import ReceiverThread, LocalIPCServer
+from byodr.utils import Application, timestamp
+from byodr.utils.ipc import ReceiverThread, LocalIPCServer, JSONZmqClient
 from byodr.utils.option import parse_option
 from byodr.utils.protocol import MessageStreamProtocol
 from byodr.utils.usbrelay import SingleChannelUsbRelay, StaticChannelRelayHolder, SearchUsbRelayFactory
@@ -39,27 +39,64 @@ def execute(arguments):
         raise AssertionError("Invalid command string '{}'.".format(_cmd))
 
 
-class MonitorReceiverThreadFactory(object):
-    def __init__(self, topic=''):
+class StatusReceiverThreadFactory(object):
+    def __init__(self, topic='ras/drive/status'):
         self._topic = topic
 
-    def create(self, **kwargs):
-        errors = []
-        _master_uri = parse_option('ras.master.uri', str, 'none', errors, **kwargs)
-        return errors, ReceiverThread(url=('{}:5555'.format(_master_uri)), topic=b'' + self._topic)
+    def create(self, master_uri):
+        return ReceiverThread(url=('{}:5555'.format(master_uri)), topic=b'' + self._topic)
+
+
+class PiClientFactory(object):
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def create(master_uri):
+        return JSONZmqClient(urls='{}:5550'.format(master_uri))
 
 
 class MonitorApplication(Application):
-    def __init__(self, relay, receiver_factory, hz=10, config_dir=os.getcwd()):
-        super(MonitorApplication, self).__init__(run_hz=hz)
-        self._config_dir = config_dir
-        self._process_frequency = hz
+    def __init__(self, relay, client_factory=None, status_factory=None, config_dir=os.getcwd()):
+        super(MonitorApplication, self).__init__()
         self._relay = relay
+        self._config_dir = config_dir
         self._integrity = MessageStreamProtocol()
-        self._receiver_factory = receiver_factory
-        self._receiver = None
+        self._status_factory = StatusReceiverThreadFactory() if status_factory is None else status_factory
+        self._client_factory = PiClientFactory() if client_factory is None else client_factory
+        self._patience_micro = 100.
+        self._pi_client = None
+        self._status = None
+        self._servo_config = None
+        self.pilot = None
+        self.teleop = None
         self.ipc_chatter = None
         self.ipc_server = None
+
+    def _send_config(self, data):
+        if self._pi_client is not None and data is not None:
+            self._pi_client.call(dict(time=timestamp(),
+                                      method='ras/servo/config',
+                                      data=data))
+
+    def _send_drive(self, throttle=0., steering=0., reverse_gear=False):
+        if self._pi_client is not None:
+            throttle = max(-1., min(1., throttle))
+            steering = max(-1., min(1., steering))
+            _reverse = 1 if reverse_gear else 0
+            self._pi_client.call(dict(time=timestamp(),
+                                      method='ras/servo/drive',
+                                      data=dict(steering=steering, throttle=throttle, reverse=_reverse)))
+
+    def _drive(self, pilot, teleop):
+        pi_status = None if self._status is None else self._status.pop_latest()
+        if pi_status is not None and not bool(pi_status.get('configured')):
+            self._send_config(self._servo_config)
+        if pilot is None:
+            self._send_drive()
+        else:
+            _reverse = teleop and teleop.get('arrow_down', 0)
+            self._send_drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse)
 
     def _config(self):
         parser = SafeConfigParser()
@@ -70,30 +107,63 @@ class MonitorApplication(Application):
         self._integrity.on_message(msg.get('time'))
 
     def setup(self):
-        if self._receiver is not None:
-            self._receiver.quit()
+        if self._pi_client is not None:
+            self._pi_client.quit()
+        if self._status is not None:
+            self._status.quit()
         if self.active():
-            _errors, self._receiver = self._receiver_factory.create(**self._config())
-            self._receiver.add_listener(self._on_receive)
-            self._receiver.start()
+            errors = []
+            _config = self._config()
+            _process_frequency = parse_option('clock.hz', int, 10, errors, **_config)
+            _master_uri = parse_option('ras.master.uri', str, 'none', errors, **_config)
+            c_steer = dict(pin=parse_option('ras.servo.steering.pin.nr', int, 0, errors, **_config),
+                           min_pw=parse_option('ras.servo.steering.min_pulse_width.ms', float, 0, errors, **_config),
+                           max_pw=parse_option('ras.servo.steering.max_pulse_width.ms', float, 0, errors, **_config),
+                           frame=parse_option('ras.servo.steering.frame_width.ms', float, 0, errors, **_config))
+            c_motor = dict(pin=parse_option('ras.servo.motor.pin.nr', int, 0, errors, **_config),
+                           min_pw=parse_option('ras.servo.motor.min_pulse_width.ms', float, 0, errors, **_config),
+                           max_pw=parse_option('ras.servo.motor.max_pulse_width.ms', float, 0, errors, **_config),
+                           frame=parse_option('ras.servo.motor.frame_width.ms', float, 0, errors, **_config))
+            c_throttle = dict(reverse=parse_option('ras.throttle.reverse.gear', int, 0, errors, **_config),
+                              forward_shift=parse_option('ras.throttle.domain.forward.shift', float, 0, errors, **_config),
+                              backward_shift=parse_option('ras.throttle.domain.backward.shift', float, 0, errors, **_config),
+                              scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **_config))
+            self.set_hz(_process_frequency)
+            self._patience_micro = parse_option('patience.ms', int, 200, errors, **_config) * 1000.
+            self._servo_config = dict(steering=c_steer, motor=c_motor, throttle=c_throttle)
+            self._pi_client = self._client_factory.create(_master_uri)
+            self._status = self._status_factory.create(_master_uri)
+            self._status.add_listener(self._on_receive)
+            self._status.start()
             self._integrity.reset()
-            self.ipc_server.register_start(_errors)
-            self.logger.info("Processing at {} Hz.".format(self._process_frequency))
+            self.ipc_server.register_start(errors)
+            self._send_config(self._servo_config)
+            self.logger.info("Processing master uri '{}' at {} Hz.".format(_master_uri, _process_frequency))
 
     def finish(self):
         self._relay.open()
-        if self._receiver is not None:
-            self._receiver.quit()
+        if self._pi_client is not None:
+            self._pi_client.quit()
+        if self._status is not None:
+            self._status.quit()
 
     def step(self):
+        # Always consume the latest commands.
+        pilot, teleop, _patience_micro = self.pilot, self.teleop, self._patience_micro
+        c_pilot = self._latest_or_none(pilot, patience=_patience_micro)
+        c_teleop = self._latest_or_none(teleop, patience=_patience_micro)
         n_violations = self._integrity.check()
         if n_violations < -5:
             self._relay.close()
+            self._drive(c_pilot, c_teleop)
         elif n_violations > 200:
             # ZeroMQ ipc over tcp does not allow connection timeouts to be set - while the timeout is too high.
             self.setup()  # Resets the protocol.
         elif n_violations > 5:
             self._relay.open()
+            self._drive(None, None)
+        else:
+            self._drive(None, None)
         chat = self.ipc_chatter.pop_latest()
         if chat and chat.get('command') == 'restart':
             self.setup()
@@ -105,13 +175,13 @@ def monitor(arguments):
 
     try:
         _holder = StaticChannelRelayHolder(relay=_relay, channel=arguments.channel)
-        _receiver_factory = MonitorReceiverThreadFactory(topic=arguments.topic)
-
-        application = MonitorApplication(relay=_holder, receiver_factory=_receiver_factory, hz=arguments.hz, config_dir=arguments.config)
+        application = MonitorApplication(relay=_holder, config_dir=arguments.config)
+        application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+        application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
         application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
         application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='relay', event=quit_event)
 
-        threads = [application.ipc_chatter, application.ipc_server]
+        threads = [application.pilot, application.teleop, application.ipc_chatter, application.ipc_server]
         if quit_event.is_set():
             return 0
 
@@ -135,8 +205,6 @@ def main():
     parser_b = subparsers.add_parser('monitor', help='Open or close the relay depending on the availability of a service and topic.')
     parser_b.add_argument('--config', type=str, default='/config', help='Config directory path.')
     parser_b.add_argument('--channel', type=int, default=0, help='Relay channel id.')
-    parser_b.add_argument('--topic', type=str, default='ras/drive/status', help='Topic to monitor.')
-    parser_b.add_argument('--hz', type=int, default=20, help='Check frequency.')
     parser_b.set_defaults(func=monitor)
 
     args = parser.parse_args()

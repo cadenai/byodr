@@ -108,3 +108,28 @@ class CollectServer(object):
 
     def clear(self):
         self._list = []
+
+
+class CollectJSONClient(object):
+    """
+    A drop-in replacement for ipc JSONZmqClient.
+    """
+
+    def __init__(self):
+        self._list = []
+
+    def call(self, message, ret=None):
+        self._list.append(message)
+        return ret
+
+    def collect(self):
+        return self._list
+
+    def get_latest(self):
+        return self._list[-1]
+
+    def clear(self):
+        self._list = []
+
+    def quit(self):
+        self.clear()
