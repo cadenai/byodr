@@ -1,9 +1,7 @@
 import argparse
 import glob
 import logging
-import multiprocessing
 import os
-import signal
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application, timestamp
@@ -14,16 +12,6 @@ from byodr.utils.usbrelay import SingleChannelUsbRelay, StaticChannelRelayHolder
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
-
-quit_event = multiprocessing.Event()
-
-signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
-signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
-
-
-def _interrupt():
-    logger.info("Received interrupt, quitting.")
-    quit_event.set()
 
 
 def execute(arguments):
@@ -176,6 +164,7 @@ def monitor(arguments):
     try:
         _holder = StaticChannelRelayHolder(relay=_relay, channel=arguments.channel)
         application = MonitorApplication(relay=_holder, config_dir=arguments.config)
+        quit_event = application.quit_event
         application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
         application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
         application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
