@@ -30,7 +30,7 @@ class MyPlatform(object):
 
 def test_relay():
     relay = MyRelay()
-    publisher = CollectPublisher()
+    publisher = CollectPublisher(topic='test/status')
     platform = MyPlatform()
 
     application = ChassisApplication(relay=relay)
@@ -43,7 +43,7 @@ def test_relay():
     assert relay.is_open()
 
     # Send the first messages to initiate valid communication.
-    drive_command = dict(steering=0, throttle=0, reverse=0)
+    drive_command = dict(steering=0.1, throttle=0.2, reverse=0)
     [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
     application.step()
     assert not relay.is_open()
@@ -55,6 +55,23 @@ def test_relay():
     assert relay.is_open()
 
     # And resuming.
+    [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
+    application.step()
+    assert not relay.is_open()
+
+    # Pretend missing commands but valid communication.
+    for _ in range(5000):
+        platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(steering=0, throttle=0, reverse=0)))
+        application.step()
+    assert relay.is_open()
+
+    # The communication requirements must still be met to let the other side know we are opertional.
+    publisher.clear()
+    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(steering=0, throttle=0, reverse=0)))
+    application.step()
+    assert len(publisher.collect()) > 0
+
+    # And resume
     [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
     application.step()
     assert not relay.is_open()

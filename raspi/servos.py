@@ -62,12 +62,34 @@ class Chassis(object):
             self._motor_servo.close()
 
 
+class CommandHistory(object):
+    def __init__(self, timeout_seconds=180, hz=25):
+        self._threshold = timeout_seconds * hz
+        self._num_missing = None
+        self.reset()
+
+    def touch(self, steering, throttle):
+        no_steering = steering is None or abs(steering) < 1e-3
+        no_throttle = throttle is None or abs(throttle) < 1e-3
+        if no_steering and no_throttle:
+            self._num_missing += 1
+        else:
+            self._num_missing = 0
+
+    def reset(self):
+        self._num_missing = self._threshold * 2
+
+    def is_missing(self):
+        return self._num_missing > self._threshold
+
+
 class ChassisApplication(Application):
     def __init__(self, relay, chassis=None, hz=10):
         super(ChassisApplication, self).__init__(run_hz=hz)
         self._relay = relay
         self._chassis = Chassis() if chassis is None else chassis
         self._integrity = MessageStreamProtocol()
+        self._cmd_history = CommandHistory(hz=hz)
         self._config_queue = collections.deque(maxlen=1)
         self._drive_queue = collections.deque(maxlen=1)
         self.platform = None
@@ -88,27 +110,38 @@ class ChassisApplication(Application):
 
     def setup(self):
         self.platform.add_listener(self._on_message)
+        self._integrity.reset()
+        self._cmd_history.reset()
 
     def finish(self):
         self._relay.open()
         self._chassis.quit()
 
     def step(self):
+        # At startup the relay is open untill non empty commands while the integrity requirements are met.
+        # After a number of missing commands open the relay and close it again when commands resume.
         n_violations = self._integrity.check()
         if n_violations > 5:
             self._relay.open()
             self._integrity.reset()
             return
 
-        if n_violations < -5:
-            self._relay.close()
-
         c_config, c_drive = self._pop_config(), self._pop_drive()
         self._chassis.set_configuration(c_config)
-        self._chassis.apply_steering(0 if c_drive is None else c_drive.get('steering', 0))
 
-        throttle = 0 if c_drive is None or n_violations > 0 else c_drive.get('throttle', 0)
-        self._chassis.apply_throttle(throttle, False if c_drive is None else bool(c_drive.get('reverse')))
+        v_steering = 0 if c_drive is None else c_drive.get('steering', 0)
+        v_throttle = 0 if c_drive is None else c_drive.get('throttle', 0)
+        v_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
+        self._cmd_history.touch(steering=v_steering, throttle=v_throttle)
+        if self._cmd_history.is_missing():
+            self._relay.open()
+        elif n_violations < -5:
+            self._relay.close()
+
+        self._chassis.apply_steering(v_steering)
+        # Immediately zero out throttle when violations start occuring.
+        self._chassis.apply_throttle(0 if n_violations > 0 else v_throttle, v_reverse)
+        # Let the communication partner know we are operational.
         self.publisher.publish(data=dict(time=timestamp(), configured=int(self._chassis.is_configured())))
 
 
