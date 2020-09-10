@@ -15,9 +15,9 @@ from inference import TFDriver, DynamicMomentum, maneuver_index
 
 
 class TFRunner(Configurable):
-    def __init__(self, model_directory):
+    def __init__(self, model_directories):
         super(TFRunner, self).__init__()
-        self._model_directory = model_directory
+        self._model_directories = model_directories
         self._gpu_id = 0
         self._process_frequency = 10
         self._steering_scale_left = 1
@@ -63,7 +63,7 @@ class TFRunner(Configurable):
         p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        self._driver = TFDriver(model_directory=self._model_directory, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
+        self._driver = TFDriver(model_directories=self._model_directories, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._dagger = p_conv_dropout > 0
         self._driver.activate()
         return _errors
@@ -117,11 +117,12 @@ class TFRunner(Configurable):
 
 
 class InferenceApplication(Application):
-    def __init__(self, runner=None, config_dir=os.getcwd(), models_dir=os.getcwd()):
+    def __init__(self, runner=None, config_dir=os.getcwd(), internal_models=os.getcwd(), user_models=None):
         super(InferenceApplication, self).__init__()
         self._config_dir = config_dir
-        self._models_dir = models_dir
-        self._runner = TFRunner(models_dir) if runner is None else runner
+        self._internal_models = internal_models
+        self._user_models = user_models
+        self._runner = TFRunner(model_directories=[user_models, internal_models]) if runner is None else runner
         self.publisher = None
         self.ipc_server = None
         self.ipc_chatter = None
@@ -135,7 +136,7 @@ class InferenceApplication(Application):
     def _config(self):
         parser = SafeConfigParser()
         # The end-user config overrides come last so all settings are modifiable.
-        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._models_dir, '*.ini') + self._glob(self._config_dir, '*.ini')]
+        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(self._config_dir, '*.ini')]
         return dict(parser.items('inference'))
 
     def get_process_frequency(self):
@@ -166,11 +167,12 @@ class InferenceApplication(Application):
 
 def main():
     parser = argparse.ArgumentParser(description='Inference server.')
-    parser.add_argument('--models', type=str, default='/models', help='Directory with the inference models.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
+    parser.add_argument('--internal', type=str, default='/models', help='Directory with the default inference models.')
+    parser.add_argument('--user', type=str, default='/user_models', help='Directory with the user inference models.')
     args = parser.parse_args()
 
-    application = InferenceApplication(config_dir=args.config, models_dir=args.models)
+    application = InferenceApplication(config_dir=args.config, internal_models=args.internal, user_models=args.user)
     quit_event = application.quit_event
     logger = application.logger
 

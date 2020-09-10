@@ -55,11 +55,20 @@ def _create_input_nodes():
     return (input_dave, maneuver_command, input_use_dropout, input_p_dropout), input_alex
 
 
-def _newest_file(path, pattern):
-    files = [] if path is None else glob.glob(os.path.join(os.path.expanduser(path), pattern))
-    match = max(files, key=os.path.getctime) if len(files) > 0 else None
-    logger.info("Located file '{}' for directory '{}' and pattern '{}'.".format(match, path, pattern))
-    return match
+def _newest_file(paths, pattern):
+    if isinstance(paths, tuple) or isinstance(paths, list):
+        _result = None
+        for path in paths:
+            _result = _newest_file(path, pattern)
+            if _result is not None:
+                break
+        return _result
+    else:
+        path = paths
+        files = [] if path is None else glob.glob(os.path.join(os.path.expanduser(path), pattern))
+        match = max(files, key=os.path.getctime) if len(files) > 0 else None
+        logger.info("Located file '{}' for directory '{}' and pattern '{}'.".format(match, path, pattern))
+        return match
 
 
 def _load_definition(f_name):
@@ -90,10 +99,11 @@ def speed_intention(turn='intersection.ahead', dtype=np.float32):
 
 
 class TFDriver(object):
-    def __init__(self, model_directory, gpu_id=0, p_conv_dropout=0):
+    def __init__(self, model_directories, gpu_id=0, p_conv_dropout=0):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
         self.p_conv_dropout = p_conv_dropout
-        self.model_directory = model_directory
+        _list = (isinstance(model_directories, tuple) or isinstance(model_directories, list))
+        self.model_directories = model_directories if _list else [model_directories]
         self._lock = multiprocessing.Lock()
         self.input_dave = None
         self.input_alex = None
@@ -121,11 +131,11 @@ class TFDriver(object):
         barrier.wait()
 
     def _load_maneuver_graph_def(self, barrier):
-        self.maneuver_graph_def = _load_definition(_newest_file(self.model_directory, 'steer*.pb'))
+        self.maneuver_graph_def = _load_definition(_newest_file(self.model_directories, 'steer*.pb'))
         barrier.wait()
 
     def _load_speed_graph_def(self, barrier):
-        self.speed_graph_def = _load_definition(_newest_file(self.model_directory, 'speed*.pb'))
+        self.speed_graph_def = _load_definition(_newest_file(self.model_directories, 'speed*.pb'))
         barrier.wait()
 
     def activate(self):
