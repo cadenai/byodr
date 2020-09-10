@@ -13,6 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-setuptools \
     python-wheel \
     python-zmq \
+    nano \
+    openssh-client \
+    lm-sensors \
     wget
 
 RUN apt-get update && apt-get install -f -y \
