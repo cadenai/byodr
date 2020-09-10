@@ -1,5 +1,5 @@
-# docker build -f <name> -t centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10 .
-# docker buildx build --platform linux/arm64,linux/amd64 --push -f <name> -t centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10 .
+# For docker hub to have this as a cross platform image build and push it at the same time.
+# docker buildx build --platform linux/arm64,linux/amd64 --push -f ubuntu-gstreamer.dockerfile -t centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10 .
 FROM ubuntu:bionic
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -34,5 +34,9 @@ RUN apt-get update && apt-get install -f -y \
     gstreamer1.0-pulseaudio \
     libgstreamer1.0-0 \
     python-gi \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get -y clean && rm -rf /var/lib/apt/lists/*
 
+RUN pip install "cachetools==2.1.0" && \
+  pip install "jsoncomment==0.3.3" && \
+  pip install "requests==2.24.0" && \
+  pip install "pytest==4.6.11"

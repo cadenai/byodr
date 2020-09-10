@@ -1,8 +1,5 @@
 FROM centipede2donald/nvidia-jetson:jp43-l4t32.3.1-py27-tf1.13
 
-RUN pip install "jsoncomment==0.3.3" && \
-  pip install "pytest==4.6.11"
-
 COPY ./common common/
 COPY ./inference app/
 WORKDIR /app

@@ -7,7 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python-pip \
     python-setuptools \
     python-zmq \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get -y clean && rm -rf /var/lib/apt/lists/*
 
 RUN pip install "jsoncomment==0.3.3" && \
   pip install "pytest==4.6.11"

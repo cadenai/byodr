@@ -1,7 +1,6 @@
 FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
 
-RUN pip install "tornado==4.5.3" && \
-  pip install "pytest==4.6.11"
+RUN pip install "tornado==4.5.3"
 
 COPY ./common common/
 COPY ./teleop app/

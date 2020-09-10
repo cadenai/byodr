@@ -2,7 +2,7 @@ FROM centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.10.2
 
 RUN apt-get update && apt-get install -y \
     usbutils \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get -y clean && rm -rf /var/lib/apt/lists/*
 
 RUN pip install "pymodbus==2.3.0" && \
     pip install "pyusb==1.0.2" && \

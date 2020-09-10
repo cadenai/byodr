@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y \
     python-pigpio \
     python-gpiozero \
     python-zmq \
- && rm -rf /var/lib/apt/lists/*
+ && apt-get -y clean && rm -rf /var/lib/apt/lists/*
 
 # http://abyz.me.uk/rpi/pigpio/pigpiod.html
 RUN git clone https://github.com/joan2937/pigpio.git \
