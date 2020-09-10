@@ -67,14 +67,15 @@ class MonitorApplication(Application):
                                       method='ras/servo/config',
                                       data=data))
 
-    def _send_drive(self, throttle=0., steering=0., reverse_gear=False):
+    def _send_drive(self, throttle=0., steering=0., reverse_gear=False, wakeup=False):
         if self._pi_client is not None:
             throttle = max(-1., min(1., throttle))
             steering = max(-1., min(1., steering))
             _reverse = 1 if reverse_gear else 0
+            _wakeup = 1 if wakeup else 0
             self._pi_client.call(dict(time=timestamp(),
                                       method='ras/servo/drive',
-                                      data=dict(steering=steering, throttle=throttle, reverse=_reverse)))
+                                      data=dict(steering=steering, throttle=throttle, reverse=_reverse, wakeup=_wakeup)))
 
     def _drive(self, pilot, teleop):
         pi_status = None if self._status is None else self._status.pop_latest()
@@ -84,7 +85,8 @@ class MonitorApplication(Application):
             self._send_drive()
         else:
             _reverse = teleop and teleop.get('arrow_down', 0)
-            self._send_drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse)
+            _wakeup = teleop and teleop.get('button_b', 0)
+            self._send_drive(steering=pilot.get('steering'), throttle=pilot.get('throttle'), reverse_gear=_reverse, wakeup=_wakeup)
 
     def _config(self):
         parser = SafeConfigParser()

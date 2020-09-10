@@ -68,13 +68,13 @@ class CommandHistory(object):
         self._num_missing = None
         self.reset()
 
-    def touch(self, steering, throttle):
+    def touch(self, steering, throttle, wakeup=False):
         no_steering = steering is None or abs(steering) < 1e-3
         no_throttle = throttle is None or abs(throttle) < 1e-3
-        if no_steering and no_throttle:
-            self._num_missing += 1
-        else:
+        if self.is_missing() and wakeup:
             self._num_missing = 0
+        elif no_steering and no_throttle:
+            self._num_missing += 1
 
     def reset(self):
         self._num_missing = self._threshold * 2
@@ -132,7 +132,8 @@ class ChassisApplication(Application):
         v_steering = 0 if c_drive is None else c_drive.get('steering', 0)
         v_throttle = 0 if c_drive is None else c_drive.get('throttle', 0)
         v_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
-        self._cmd_history.touch(steering=v_steering, throttle=v_throttle)
+        v_wakeup = False if c_drive is None else bool(c_drive.get('wakeup'))
+        self._cmd_history.touch(steering=v_steering, throttle=v_throttle, wakeup=v_wakeup)
         if self._cmd_history.is_missing():
             self._relay.open()
         elif n_violations < -5:

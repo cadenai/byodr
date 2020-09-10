@@ -41,38 +41,47 @@ def test_relay():
     # Without reliable communication the relay is open.
     application.step()
     assert relay.is_open()
+    publisher.clear()
 
-    # Send the first messages to initiate valid communication.
-    drive_command = dict(steering=0.1, throttle=0.2, reverse=0)
-    [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
+    # A non-zero command.
+    command = dict(steering=0.1, throttle=0.2, reverse=0)
+
+    # Send the first commands to do valid communication.
+    # The integrity protocol does not assume valid by default.
+    map(lambda _: (platform.send(dict(time=timestamp(), method='ras/servo/drive', data=command)), application.step()), range(10))
+    assert relay.is_open()
+    publisher.clear()
+
+    # Send wakeup to close the relais after startup.
+    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(wakeup=1)))
     application.step()
     assert not relay.is_open()
+    publisher.clear()
 
     # Simulate communication violations.
-    for i in range(10):
-        platform.send(dict(time=timestamp() + i * 1e6, method='ras/servo/drive', data=drive_command))
-        application.step()
+    map(lambda i: (platform.send(dict(time=timestamp() + i * 1e6, method='ras/servo/drive', data=command)), application.step()), range(10))
     assert relay.is_open()
+    publisher.clear()
 
-    # And resuming.
-    [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
-    application.step()
+    # And resume.
+    map(lambda _: (platform.send(dict(time=timestamp(), method='ras/servo/drive', data=command)), application.step()), range(10))
     assert not relay.is_open()
+    publisher.clear()
 
     # Pretend missing commands but valid communication.
-    for _ in range(5000):
-        platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(steering=0, throttle=0, reverse=0)))
-        application.step()
+    _null_command = dict(steering=0, throttle=0, reverse=0)
+    map(lambda _: (platform.send(dict(time=timestamp(), method='ras/servo/drive', data=_null_command)), application.step()), range(5000))
     assert relay.is_open()
+    publisher.clear()
 
     # The communication requirements must still be met to let the other side know we are opertional.
-    publisher.clear()
-    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(steering=0, throttle=0, reverse=0)))
+    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=_null_command))
     application.step()
     assert len(publisher.collect()) > 0
+    publisher.clear()
 
-    # And resume
-    [platform.send(dict(time=timestamp(), method='ras/servo/drive', data=drive_command)) for _ in range(10)]
+    # Wakeup again.
+    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(wakeup=1)))
     application.step()
     assert not relay.is_open()
 
