@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 class ControlServerSocket(websocket.WebSocketHandler):
-    # There can be only one client in control at any time.
-    connections = set()
+    # There can be only one operator in control at any time.
+    operators = set()
+    viewers = set()
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
@@ -31,21 +32,30 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        logger.info("Control client connected.")
-        self.connections.add(self)
-        if len(self.connections) > 1:
-            [c.close() for c in self.connections]
+        if len(self.operators) == 0:
+            self.operators.add(self)
+            logger.info("Operator {} connected.".format(self.request.remote_ip))
+        else:
+            self.viewers.add(self)
+            logger.info("Viewer {} connected.".format(self.request.remote_ip))
 
     def on_close(self):
-        logger.info("Control client disconnected.")
-        self.connections.remove(self)
+        if self in self.operators:
+            self.operators.remove(self)
+            logger.info("Operator {} disconnected.".format(self.request.remote_ip))
+        else:
+            self.viewers.remove(self)
+            logger.info("Viewer {} disconnected.".format(self.request.remote_ip))
 
     def on_message(self, json_message):
-        msg = json.loads(json_message)
-        msg['time'] = timestamp()
-        self._fn_control(msg)
+        _response = json.dumps(dict(control='viewer'))
+        if self in self.operators:
+            msg = json.loads(json_message)
+            msg['time'] = timestamp()
+            self._fn_control(msg)
+            _response = json.dumps(dict(control='operator'))
         try:
-            self.write_message('{}')
+            self.write_message(_response)
         except websocket.WebSocketClosedError:
             pass
 
@@ -63,10 +73,10 @@ class MessageServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        logger.info("Log client connected.")
+        pass
 
     def on_close(self):
-        logger.info("Log client disconnected.")
+        pass
 
     @staticmethod
     def _translate_driver(pilot, inference):
@@ -156,10 +166,10 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        logger.info("Camera client connected.")
+        pass
 
     def on_close(self):
-        logger.info("Camera client disconnected.")
+        pass
 
     def on_message(self, message):
         try:

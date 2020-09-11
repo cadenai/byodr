@@ -4,27 +4,40 @@ window.addEventListener("gamepaddisconnected", function(e) { gamepad_controller.
 
 var teleop_screen = {
     is_connection_ok: 0,
-    is_console_ok: 0,
+    controller_status: 0,
+    c_msg_connection_lost: "Connection lost - please wait or refresh the page.",
+    c_msg_controller_err: "Controller not detected - please press a button on the device.",
+    c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
 
     update: function() {
         is_connection_ok = teleop_screen.is_connection_ok;
-        is_console_ok = teleop_screen.is_console_ok;
-        var connection_error = $('div#connection_error');
-        var console_warning = $('div#console_warning');
-        if (is_connection_ok) {
-            connection_error.hide();
+        controller_status = teleop_screen.controller_status;
+        c_msg_connection_lost = teleop_screen.c_msg_connection_lost;
+        c_msg_controller_err = teleop_screen.c_msg_controller_err;
+        c_msg_teleop_view_only = teleop_screen.c_msg_teleop_view_only;
+        var message_box = $('div#message_box');
+        if (!is_connection_ok) {
+            message_box.text(c_msg_connection_lost);
+            message_box.removeClass();
+            message_box.addClass('message error_message');
+            message_box.show();
+        } else if (controller_status == 0) {
+            message_box.text(c_msg_controller_err);
+            message_box.removeClass();
+            message_box.addClass('message warning_message');
+            message_box.show();
+        } else if (controller_status == 2) {
+            message_box.text(c_msg_teleop_view_only);
+            message_box.removeClass();
+            message_box.addClass('message warning_message');
+            message_box.show();
         } else {
-            connection_error.show();
-        }
-        if (is_console_ok) {
-            console_warning.hide();
-        } else {
-            console_warning.show();
+            message_box.hide();
         }
     }
 }
 
-gamepad_controller.capture = function() {
+gamepad_controller.capture = function(cs_response) {
     gc = gamepad_controller;
     ct = gc.controller;
     msg = {};
@@ -64,7 +77,11 @@ gamepad_controller.capture = function() {
         }
     }
     gc.socket.send(JSON.stringify(msg));
-    teleop_screen.is_console_ok = gc_active;
+    if (cs_response != undefined && cs_response.control == 'operator') {
+        teleop_screen.controller_status = gc_active;
+    } else if (cs_response != undefined) {
+        teleop_screen.controller_status = 2;
+    }
     teleop_screen.update();
 }
 socket_utils.create_socket("/ws/ctl", false, 100, function(ws) {
@@ -79,12 +96,13 @@ socket_utils.create_socket("/ws/ctl", false, 100, function(ws) {
         teleop_screen.update();
     };
     ws.onerror = function() {
-        teleop_screen.is_console_ok = gamepad_controller.controller.poll();
+        teleop_screen.controller_status = gamepad_controller.controller.poll();
         teleop_screen.is_connection_ok = 0;
         teleop_screen.update();
     };
-    ws.onmessage = function() {
-        setTimeout(gamepad_controller.capture, 0);
+    ws.onmessage = function(evt) {
+        var message = JSON.parse(evt.data);
+        setTimeout(function() {gamepad_controller.capture(message);}, 0);
     };
 });
 

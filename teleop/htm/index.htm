@@ -43,11 +43,11 @@
           padding: 10px;
         }
 
-        div#console_warning {
+        .warning_message {
           background-color: #ffffcc;
         }
 
-        div#connection_error {
+        .error_message {
           background-color: #9c2b2e;
         }
 
@@ -159,15 +159,14 @@
 	<script src="http-live-player.js?v=0.20"></script>
 	<script src="index_utils.js?v=0.20"></script>
 	<script src="index_gamepad.js?v=0.20"></script>
-	<script src="index_teleop.js?v=0.20"></script>
+	<script src="index_teleop.js?v=0.20.2"></script>
 	<script src="index_mjpeg.js?v=0.20"></script>
 	<script src="index_h264.js?v=0.20"></script>
 </head>
 <body>
 <div id="container" class="centered">
     <div id="column">
-        <div id="connection_error" class="message">Connection lost - please wait or refresh the page.</div>
-        <div id="console_warning" class="message">Controller asleep or not detected - please check the connection and press a button.</div>
+        <div id="message_box" class="message"></div>
         <div id="bar">
             <div id="home_menu" class="left">
                 <a href="/user_options.htm?v=0.20"><img id="home_menu_icon" src='index-menu.png?v=0.20'/></a>
