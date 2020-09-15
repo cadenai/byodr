@@ -72,4 +72,9 @@ RUN pip install tensorflow_gpu-1.13.0rc0+nv19.2-cp27-cp27mu-linux_aarch64.whl &&
     rm -rf tensorflow*.whl && \
     rm -rf /root/.cache
 
+ENV LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-10.0/targets/aarch64-linux/lib
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
+
 WORKDIR /

@@ -2,7 +2,7 @@ import argparse
 import glob
 import logging
 import os
-from ConfigParser import SafeConfigParser
+import sys
 from functools import partial
 
 import numpy as np
@@ -12,6 +12,11 @@ from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIP
 from byodr.utils.option import parse_option
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
+
+if sys.version_info > (3,):
+    from configparser import ConfigParser as SafeConfigParser
+else:
+    from ConfigParser import SafeConfigParser
 
 
 class TFRunner(Configurable):

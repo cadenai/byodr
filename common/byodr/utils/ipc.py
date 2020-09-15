@@ -18,9 +18,17 @@ if sys.version_info > (3,):
 
     def receive_string(subscriber):
         return subscriber.recv_string()
+
+
+    def send_string(sender, val, flags=0):
+        return sender.send_string(val, flags)
 else:
     def receive_string(subscriber):
         return subscriber.recv()
+
+
+    def send_string(sender, val, flags=0):
+        return sender.send(val, flags)
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +44,7 @@ class JSONPublisher(object):
 
     def publish(self, data, topic=None):
         _topic = self._topic if topic is None else topic
-        self._publisher.send('{}:{}'.format(_topic, json.dumps(data)), zmq.NOBLOCK)
+        send_string(self._publisher, '{}:{}'.format(_topic, json.dumps(data)), zmq.NOBLOCK)
 
 
 class ImagePublisher(object):
@@ -156,7 +164,7 @@ class JSONServerThread(threading.Thread):
             try:
                 message = json.loads(receive_string(self._server))
                 self.on_message(message)
-                self._server.send(json.dumps(self.serve(message)))
+                send_string(self._server, json.dumps(self.serve(message)))
             except zmq.Again:
                 pass
 
@@ -214,7 +222,7 @@ class JSONZmqClient(object):
         ret = {}
         for i in range(len(self._urls)):
             try:
-                self._socket.send(json.dumps(message), zmq.NOBLOCK)
+                send_string(self._socket, json.dumps(message), zmq.NOBLOCK)
                 ret.update(json.loads(receive_string(self._socket)))
             except zmq.ZMQError:
                 j = i + 1
