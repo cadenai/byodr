@@ -1,4 +1,4 @@
-# docker build -f <name> -t centipede2donald/nvidia-jetson:jp43-l4t32.3.1-py27-tf1.13 .
+# docker build -f tf113-jp43.dockerfile -t centipede2donald/nvidia-jetson:jp43-cp27-tf113-2 .
 FROM balenalib/jetson-nano-ubuntu:bionic as buildstep
 
 WORKDIR /app
@@ -57,24 +57,19 @@ RUN apt-get update && apt-get install lbzip2 -y && \
     libblas-dev \
     gfortran \
     wget && \
+    apt-get -y clean && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf *.tbz2
-
-RUN apt-get -y clean
-
-# From https://developer.download.nvidia.com/compute/redist/jp/v411/tensorflow-gpu
-COPY /tensorflow_gpu-1.13.0* .
-
-RUN pip install tensorflow_gpu-1.13.0rc0+nv19.2-cp27-cp27mu-linux_aarch64.whl && \
-    rm -rf tensorflow*.whl
 
 RUN pip install "jsoncomment==0.3.3" && \
   pip install "numpy==1.16.6" && \
   pip install "pytest==4.6.11"
 
-ENV LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64
-ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-10.0/targets/aarch64-linux/lib
-ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
-ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
+# From https://developer.download.nvidia.com/compute/redist/jp/v411/tensorflow-gpu
+COPY /tensorflow_gpu-1.13.0* .
+
+RUN pip install tensorflow_gpu-1.13.0rc0+nv19.2-cp27-cp27mu-linux_aarch64.whl && \
+    rm -rf tensorflow*.whl && \
+    rm -rf /root/.cache
 
 WORKDIR /

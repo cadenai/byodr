@@ -52,7 +52,7 @@ def _create_input_nodes():
     maneuver_command = tf.placeholder(dtype=tf.float32, shape=[None, 4], name='input/maneuver_command')
     input_use_dropout = placeholder(tf.bool, shape=(), name='input/use_dropout')
     input_p_dropout = placeholder(tf.float32, shape=(), name='input/p_dropout')
-    return (input_dave, maneuver_command, input_use_dropout, input_p_dropout), input_alex
+    return input_dave, input_alex, maneuver_command, input_use_dropout, input_p_dropout
 
 
 def _newest_file(paths, pattern):
@@ -67,7 +67,7 @@ def _newest_file(paths, pattern):
         path = paths
         files = [] if path is None else glob.glob(os.path.join(os.path.expanduser(path), pattern))
         match = max(files, key=os.path.getctime) if len(files) > 0 else None
-        logger.info("Located file '{}' for directory '{}' and pattern '{}'.".format(match, path, pattern))
+        logger.info("Located file '{}'.".format(match))
         return match
 
 
@@ -91,13 +91,6 @@ def maneuver_intention(turn='general.fallback', dtype=np.float32):
     return command
 
 
-def speed_intention(turn='intersection.ahead', dtype=np.float32):
-    command = np.zeros(3, dtype=dtype)
-    _options = {'intersection.left': 0, 'intersection.ahead': 1, 'intersection.right': 2}
-    command[_options.get(turn, 1)] = 1
-    return command
-
-
 class TFDriver(object):
     def __init__(self, model_directories, gpu_id=0, p_conv_dropout=0):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
@@ -116,8 +109,7 @@ class TFDriver(object):
         self.tf_brake = None
         self.tf_brake_critic = None
         self.sess = None
-        self.maneuver_graph_def = None
-        self.speed_graph_def = None
+        self.graph_def = None
         self._fallback_intention = maneuver_intention()
 
     def set_conv_dropout_probability(self, p):
@@ -130,52 +122,42 @@ class TFDriver(object):
             self.sess = tf.Session(config=config, graph=graph)
         barrier.wait()
 
-    def _load_maneuver_graph_def(self, barrier):
-        self.maneuver_graph_def = _load_definition(_newest_file(self.model_directories, 'steer*.pb'))
-        barrier.wait()
-
-    def _load_speed_graph_def(self, barrier):
-        self.speed_graph_def = _load_definition(_newest_file(self.model_directories, 'speed*.pb'))
+    def _load_graph_def(self, f_definition, barrier):
+        self.graph_def = _load_definition(f_definition)
         barrier.wait()
 
     def activate(self):
         with self._lock:
             _start = time.time()
+            f_definition = _newest_file(self.model_directories, '*.optimized.pb')
+            if f_definition is None:
+                logger.warning("Cannot load from a missing graph.")
+                return
             graph = tf.Graph()
             _threads = []
-            _barrier = Barrier(parties=3)
+            _barrier = Barrier(parties=2)
             _threads.append(Thread(target=self._create_session, args=(graph, _barrier)))
-            _threads.append(Thread(target=self._load_maneuver_graph_def, args=(_barrier,)))
-            _threads.append(Thread(target=self._load_speed_graph_def, args=(_barrier,)))
+            _threads.append(Thread(target=self._load_graph_def, args=(f_definition, _barrier,)))
             for thr in _threads:
                 thr.start()
             for thr in _threads:
                 thr.join(timeout=30)
-            logger.info("Loaded session and graph definitions in {:2.2f} seconds.".format(time.time() - _start))
-            if None in (self.maneuver_graph_def, self.speed_graph_def):
-                logger.warning("Cannot create the graph when one of the parts is missing.")
-                return
+            logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_definition, time.time() - _start))
             with graph.as_default():
-                _nodes = _create_input_nodes()
-                self.input_dave, self.tf_maneuver_cmd, self.input_udr, self.input_pdr = _nodes[0]
-                self.input_alex = _nodes[-1]
-                _input_maneuver = {
+                self.input_dave, self.input_alex, self.tf_maneuver_cmd, self.input_udr, self.input_pdr = _create_input_nodes()
+                _inputs = {
                     'input/dave_image': self.input_dave,
+                    'input/alex_image': self.input_alex,
                     'input/maneuver_command': self.tf_maneuver_cmd,
                     'input/use_dropout': self.input_udr,
                     'input/p_dropout': self.input_pdr
                 }
-                _input_speed = {
-                    'input/alex_image': self.input_alex,
-                    'input/maneuver_command': self.tf_maneuver_cmd
-                }
-                tf.import_graph_def(self.maneuver_graph_def, input_map=_input_maneuver, name='fm')
-                tf.import_graph_def(self.speed_graph_def, input_map=_input_speed, name='fs')
-                self.tf_steering = graph.get_tensor_by_name('fm/output/steering:0')
-                self.tf_critic = graph.get_tensor_by_name('fm/output/critic:0')
-                self.tf_surprise = graph.get_tensor_by_name('fm/output/surprise:0')
-                self.tf_brake = graph.get_tensor_by_name('fs/output/brake:0')
-                self.tf_brake_critic = graph.get_tensor_by_name('fs/output/critic:0')
+                tf.import_graph_def(self.graph_def, input_map=_inputs, name='m')
+                self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
+                self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
+                self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
+                self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
+                self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/critic:0')
 
     def deactivate(self):
         with self._lock:

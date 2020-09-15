@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:1.15.0-gpu
+FROM tensorflow/tensorflow:1.13.2-gpu
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -16,7 +16,7 @@ COPY ./common common/
 COPY ./inference app/
 WORKDIR /app
 
-COPY ./build/*optimized.pb /models/
+COPY ./build/*.pb /models/
 COPY ./build/*.ini /models/
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"

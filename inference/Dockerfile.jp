@@ -1,11 +1,16 @@
-FROM centipede2donald/nvidia-jetson:jp43-l4t32.3.1-py27-tf1.13
+FROM centipede2donald/nvidia-jetson:jp43-cp27-tf113-2
 
 COPY ./common common/
 COPY ./inference app/
 WORKDIR /app
 
-COPY ./build/*optimized.pb /models/
+COPY ./build/*.pb /models/
 COPY ./build/*.ini /models/
+
+ENV LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-10.0/targets/aarch64-linux/lib
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
