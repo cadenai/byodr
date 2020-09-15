@@ -3,12 +3,24 @@ import json
 import logging
 import multiprocessing
 import os
+import sys
 import threading
 
 import numpy as np
 import zmq
 
 from byodr.utils import timestamp
+
+if sys.version_info > (3,):
+    # noinspection PyShadowingBuiltins
+    buffer = memoryview
+
+
+    def receive_string(subscriber):
+        return subscriber.recv_string()
+else:
+    def receive_string(subscriber):
+        return subscriber.recv()
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +84,7 @@ class ReceiverThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             try:
-                _latest = json.loads(self._subscriber.recv().split(':', 1)[1])
+                _latest = json.loads(receive_string(self._subscriber).split(':', 1)[1])
                 self._queue.appendleft(_latest)
                 map(lambda x: x(_latest), self._listeners)
             except zmq.Again:
@@ -142,7 +154,7 @@ class JSONServerThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             try:
-                message = json.loads(self._server.recv())
+                message = json.loads(receive_string(self._server))
                 self.on_message(message)
                 self._server.send(json.dumps(self.serve(message)))
             except zmq.Again:
@@ -203,7 +215,7 @@ class JSONZmqClient(object):
         for i in range(len(self._urls)):
             try:
                 self._socket.send(json.dumps(message), zmq.NOBLOCK)
-                ret.update(json.loads(self._socket.recv()))
+                ret.update(json.loads(receive_string(self._socket)))
             except zmq.ZMQError:
                 j = i + 1
                 self._create(self._urls[j:] + self._urls[:j])
