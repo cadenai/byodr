@@ -11,7 +11,7 @@ from tornado import web, ioloop
 
 from byodr.utils import Application
 from byodr.utils import timestamp
-from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, JSONZmqClient
+from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, ApiSystemStateHandler
 
 logger = logging.getLogger(__name__)
@@ -70,12 +70,14 @@ def main():
     application = TeleopApplication(event=quit_event, config_dir=args.config)
     application.setup()
 
-    pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
-    recorder = ReceiverThread(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state', event=quit_event)
     camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    threads = [pilot, vehicle, inference, recorder, camera]
+    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
+    inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
+    recorder = JSONReceiver(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state')
+    collector = CollectorThread(receivers=(pilot, vehicle, inference, recorder), event=quit_event)
+
+    threads = [camera, collector]
     if quit_event.is_set():
         return 0
 
@@ -100,15 +102,15 @@ def main():
              dict(fn_control=(lambda x: publisher.publish(x)))),
             (r"/ws/log", MessageServerSocket,
              dict(speed_scale=application.get_display_speed_scale(),
-                  fn_state=(lambda: (pilot.get_latest(),
-                                     vehicle.get_latest(),
-                                     inference.get_latest(),
-                                     recorder.get_latest())))),
+                  fn_state=(lambda: (collector.get(0),
+                                     collector.get(1),
+                                     collector.get(2),
+                                     collector.get(3))))),
             (r"/ws/cam", CameraMJPegSocket, dict(fn_capture=(lambda: camera.capture()[-1]))),
             (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=(UserOptions(application.get_user_config_file())),
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", ApiSystemStateHandler, dict(fn_list_start_messages=list_process_start_messages)),
-            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.20.3', permanent=False)),
+            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.20.4', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
         port = args.port

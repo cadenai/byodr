@@ -8,7 +8,7 @@ from functools import partial
 import numpy as np
 
 from byodr.utils import timestamp, Configurable, Application
-from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
+from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.option import parse_option
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
@@ -129,10 +129,10 @@ class InferenceApplication(Application):
         self._user_models = user_models
         self._runner = TFRunner(model_directories=[user_models, internal_models]) if runner is None else runner
         self.publisher = None
-        self.ipc_server = None
-        self.ipc_chatter = None
-        self.pilot = None
         self.camera = None
+        self.ipc_server = None
+        self.pilot = None
+        self.ipc_chatter = None
 
     @staticmethod
     def _glob(directory, pattern):
@@ -160,12 +160,14 @@ class InferenceApplication(Application):
         self._runner.quit()
 
     def step(self):
-        blob = self.pilot.get_latest()
+        blob = self.pilot()
         image = self.camera.capture()[-1]
         if image is not None:
             instruction = 'intersection.ahead' if blob is None else blob.get('instruction')
-            self.publisher.publish(self._runner.forward(image=image, intention=instruction))
-        chat = self.ipc_chatter.pop_latest()
+            state = self._runner.forward(image=image, intention=instruction)
+            state['_fps'] = self.get_actual_hz()
+            self.publisher.publish(state)
+        chat = self.ipc_chatter()
         if chat and chat.get('command') == 'restart':
             self.setup()
 
@@ -181,12 +183,16 @@ def main():
     quit_event = application.quit_event
     logger = application.logger
 
+    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    collector = CollectorThread(receivers=(pilot, ipc_chatter), event=quit_event)
+
     application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
-    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     application.camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/inference_c.sock', name='inference', event=quit_event)
-    threads = [application.pilot, application.camera, application.ipc_chatter, application.ipc_server]
+    application.pilot = lambda: collector.get(0)
+    application.ipc_chatter = lambda: collector.get(1)
+    threads = [collector, application.camera, application.ipc_server]
     if quit_event.is_set():
         return 0
 

@@ -5,7 +5,7 @@ import os
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application, timestamp
-from byodr.utils.ipc import ReceiverThread, LocalIPCServer, JSONZmqClient
+from byodr.utils.ipc import ReceiverThread, LocalIPCServer, JSONZmqClient, JSONReceiver, CollectorThread
 from byodr.utils.option import parse_option
 from byodr.utils.protocol import MessageStreamProtocol
 from byodr.utils.usbrelay import SingleChannelUsbRelay, StaticChannelRelayHolder, SearchUsbRelayFactory
@@ -56,10 +56,10 @@ class MonitorApplication(Application):
         self._pi_client = None
         self._status = None
         self._servo_config = None
+        self.ipc_server = None
         self.pilot = None
         self.teleop = None
         self.ipc_chatter = None
-        self.ipc_server = None
 
     def _send_config(self, data):
         if self._pi_client is not None and data is not None:
@@ -154,7 +154,7 @@ class MonitorApplication(Application):
             self._drive(None, None)
         else:
             self._drive(None, None)
-        chat = self.ipc_chatter.pop_latest()
+        chat = self.ipc_chatter()
         if chat and chat.get('command') == 'restart':
             self.setup()
 
@@ -167,12 +167,18 @@ def monitor(arguments):
         _holder = StaticChannelRelayHolder(relay=_relay, channel=arguments.channel)
         application = MonitorApplication(relay=_holder, config_dir=arguments.config)
         quit_event = application.quit_event
-        application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-        application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-        application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
-        application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='relay', event=quit_event)
 
-        threads = [application.pilot, application.teleop, application.ipc_chatter, application.ipc_server]
+        pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+        teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
+        ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+        collector = CollectorThread(receivers=(pilot, teleop, ipc_chatter), event=quit_event)
+
+        application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='relay', event=quit_event)
+        application.pilot = lambda: collector.get(0)
+        application.teleop = lambda: collector.get(1)
+        application.ipc_chatter = lambda: collector.get(2)
+
+        threads = [collector, application.ipc_server]
         if quit_event.is_set():
             return 0
 

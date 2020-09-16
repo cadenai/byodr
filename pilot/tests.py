@@ -6,21 +6,21 @@ from byodr.utils import timestamp
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer
 
 
-def create_application(config_dir):
-    application = PilotApplication(config_dir=config_dir)
-    application.publisher = CollectPublisher()
-    application.teleop = QueueReceiver()
-    application.vehicle = QueueReceiver()
-    application.inference = QueueReceiver()
-    application.ipc_chatter = QueueReceiver()
-    application.ipc_server = CollectServer()
-    return application
-
-
 def test_create_and_setup(tmpdir):
     directory = str(tmpdir.realpath())
-    app = create_application(directory)
-    publisher, teleop, vehicle, ipc_chatter, ipc_server = app.publisher, app.teleop, app.vehicle, app.ipc_chatter, app.ipc_server
+    publisher = CollectPublisher()
+    ipc_server = CollectServer()
+    teleop = QueueReceiver()
+    vehicle = QueueReceiver()
+    ipc_chatter = QueueReceiver()
+    app = PilotApplication(config_dir=directory)
+    app.publisher = publisher
+    app.ipc_server = ipc_server
+    app.teleop = lambda: teleop.get_latest()
+    app.vehicle = lambda: vehicle.get_latest()
+    app.inference = lambda: None
+    app.ipc_chatter = lambda: ipc_chatter.get_latest()
+
     try:
         # The default settings must result in a workable instance.
         app.setup()

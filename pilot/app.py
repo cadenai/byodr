@@ -5,7 +5,7 @@ import os
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
-from byodr.utils.ipc import ReceiverThread, JSONPublisher, LocalIPCServer
+from byodr.utils.ipc import JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from pilot import CommandProcessor
 
 
@@ -42,11 +42,11 @@ class PilotApplication(Application):
         self._processor.quit()
 
     def step(self):
-        commands = (self.teleop.get_latest(), self.vehicle.get_latest(), self.inference.get_latest())
+        commands = (self.teleop(), self.vehicle(), self.inference())
         action = self._processor.next_action(*commands)
         if action:
             self.publisher.publish(action)
-        chat = self.ipc_chatter.pop_latest()
+        chat = self.ipc_chatter()
         if chat and chat.get('command') == 'restart':
             self.setup()
 
@@ -60,13 +60,19 @@ def main():
     quit_event = application.quit_event
     logger = application.logger
 
+    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
+    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
+    inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    collector = CollectorThread(receivers=(teleop, vehicle, inference, ipc_chatter), event=quit_event)
+
+    application.teleop = lambda: collector.get(0)
+    application.vehicle = lambda: collector.get(1)
+    application.inference = lambda: collector.get(2)
+    application.ipc_chatter = lambda: collector.get(3)
     application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
-    application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    application.vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    application.inference = ReceiverThread(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
-    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
-    threads = [application.teleop, application.vehicle, application.inference, application.ipc_chatter, application.ipc_server]
+    threads = [collector, application.ipc_server]
     if quit_event.is_set():
         return 0
 

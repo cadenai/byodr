@@ -1,3 +1,4 @@
+import collections
 import logging
 import multiprocessing
 import signal
@@ -83,6 +84,8 @@ class Application(object):
             signal.signal(signal.SIGTERM, lambda sig, frame: self._interrupt())
         else:
             self.quit_event = quit_event
+        # Recent window to calculate the actual processing frequency.
+        self._rt_queue = collections.deque(maxlen=50)
 
     def _interrupt(self):
         self.logger.info("Received interrupt, quitting.")
@@ -90,13 +93,16 @@ class Application(object):
 
     @staticmethod
     def _latest_or_none(receiver, patience):
-        candidate = receiver.get_latest()
+        candidate = receiver()
         _time = 0 if candidate is None else candidate.get('time')
         _on_time = (timestamp() - _time) < patience
         return candidate if _on_time else None
 
     def get_hz(self):
         return self._hz
+
+    def get_actual_hz(self):
+        return (1. / np.mean(self._rt_queue)) if self._rt_queue else 0
 
     def set_hz(self, hz):
         self._hz = hz
@@ -124,6 +130,7 @@ class Application(object):
                 _start = time.time()
                 self.step()
                 _duration = (time.time() - _start)
+                self._rt_queue.append(_duration)
                 time.sleep(max(0., self._sleep - _duration))
         except Exception as e:
             self.logger.error("{}".format(traceback.format_exc(e)))

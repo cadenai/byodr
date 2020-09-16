@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 from byodr.utils import Application
-from byodr.utils.ipc import ReceiverThread, CameraThread, JSONPublisher, LocalIPCServer
+from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, CollectorThread, JSONReceiver
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
 from store import Event
@@ -173,10 +173,10 @@ class RecorderApplication(Application):
         self._handler = None
         self.publisher = None
         self.ipc_server = None
-        self.ipc_chatter = None
         self.camera = None
         self.pilot = None
         self.vehicle = None
+        self.ipc_chatter = None
         self._last_publish = time.time()
         self._publish_duration = 0
 
@@ -205,15 +205,15 @@ class RecorderApplication(Application):
         self._handler.quit()
 
     def step(self):
-        m_pilot = self.pilot.get_latest()
-        m_vehicle = self.vehicle.get_latest()
+        m_pilot = self.pilot()
+        m_vehicle = self.vehicle()
         image_md, image = self.camera.capture()
         if None not in (m_pilot, m_vehicle, image_md):
             self._handler.record(m_pilot, m_vehicle, image_md, image)
         if time.time() - self._last_publish > self._publish_duration:
             self.publisher.publish(self._handler.state())
             self._last_publish = time.time()
-        chat = self.ipc_chatter.pop_latest()
+        chat = self.ipc_chatter()
         if chat and chat.get('command') == 'restart':
             self.setup()
 
@@ -230,14 +230,19 @@ def main():
     application = RecorderApplication(config_dir=args.config, sessions_dir=sessions_dir)
     quit_event = application.quit_event
 
+    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    collector = CollectorThread(receivers=(pilot, vehicle, ipc_chatter), event=quit_event)
+
     application.publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
     application.camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
-    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    application.vehicle = ReceiverThread(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/recorder_c.sock', name='recorder', event=quit_event)
+    application.pilot = lambda: collector.get(0)
+    application.vehicle = lambda: collector.get(1)
+    application.ipc_chatter = lambda: collector.get(2)
 
-    threads = [application.camera, application.pilot, application.vehicle, application.ipc_chatter, application.ipc_server]
+    threads = [collector, application.camera, application.ipc_server]
     if quit_event.is_set():
         return 0
 

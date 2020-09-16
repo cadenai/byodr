@@ -38,6 +38,7 @@ class JSONPublisher(object):
         if clean_start and url.startswith('ipc://') and os.path.exists(url[6:]):
             os.remove(url[6:])
         publisher = zmq.Context().socket(zmq.PUB)
+        publisher.set_hwm(1)
         publisher.bind(url)
         self._publisher = publisher
         self._topic = topic
@@ -52,6 +53,7 @@ class ImagePublisher(object):
         if clean_start and url.startswith('ipc://') and os.path.exists(url[6:]):
             os.remove(url[6:])
         publisher = zmq.Context().socket(zmq.PUB)
+        publisher.set_hwm(1)
         publisher.bind(url)
         self._publisher = publisher
         self._topic = topic
@@ -63,11 +65,54 @@ class ImagePublisher(object):
                                        flags=zmq.NOBLOCK)
 
 
+class JSONReceiver(object):
+    def __init__(self, url, topic=b'', receive_timeout_ms=1, pop=False):
+        subscriber = zmq.Context().socket(zmq.SUB)
+        subscriber.set_hwm(1)
+        subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
+        subscriber.setsockopt(zmq.LINGER, 0)
+        subscriber.connect(url)
+        subscriber.setsockopt(zmq.SUBSCRIBE, topic)
+        self._subscriber = subscriber
+        self._peek = not pop
+        self._queue = collections.deque(maxlen=1)
+
+    def _consume(self):
+        try:
+            # Does not replace local queue messages with None.
+            self._queue.appendleft(json.loads(receive_string(self._subscriber).split(':', 1)[1]))
+        except zmq.Again:
+            pass
+
+    def get(self):
+        self._consume()
+        return (self._queue[0] if self._peek else self._queue.popleft()) if self._queue else None
+
+
+class CollectorThread(threading.Thread):
+    def __init__(self, receivers, event=None):
+        super(CollectorThread, self).__init__()
+        _list = (isinstance(receivers, tuple) or isinstance(receivers, list))
+        self._receivers = receivers if _list else [receivers]
+        self._queues = [collections.deque(maxlen=1) for _ in range(len(self._receivers))]
+        self._quit_event = multiprocessing.Event() if event is None else event
+
+    def get(self, index):
+        return self._queues[index][0] if bool(self._queues[index]) else None
+
+    def quit(self):
+        self._quit_event.set()
+
+    def run(self):
+        while not self._quit_event.is_set():
+            [self._queues[idx].appendleft(self._receivers[idx].get()) for idx in range(len(self._receivers))]
+
+
 class ReceiverThread(threading.Thread):
     def __init__(self, url, event=None, topic=b'', receive_timeout_ms=1):
         super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
+        subscriber.set_hwm(1)
         subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         subscriber.setsockopt(zmq.LINGER, 0)
         subscriber.connect(url)
@@ -103,7 +148,7 @@ class CameraThread(threading.Thread):
     def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
         super(CameraThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.setsockopt(zmq.RCVHWM, 1)
+        subscriber.set_hwm(1)
         subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         subscriber.setsockopt(zmq.LINGER, 0)
         subscriber.connect(url)
@@ -134,7 +179,7 @@ class JSONServerThread(threading.Thread):
     def __init__(self, url, event, receive_timeout_ms=50):
         super(JSONServerThread, self).__init__()
         server = zmq.Context().socket(zmq.REP)
-        server.setsockopt(zmq.RCVHWM, 1)
+        server.set_hwm(1)
         server.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         server.setsockopt(zmq.LINGER, 0)
         server.bind(url)
@@ -207,7 +252,7 @@ class JSONZmqClient(object):
     def _create(self, locations):
         context = zmq.Context()
         socket = context.socket(zmq.REQ)
-        socket.setsockopt(zmq.RCVHWM, 1)
+        socket.set_hwm(1)
         socket.setsockopt(zmq.RCVTIMEO, self._receive_timeout)
         socket.setsockopt(zmq.LINGER, 0)
         [socket.connect(location) for location in locations]

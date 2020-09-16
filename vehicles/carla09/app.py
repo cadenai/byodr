@@ -7,7 +7,7 @@ from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
 from byodr.utils import Configurable
-from byodr.utils.ipc import ReceiverThread, JSONPublisher, ImagePublisher, LocalIPCServer
+from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.option import parse_option
 from vehicle import CarlaHandler
 
@@ -58,10 +58,10 @@ class CarlaApplication(Application):
         self._config_dir = config_dir
         self._runner = CarlaRunner(image_publisher)
         self.publisher = None
-        self.teleop = None
-        self.pilot = None
-        self.ipc_server = None
         self.ipc_chatter = None
+        self.pilot = None
+        self.teleop = None
+        self.ipc_server = None
 
     def _check_user_file(self):
         # One user configuration file is optional and can be used to persist settings.
@@ -102,7 +102,7 @@ class CarlaApplication(Application):
         else:
             runner.noop()
         self.publisher.publish(runner.state())
-        chat = self.ipc_chatter.pop_latest()
+        chat = self.ipc_chatter()
         if chat and chat.get('command') == 'restart':
             self.setup()
 
@@ -116,12 +116,17 @@ def main():
     application = CarlaApplication(image_publisher=image_publisher, config_dir=args.config)
     quit_event = application.quit_event
 
+    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
+    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    collector = CollectorThread(receivers=(pilot, teleop, ipc_chatter), event=quit_event)
+
     application.publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
-    application.teleop = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    application.pilot = ReceiverThread(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    application.ipc_chatter = ReceiverThread(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
-    threads = [application.teleop, application.pilot, application.ipc_chatter, application.ipc_server]
+    application.pilot = lambda: collector.get(0)
+    application.teleop = lambda: collector.get(1)
+    application.ipc_chatter = lambda: collector.get(2)
+    threads = [collector, application.ipc_server]
     if quit_event.is_set():
         return 0
 

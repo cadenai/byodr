@@ -58,14 +58,18 @@ def test_monitor_relay(tmpdir):
     status_factory = MyStatusReceiverThreadFactory(queue=receiver)
     assert relay.is_open(), "The test assumes a normally opened relay."
 
+    pilot = QueueReceiver()
+    teleop = QueueReceiver()
+    ipc_chatter = QueueReceiver()
     application = MonitorApplication(relay=relay,
                                      client_factory=client_factory,
                                      status_factory=status_factory,
                                      config_dir=config_directory)
-    application.pilot = QueueReceiver()
-    application.teleop = QueueReceiver()
-    application.ipc_chatter = QueueReceiver()
     application.ipc_server = CollectServer()
+    application.pilot = lambda: pilot.get_latest()
+    application.teleop = lambda: teleop.get_latest()
+    application.ipc_chatter = lambda: ipc_chatter.pop_latest()
+
     application.setup()
     assert application.get_hz() > 0
     assert receiver.is_started()

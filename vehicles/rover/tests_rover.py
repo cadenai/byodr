@@ -6,20 +6,21 @@ from app import RoverApplication
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer
 
 
-def set_rover_publishers_receivers(application):
-    application.image_publisher = CollectPublisher()
-    application.state_publisher = CollectPublisher()
-    application.pilot = QueueReceiver()
-    application.teleop = QueueReceiver()
-    application.ipc_chatter = QueueReceiver()
-    application.ipc_server = CollectServer()
-    return application
-
-
 def test_rover_create_and_setup(tmpdir):
     directory = str(tmpdir.realpath())
-    app = set_rover_publishers_receivers(RoverApplication(config_dir=directory))
-    ipc_chatter, ipc_server = app.ipc_chatter, app.ipc_server
+    pilot = QueueReceiver()
+    teleop = QueueReceiver()
+    ipc_chatter = QueueReceiver()
+    ipc_server = CollectServer()
+
+    app = RoverApplication(config_dir=directory)
+    app.image_publisher = CollectPublisher()
+    app.state_publisher = CollectPublisher()
+    app.ipc_server = ipc_server
+    app.pilot = lambda: pilot.get_latest()
+    app.teleop = lambda: teleop.get_latest()
+    app.ipc_chatter = lambda: ipc_chatter.pop_latest()
+
     try:
         # The application writes a new user configuration file if none exists at the configuration location.
         assert len(glob.glob(os.path.join(directory, 'config.ini'))) == 0

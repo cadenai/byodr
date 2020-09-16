@@ -5,21 +5,18 @@ from app import RecorderApplication
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer, QueueCamera
 
 
-def create_application(config_dir):
-    application = RecorderApplication(config_dir=config_dir)
-    application.publisher = CollectPublisher()
-    application.camera = QueueCamera()
-    application.pilot = QueueReceiver()
-    application.vehicle = QueueReceiver()
-    application.ipc_chatter = QueueReceiver()
-    application.ipc_server = CollectServer()
-    return application
-
-
 def test_create_and_setup(tmpdir):
     directory = str(tmpdir.realpath())
-    app = create_application(directory)
-    ipc_chatter, ipc_server = app.ipc_chatter, app.ipc_server
+    ipc_server = CollectServer()
+    ipc_chatter = QueueReceiver()
+    app = RecorderApplication(config_dir=directory)
+    app.publisher = CollectPublisher()
+    app.camera = QueueCamera()
+    app.ipc_server = ipc_server
+    app.pilot = lambda: None
+    app.vehicle = lambda: None
+    app.ipc_chatter = lambda: ipc_chatter.pop_latest()
+
     try:
         # The default settings must result in a workable instance.
         app.setup()
