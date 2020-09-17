@@ -26,5 +26,5 @@ def parse_option(key, fn_type=(lambda x: x), default_value=None, errors=None, **
         return fn_type(default_value)
 
 
-def hash_dict(**kwargs):
-    return hash(''.join([str(k) + str(v) for k, v in kwargs.items()]))
+def hash_dict(**m):
+    return hash(''.join(str(k) + str(m.get(k)) for k in sorted(m.keys())))
