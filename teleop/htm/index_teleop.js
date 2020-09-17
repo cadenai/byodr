@@ -177,7 +177,7 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
                     el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.20');
                     break;
                 default:
-                    el_turn_arrow.attr('src', '');
+                    el_turn_arrow.attr('src', 'im_arrow_nb.png?v=0.20');
                     break;
             }
         }
@@ -196,10 +196,10 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
             }
             if (is_on_autopilot) {
                 el_max_speed_container.show();
-                el_autopilot_status.show();
+                el_autopilot_status.text('AP');
             } else {
                 el_max_speed_container.hide();
-                el_autopilot_status.hide();
+                el_autopilot_status.text('TO');
             }
         }
         var display_rotation = Math.floor(command.ste * 90.0)

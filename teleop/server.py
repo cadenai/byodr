@@ -32,7 +32,8 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        if len(self.operators) == 0:
+        if len(self.operators) == 0 or next(iter(self.operators)).ws_connection is None:
+            self.operators.clear()
             self.operators.add(self)
             logger.info("Operator {} connected.".format(self.request.remote_ip))
         else:

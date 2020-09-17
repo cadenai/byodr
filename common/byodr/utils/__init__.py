@@ -130,8 +130,9 @@ class Application(object):
                 _start = time.time()
                 self.step()
                 _duration = (time.time() - _start)
-                self._rt_queue.append(_duration)
                 time.sleep(max(0., self._sleep - _duration))
+                # Report the actual clock frequency which includes the user specified wait time.
+                self._rt_queue.append(time.time() - _start)
         except Exception as e:
             self.logger.error("{}".format(traceback.format_exc(e)))
             self.quit()
