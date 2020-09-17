@@ -57,39 +57,41 @@
           font-family: Verdana;
         }
 
+        div#dashboard {
+            margin: 0 0 0 30%;
+        }
+
         img#arrow {
           padding-top: 10px;
         }
 
-        div#max_speed {
+        div#alpha_speed {
           display: inline-block;
           font-size: 8px;
           padding: 5px 10px 0 20px;
         }
 
-        div#current_speed {
+        div#beta_speed {
           display: inline-block;
           font-size: 8px;
-          padding-left: 20px;
-          padding-top: 10px;
-          padding-right: 40px;
+          padding: 10px 10px 0 10px;
         }
 
-        div#max_speed_value {
+        div#alpha_speed_value {
           font-size: 30px;
         }
 
-        div#current_speed_value {
+        div#beta_speed_value {
           font-size: 30px;
         }
 
-        div#current_speed_units {
+        div#beta_speed_label {
           font-size: 8px;
         }
 
         img#steeringWheel {
           transform: scale(0.8);
-          padding: 10px 0 3px 0;
+          padding: 10px 0 0 0;
         }
 
         div#debug_values {
@@ -140,11 +142,9 @@
         div#mjpeg_stream_controls > img#caret_down {
             margin-left: 3px;
         }
-        p#autopilot_status {
-            font-family: "Arial";
-            font-size: 20px;
-            font-weight: bold;
-            margin-right: 10px;
+        span#autopilot_status {
+            display: inline-block;
+            width: 45px;
         }
         div#home_menu {
         }
@@ -158,8 +158,8 @@
     <script src="performance-polyfill.js?v=0.20"></script>
 	<script src="http-live-player.js?v=0.20"></script>
 	<script src="index_utils.js?v=0.20"></script>
-	<script src="index_gamepad.js?v=0.20"></script>
-	<script src="index_teleop.js?v=0.20.5"></script>
+	<script src="index_gamepad.js?v=0.20.5"></script>
+	<script src="index_teleop.js?v=0.20.5c"></script>
 	<script src="index_mjpeg.js?v=0.20"></script>
 	<script src="index_h264.js?v=0.20"></script>
 </head>
@@ -179,17 +179,19 @@
                 <span id="mjpeg_quality_val">0</span>
                 <img id="caret_down" src='caret.png?v=0.20' onclick="mjpeg_caret_down();"/>
                 <img id="caret_up" src='caret.png?v=0.20' onclick="mjpeg_caret_up();"/>
-                <!-- <span id="frame_fps_text">fps:&nbsp;</span>
-                <span id="frame_fps">0</span> -->
             </div>
-            <img id="arrow"/>
-            <div id="max_speed">
-                <div id="max_speed_value">0</div>
-                <div id="max_speed_text">MAX</div>
-            </div>
-            <div id="current_speed">
-                <div id="current_speed_value">0</div>
-                <div id="current_speed_units">km/h</div>
+            <div id="dashboard" class="left">
+                <span id="autopilot_status"></span>
+                <img id="arrow"/>
+                <div id="alpha_speed">
+                    <div id="alpha_speed_value">0</div>
+                    <div id="alpha_speed_label"></div>
+                </div>
+                <img id="steeringWheel"/>
+                <div id="beta_speed">
+                    <div id="beta_speed_value">0</div>
+                    <div id="beta_speed_label">km/h</div>
+                </div>
             </div>
             <div id="debug_values">
                 <p class="debug_line"><span id="pilot_steering">0</span>&nbsp;ste</p>
@@ -198,8 +200,6 @@
                 <p class="debug_line"><span id="inference_obstacle">0</span>&nbsp;obs</p>
                 <p class="debug_line"><span id="inference_fps">0</span>&nbsp;fps</p>
             </div>
-            <img id="steeringWheel" class="right"/>
-            <p id="autopilot_status" class="right"></p>
         </div>
         <div id="camera1"></div>
     </div>

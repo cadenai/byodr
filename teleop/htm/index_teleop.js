@@ -137,9 +137,10 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         var el_inference_penalty = $('span#inference_penalty');
         var el_inference_obstacle = $('span#inference_obstacle');
         var el_inference_fps = $('span#inference_fps');
-        var el_max_speed_container = $('div#max_speed');
-        var el_max_speed = $('div#max_speed_value');
-        var el_current_speed = $('div#current_speed_value');
+        var el_alpha_speed = $('div#alpha_speed_value');
+        var el_alpha_speed_label = $('div#alpha_speed_label');
+        var el_beta_speed_container = $('div#beta_speed');
+        var el_beta_speed = $('div#beta_speed_value');
         var el_steering_wheel = $('img#steeringWheel');
         var el_turn_arrow = $('img#arrow');
         var el_autopilot_status = $('#autopilot_status');
@@ -151,33 +152,31 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
         el_inference_obstacle.text(command.debug2.toFixed(2));
         el_inference_fps.text(command.debug7.toFixed(0));
         // el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
-        // max_speed is the maximum speed
         // speed is the desired speed
         // vel_y is the actual vehicle speed
         // console.log(command);
-        // Math.ceil(command.max_speed);
         var is_on_autopilot = command.ctl == 5;
         if (is_on_autopilot) {
-            el_max_speed.text(command.max_speed.toFixed(1));
-            el_current_speed.text(command.speed.toFixed(1));
+            el_alpha_speed.text(command.max_speed.toFixed(1));
+            el_beta_speed.text(command.speed.toFixed(1));
         } else {
-            el_current_speed.text(command.vel_y.toFixed(1));
+            el_alpha_speed.text(command.vel_y.toFixed(1));
         }
         //
         if (view.command_turn != command.turn) {
             view.command_turn = command.turn;
             switch(command.turn) {
                 case "intersection.left":
-                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.20');
+                    el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.20.5');
                     break;
                 case "intersection.right":
-                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.20');
+                    el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.20.5');
                     break;
                 case "intersection.ahead":
-                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.20');
+                    el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.20.5');
                     break;
                 default:
-                    el_turn_arrow.attr('src', 'im_arrow_nb.png?v=0.20');
+                    el_turn_arrow.attr('src', 'im_arrow_none.png?v=0.20.5');
                     break;
             }
         }
@@ -195,11 +194,13 @@ socket_utils.create_socket("/ws/log", false, 100, function(ws) {
                 el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.20');
             }
             if (is_on_autopilot) {
-                el_max_speed_container.show();
-                el_autopilot_status.text('AP');
+                el_alpha_speed_label.text('MAX');
+                el_beta_speed_container.show();
+                el_autopilot_status.text('AUTO');
             } else {
-                el_max_speed_container.hide();
-                el_autopilot_status.text('TO');
+                el_alpha_speed_label.text('km/h');
+                el_beta_speed_container.hide();
+                el_autopilot_status.text('TELE');
             }
         }
         var display_rotation = Math.floor(command.ste * 90.0)

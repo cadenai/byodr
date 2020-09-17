@@ -48,19 +48,21 @@ var Xbox360StandardController = extend(NoneController, {
 
     poll: function() {
         pad = this.gamepad();
-        this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
-        this.steering = this.collapse(pad.axes[2], this.threshold);
-        this.pan = this.collapse(pad.axes[0], this.threshold);
-        this.tilt = this.collapse(pad.axes[1], this.threshold);
-        this.button_y = pad.buttons[3].value;
-        this.button_b = pad.buttons[1].value;
-        this.button_x = pad.buttons[2].value;
-        this.button_a = pad.buttons[0].value;
-        this.button_left = pad.buttons[4].value;
-        this.button_right = pad.buttons[5].value;
-        this.button_center = pad.buttons[16].value;
-        this.arrow_up = pad.buttons[12].value;
-        this.arrow_down = pad.buttons[13].value;
+        if (pad != undefined) {
+            this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
+            this.steering = this.collapse(pad.axes[2], this.threshold);
+            this.pan = this.collapse(pad.axes[0], this.threshold);
+            this.tilt = this.collapse(pad.axes[1], this.threshold);
+            this.button_y = pad.buttons[3].value;
+            this.button_b = pad.buttons[1].value;
+            this.button_x = pad.buttons[2].value;
+            this.button_a = pad.buttons[0].value;
+            this.button_left = pad.buttons[4].value;
+            this.button_right = pad.buttons[5].value;
+            this.button_center = pad.buttons[16].value;
+            this.arrow_up = pad.buttons[12].value;
+            this.arrow_down = pad.buttons[13].value;
+        }
         return this.healthy;
     }
 });
@@ -71,19 +73,21 @@ var PS4StandardController = extend(NoneController, {
     poll: function() {
         // On ubuntu 18 under chrome button 17 does not exist - use button 16.
         pad = this.gamepad();
-        this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
-        this.steering = this.collapse(pad.axes[2], this.threshold);
-        this.pan = this.collapse(pad.axes[0], this.threshold);
-        this.tilt = this.collapse(pad.axes[1], this.threshold);
-        this.button_y = pad.buttons[3].value;
-        this.button_b = pad.buttons[1].value;
-        this.button_x = pad.buttons[2].value;
-        this.button_a = pad.buttons[0].value;
-        this.button_left = pad.buttons[4].value;
-        this.button_right = pad.buttons[5].value;
-        this.button_center = pad.buttons[16].value;
-        this.arrow_up = pad.buttons[12].value;
-        this.arrow_down = pad.buttons[13].value;
+        if (pad != undefined) {
+            this.set_throttle(pad.buttons[6].value, pad.buttons[7].value)
+            this.steering = this.collapse(pad.axes[2], this.threshold);
+            this.pan = this.collapse(pad.axes[0], this.threshold);
+            this.tilt = this.collapse(pad.axes[1], this.threshold);
+            this.button_y = pad.buttons[3].value;
+            this.button_b = pad.buttons[1].value;
+            this.button_x = pad.buttons[2].value;
+            this.button_a = pad.buttons[0].value;
+            this.button_left = pad.buttons[4].value;
+            this.button_right = pad.buttons[5].value;
+            this.button_center = pad.buttons[16].value;
+            this.arrow_up = pad.buttons[12].value;
+            this.arrow_down = pad.buttons[13].value;
+        }
         return this.healthy;
     }
 });
