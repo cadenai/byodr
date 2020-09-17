@@ -65,7 +65,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_state = kwargs.get('fn_state')
-        self._speed_scale = kwargs.get('speed_scale')
+        self._fn_speed_scale = kwargs.get('fn_speed_scale')
 
     def check_origin(self, origin):
         return True
@@ -109,6 +109,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
+            _speed_scale = self._fn_speed_scale()
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -123,11 +124,11 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'ste': 0 if pilot is None else pilot.get('steering'),
                 'thr': 0 if pilot is None else pilot.get('throttle'),
                 'rev': 0,
-                'vel_y': 0 if vehicle is None else vehicle.get('velocity') * self._speed_scale,
+                'vel_y': 0 if vehicle is None else vehicle.get('velocity') * _speed_scale,
                 'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
                 'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
-                'speed': 0 if pilot is None else pilot.get('desired_speed') * self._speed_scale,
-                'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * self._speed_scale,
+                'speed': 0 if pilot is None else pilot.get('desired_speed') * _speed_scale,
+                'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * _speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'route': None,
                 'route_np': None,

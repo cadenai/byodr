@@ -1,4 +1,7 @@
+import os
+import random
 import time
+from ConfigParser import SafeConfigParser
 
 from byodr.utils import timestamp
 from byodr.utils.testing import QueueReceiver, CollectServer, CollectJSONClient
@@ -75,7 +78,17 @@ def test_monitor_relay(tmpdir):
     assert receiver.is_started()
     assert status_factory.get_num_create_calls() == 1
 
-    # Setup again to simulate reconfiguration.
+    # Without a configuration change the application does not restart.
+    application.setup()
+    assert receiver.is_started()
+    assert status_factory.get_num_create_calls() == 1
+
+    # Change a relevant setting.
+    _parser = SafeConfigParser()
+    _parser.add_section('vehicle')
+    _parser.set('vehicle', 'ras.master.uri', 'localhost-' + str(random.random()))
+    with open(os.path.join(config_directory, 'test_config.ini'), 'wb') as f:
+        _parser.write(f)
     application.setup()
     assert receiver.is_started()
     assert status_factory.get_num_create_calls() == 2

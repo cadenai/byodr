@@ -5,11 +5,12 @@ import logging
 import multiprocessing
 import os
 import signal
+import threading
 from ConfigParser import SafeConfigParser
 
 from tornado import web, ioloop
 
-from byodr.utils import Application
+from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, ApiSystemStateHandler
@@ -37,6 +38,8 @@ class TeleopApplication(Application):
         self._config_dir = config_dir
         self._display_speed_scale = 0
         self._user_config_file = os.path.join(self._config_dir, 'config.ini')
+        self._config_hash = -1
+        self._lock = threading.Lock()
 
     def _check_user_config(self):
         _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
@@ -52,13 +55,20 @@ class TeleopApplication(Application):
         return self._user_config_file
 
     def get_display_speed_scale(self):
-        return self._display_speed_scale
+        with self._lock:
+            return self._display_speed_scale
 
     def setup(self):
         if self.active():
             self._check_user_config()
-            self._display_speed_scale = float(self._config().get('display.speed.scale'))
-            self.logger.info("Speed scale = {}.".format(self._display_speed_scale))
+            _config = self._config()
+            _hash = hash_dict(**_config)
+            if _hash != self._config_hash:
+                self._config_hash = _hash
+                _scale = float(_config.get('display.speed.scale'))
+                self.logger.info("Speed scale = {}.".format(_scale))
+                with self._lock:
+                    self._display_speed_scale = _scale
 
 
 def main():
@@ -84,13 +94,15 @@ def main():
     [t.start() for t in threads]
 
     publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
+    chatter = JSONPublisher(url='ipc:///byodr/teleop_c.sock', topic='aav/teleop/chatter')
     zm_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock',
                                     'ipc:///byodr/inference_c.sock',
                                     'ipc:///byodr/vehicle_c.sock',
+                                    'ipc:///byodr/relay_c.sock',
                                     'ipc:///byodr/recorder_c.sock'])
 
     def on_options_save():
-        publisher.publish(dict(time=timestamp(), command='restart'), topic='aav/teleop/chatter')
+        chatter.publish(dict(time=timestamp(), command='restart'))
         application.setup()
 
     def list_process_start_messages():
@@ -101,7 +113,7 @@ def main():
             (r"/ws/ctl", ControlServerSocket,
              dict(fn_control=(lambda x: publisher.publish(x)))),
             (r"/ws/log", MessageServerSocket,
-             dict(speed_scale=application.get_display_speed_scale(),
+             dict(fn_speed_scale=(lambda: application.get_display_speed_scale()),
                   fn_state=(lambda: (collector.get(0),
                                      collector.get(1),
                                      collector.get(2),

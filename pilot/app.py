@@ -63,7 +63,7 @@ def main():
     teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
     vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
     inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
     collector = CollectorThread(receivers=(teleop, vehicle, inference, ipc_chatter), event=quit_event)
 
     application.teleop = lambda: collector.get(0)

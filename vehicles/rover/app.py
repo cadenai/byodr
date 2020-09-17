@@ -8,7 +8,7 @@ from ConfigParser import SafeConfigParser
 from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, CollectorThread, JSONReceiver
-from byodr.utils.option import parse_option
+from byodr.utils.option import parse_option, hash_dict
 from core import GpsPollerThread, PTZCamera, GstSource
 
 logger = logging.getLogger(__name__)
@@ -20,11 +20,14 @@ class Platform(Configurable):
         super(Platform, self).__init__()
         self._gps_poller = GpsPollerThread()
 
-    def state(self):
+    def state(self, c_teleop):
+        # The platform currently does not contain a speedometer.
+        # Use throttle as the proxy.
+        y_vel = c_teleop.get('throttle', 0) if c_teleop else 0
         return dict(x_coordinate=self._gps_poller.get_latitude(),
                     y_coordinate=self._gps_poller.get_longitude(),
-                    heading=0,
-                    velocity=0,
+                    heading=0,  # Tbd - get this from gps.
+                    velocity=y_vel,
                     time=timestamp())
 
     def internal_quit(self, restarting=False):
@@ -73,7 +76,7 @@ class RoverHandler(Configurable):
     def cycle(self, c_pilot, c_teleop):
         self._camera.add(c_pilot, c_teleop)
         self._gst_source.check()
-        return self._vehicle.state()
+        return self._vehicle.state(c_teleop)
 
 
 class RoverApplication(Application):
@@ -81,6 +84,7 @@ class RoverApplication(Application):
         super(RoverApplication, self).__init__()
         self._config_dir = config_dir
         self._handler = handler
+        self._config_hash = -1
         self.image_publisher = None
         self.state_publisher = None
         self.ipc_server = None
@@ -106,13 +110,17 @@ class RoverApplication(Application):
         if self._handler is None:
             self._handler = RoverHandler(gst_source=GstSource(self.image_publisher))
         if self.active():
-            self._check_user_file()
-            _restarted = self._handler.restart(**self._config())
-            if _restarted:
-                self.ipc_server.register_start(self._handler.get_errors())
-                _frequency = self._handler.get_process_frequency()
-                self.set_hz(_frequency)
-                self.logger.info("Processing at {} Hz.".format(_frequency))
+            _config = self._config()
+            _hash = hash_dict(**_config)
+            if _hash != self._config_hash:
+                self._config_hash = _hash
+                self._check_user_file()
+                _restarted = self._handler.restart(**_config)
+                if _restarted:
+                    self.ipc_server.register_start(self._handler.get_errors())
+                    _frequency = self._handler.get_process_frequency()
+                    self.set_hz(_frequency)
+                    self.logger.info("Processing at {} Hz.".format(_frequency))
 
     def finish(self):
         self._handler.quit()
@@ -138,7 +146,7 @@ def main():
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
     teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
     collector = CollectorThread(receivers=(pilot, teleop, ipc_chatter), event=quit_event)
 
     application.image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')

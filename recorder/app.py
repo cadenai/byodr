@@ -179,6 +179,7 @@ class RecorderApplication(Application):
         self.ipc_chatter = None
         self._last_publish = time.time()
         self._publish_duration = 0
+        self._config_hash = -1
 
     def _config(self):
         parser = SafeConfigParser()
@@ -189,20 +190,25 @@ class RecorderApplication(Application):
         return 0 if self._handler is None else self._handler.get_process_frequency()
 
     def setup(self):
-        if self._handler is not None:
-            self._handler.quit()
         if self.active():
-            self._handler = EventHandler(self._sessions_dir, **self._config())
-            self._handler.start()
-            self.ipc_server.register_start(self._handler.get_errors())
-            _process_hz = self._handler.get_process_frequency()
-            _publish_hz = self._handler.get_publish_frequency()
-            self.set_hz(_process_hz)
-            self._publish_duration = 1. / _publish_hz
-            self.logger.info("Processing at {} Hz publishing at {} Hz.".format(_process_hz, _publish_hz))
+            _config = self._config()
+            _hash = hash_dict(**_config)
+            if _hash != self._config_hash:
+                self._config_hash = _hash
+                if self._handler is not None:
+                    self._handler.quit()
+                self._handler = EventHandler(self._sessions_dir, **_config)
+                self._handler.start()
+                self.ipc_server.register_start(self._handler.get_errors())
+                _process_hz = self._handler.get_process_frequency()
+                _publish_hz = self._handler.get_publish_frequency()
+                self.set_hz(_process_hz)
+                self._publish_duration = 1. / _publish_hz
+                self.logger.info("Processing at {} Hz publishing at {} Hz.".format(_process_hz, _publish_hz))
 
     def finish(self):
-        self._handler.quit()
+        if self._handler is not None:
+            self._handler.quit()
 
     def step(self):
         m_pilot = self.pilot()
@@ -232,7 +238,7 @@ def main():
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
     vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/chatter', pop=True)
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
     collector = CollectorThread(receivers=(pilot, vehicle, ipc_chatter), event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')

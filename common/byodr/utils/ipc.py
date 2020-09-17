@@ -1,4 +1,5 @@
 import collections
+import datetime
 import json
 import logging
 import multiprocessing
@@ -34,11 +35,11 @@ logger = logging.getLogger(__name__)
 
 
 class JSONPublisher(object):
-    def __init__(self, url, topic='', clean_start=True):
+    def __init__(self, url, topic='', hwm=1, clean_start=True):
         if clean_start and url.startswith('ipc://') and os.path.exists(url[6:]):
             os.remove(url[6:])
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.set_hwm(1)
+        publisher.set_hwm(hwm)
         publisher.bind(url)
         self._publisher = publisher
         self._topic = topic
@@ -49,11 +50,11 @@ class JSONPublisher(object):
 
 
 class ImagePublisher(object):
-    def __init__(self, url, topic='', clean_start=True):
+    def __init__(self, url, topic='', hwm=1, clean_start=True):
         if clean_start and url.startswith('ipc://') and os.path.exists(url[6:]):
             os.remove(url[6:])
         publisher = zmq.Context().socket(zmq.PUB)
-        publisher.set_hwm(1)
+        publisher.set_hwm(hwm)
         publisher.bind(url)
         self._publisher = publisher
         self._topic = topic
@@ -66,9 +67,9 @@ class ImagePublisher(object):
 
 
 class JSONReceiver(object):
-    def __init__(self, url, topic=b'', receive_timeout_ms=1, pop=False):
+    def __init__(self, url, topic=b'', hwm=1, receive_timeout_ms=1, pop=False):
         subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.set_hwm(1)
+        subscriber.set_hwm(hwm)
         subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         subscriber.setsockopt(zmq.LINGER, 0)
         subscriber.connect(url)
@@ -77,15 +78,14 @@ class JSONReceiver(object):
         self._peek = not pop
         self._queue = collections.deque(maxlen=1)
 
-    def _consume(self):
+    def consume(self):
         try:
-            # Does not replace local queue messages with None.
+            # Does not replace local queue messages when none are available.
             self._queue.appendleft(json.loads(receive_string(self._subscriber).split(':', 1)[1]))
         except zmq.Again:
             pass
 
     def get(self):
-        self._consume()
         return (self._queue[0] if self._peek else self._queue.popleft()) if self._queue else None
 
 
@@ -94,25 +94,24 @@ class CollectorThread(threading.Thread):
         super(CollectorThread, self).__init__()
         _list = (isinstance(receivers, tuple) or isinstance(receivers, list))
         self._receivers = receivers if _list else [receivers]
-        self._queues = [collections.deque(maxlen=1) for _ in range(len(self._receivers))]
         self._quit_event = multiprocessing.Event() if event is None else event
 
     def get(self, index):
-        return self._queues[index][0] if bool(self._queues[index]) else None
+        return self._receivers[index].get()
 
     def quit(self):
         self._quit_event.set()
 
     def run(self):
         while not self._quit_event.is_set():
-            [self._queues[idx].appendleft(self._receivers[idx].get()) for idx in range(len(self._receivers))]
+            map(lambda recv: recv.consume(), self._receivers)
 
 
 class ReceiverThread(threading.Thread):
-    def __init__(self, url, event=None, topic=b'', receive_timeout_ms=1):
+    def __init__(self, url, event=None, topic=b'', hwm=1, receive_timeout_ms=1):
         super(ReceiverThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.set_hwm(1)
+        subscriber.set_hwm(hwm)
         subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         subscriber.setsockopt(zmq.LINGER, 0)
         subscriber.connect(url)
@@ -145,10 +144,10 @@ class ReceiverThread(threading.Thread):
 
 
 class CameraThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', receive_timeout_ms=1):
+    def __init__(self, url, event, topic=b'', hwm=1, receive_timeout_ms=1):
         super(CameraThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
-        subscriber.set_hwm(1)
+        subscriber.set_hwm(hwm)
         subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         subscriber.setsockopt(zmq.LINGER, 0)
         subscriber.connect(url)
@@ -176,10 +175,10 @@ class CameraThread(threading.Thread):
 
 
 class JSONServerThread(threading.Thread):
-    def __init__(self, url, event, receive_timeout_ms=50):
+    def __init__(self, url, event, hwm=1, receive_timeout_ms=50):
         super(JSONServerThread, self).__init__()
         server = zmq.Context().socket(zmq.REP)
-        server.set_hwm(1)
+        server.set_hwm(hwm)
         server.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)
         server.setsockopt(zmq.LINGER, 0)
         server.bind(url)
@@ -221,7 +220,7 @@ class LocalIPCServer(JSONServerThread):
         self._m_startup = collections.deque(maxlen=1)
 
     def register_start(self, errors):
-        self._m_startup.append((timestamp(), errors))
+        self._m_startup.append((datetime.datetime.utcnow().strftime('%b %d %H:%M:%S.%s UTC'), errors))
 
     def serve_local(self, message):
         return {}
@@ -242,17 +241,18 @@ class LocalIPCServer(JSONServerThread):
 
 
 class JSONZmqClient(object):
-    def __init__(self, urls, receive_timeout_ms=200):
+    def __init__(self, urls, hwm=1, receive_timeout_ms=200):
         self._urls = urls if isinstance(urls, list) else [urls]
         self._receive_timeout = receive_timeout_ms
         self._context = None
         self._socket = None
+        self._hwm = hwm
         self._create(self._urls)
 
     def _create(self, locations):
         context = zmq.Context()
         socket = context.socket(zmq.REQ)
-        socket.set_hwm(1)
+        socket.set_hwm(self._hwm)
         socket.setsockopt(zmq.RCVTIMEO, self._receive_timeout)
         socket.setsockopt(zmq.LINGER, 0)
         [socket.connect(location) for location in locations]
