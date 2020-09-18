@@ -45,7 +45,6 @@ class ControlServerSocket(websocket.WebSocketHandler):
             self.viewers.add(self)
             logger.info("Viewer {} connected.".format(self.request.remote_ip))
         else:
-            self.operators.clear()
             self.operators.add(self)
             logger.info("Operator {} connected.".format(self.request.remote_ip))
 
