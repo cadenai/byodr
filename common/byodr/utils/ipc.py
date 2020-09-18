@@ -77,13 +77,15 @@ class JSONReceiver(object):
         self._subscriber = subscriber
         self._peek = not pop
         self._queue = collections.deque(maxlen=1)
+        self._lock = threading.Lock()
 
     def consume(self):
-        try:
-            # Does not replace local queue messages when none are available.
-            self._queue.appendleft(json.loads(receive_string(self._subscriber).split(':', 1)[1]))
-        except zmq.Again:
-            pass
+        with self._lock:
+            try:
+                # Does not replace local queue messages when none are available.
+                self._queue.appendleft(json.loads(receive_string(self._subscriber).split(':', 1)[1]))
+            except zmq.Again:
+                pass
 
     def get(self):
         return (self._queue[0] if self._peek else self._queue.popleft()) if self._queue else None
@@ -97,13 +99,17 @@ class CollectorThread(threading.Thread):
         self._quit_event = multiprocessing.Event() if event is None else event
 
     def get(self, index):
-        return self._receivers[index].get()
+        # Get the latest message.
+        _receiver = self._receivers[index]
+        _receiver.consume()
+        return _receiver.get()
 
     def quit(self):
         self._quit_event.set()
 
     def run(self):
         while not self._quit_event.is_set():
+            # Empty the receiver queues to not block upstream senders.
             map(lambda recv: recv.consume(), self._receivers)
 
 

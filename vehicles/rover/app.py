@@ -19,11 +19,16 @@ class Platform(Configurable):
     def __init__(self):
         super(Platform, self).__init__()
         self._gps_poller = GpsPollerThread()
+        self._velocity = 0
 
     def state(self, c_teleop):
         # The platform currently does not contain a speedometer.
         # Use throttle as the proxy.
-        y_vel = c_teleop.get('throttle', 0) if c_teleop else 0
+        y_vel = self._velocity
+        # The teleop command can be none sometimes on slow connections.
+        if c_teleop:
+            y_vel = c_teleop.get('throttle', 0)
+            self._velocity = y_vel
         return dict(x_coordinate=self._gps_poller.get_latitude(),
                     y_coordinate=self._gps_poller.get_longitude(),
                     heading=0,  # Tbd - get this from gps.

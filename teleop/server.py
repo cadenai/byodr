@@ -18,12 +18,15 @@ logger = logging.getLogger(__name__)
 
 class ControlServerSocket(websocket.WebSocketHandler):
     # There can be only one operator in control at any time.
+    # Do not use a single variable since class attributes mutate to be instance attributes.
     operators = set()
+    operator_access_times = collections.deque(maxlen=1)
     viewers = set()
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_control = kwargs.get('fn_control')
+        self._operator_timeout_micro = 60 * 1e6  # 60 seconds.
 
     def check_origin(self, origin):
         return True
@@ -32,13 +35,19 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        if len(self.operators) == 0 or next(iter(self.operators)).ws_connection is None:
+        # Perhaps the operator has timed-out but the control connection was not closed somehow.
+        if self.operators:
+            _last_msg_micro = self.operator_access_times[-1] if self.operator_access_times else 0
+            if (timestamp() - _last_msg_micro > self._operator_timeout_micro) or next(iter(self.operators)).ws_connection is None:
+                self.operators.clear()
+        # Proceed.
+        if self.operators:
+            self.viewers.add(self)
+            logger.info("Viewer {} connected.".format(self.request.remote_ip))
+        else:
             self.operators.clear()
             self.operators.add(self)
             logger.info("Operator {} connected.".format(self.request.remote_ip))
-        else:
-            self.viewers.add(self)
-            logger.info("Viewer {} connected.".format(self.request.remote_ip))
 
     def on_close(self):
         if self in self.operators:
@@ -52,7 +61,9 @@ class ControlServerSocket(websocket.WebSocketHandler):
         _response = json.dumps(dict(control='viewer'))
         if self in self.operators:
             msg = json.loads(json_message)
-            msg['time'] = timestamp()
+            _micro_time = timestamp()
+            msg['time'] = _micro_time
+            self.operator_access_times.append(_micro_time)
             self._fn_control(msg)
             _response = json.dumps(dict(control='operator'))
         try:
@@ -65,7 +76,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_state = kwargs.get('fn_state')
-        self._fn_speed_scale = kwargs.get('fn_speed_scale')
+        _fn_speed_scale = kwargs.get('fn_speed_scale')
+        self._speed_scale = _fn_speed_scale()
 
     def check_origin(self, origin):
         return True
@@ -109,7 +121,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
-            _speed_scale = self._fn_speed_scale()
+            _speed_scale = self._speed_scale
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),

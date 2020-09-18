@@ -511,14 +511,14 @@ class DriverManager(Configurable):
         self._driver.noop(blob)
         return blob
 
-    def next_action(self, command, vehicle, inference):
+    def next_action(self, teleop, vehicle, inference):
         with self._lock:
             # The blob time is now.
             # If downstream processes need the teleop time then use an extra attribute.
             blob = Blob(driver=self._driver_ctl,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
-                        **command)
+                        **teleop)
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
@@ -594,6 +594,7 @@ class CommandProcessor(Configurable):
             self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
 
     def next_action(self, *args):
+        # A higher patience for teleop commands allows to switch driver etc on slow connections.
         _patience, _ts = self._patience_micro, timestamp()
         # Any of these can be None, too old or repetitive.
         times = [None if arg is None else _ts - arg.get('time') for arg in args]
