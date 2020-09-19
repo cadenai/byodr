@@ -157,11 +157,11 @@
     <script src="jquery-3.4.1.min.js"></script>
     <script src="performance-polyfill.js?v=0.20"></script>
 	<script src="http-live-player.js?v=0.20"></script>
-	<script src="index_utils.js?v=0.20"></script>
-	<script src="index_gamepad.js?v=0.20.5b"></script>
-	<script src="index_teleop.js?v=0.20.5c"></script>
-	<script src="index_mjpeg.js?v=0.20"></script>
-	<script src="index_h264.js?v=0.20"></script>
+	<script src="index_utils.js?v=0.20.5c"></script>
+	<script src="index_gamepad.js?v=0.20.5e"></script>
+	<script src="index_teleop.js?v=0.20.5f"></script>
+	<script src="index_mjpeg.js?v=0.20.5c"></script>
+	<script src="index_h264.js?v=0.20.5c"></script>
 </head>
 <body>
 <div id="container" class="centered">
@@ -218,8 +218,40 @@ function mjpeg_caret_down() {
     mjpeg_controller.set_max_quality(mjpeg_controller.max_jpeg_quality - 5);
     mjpeg_refresh_page_values();
 }
+function start_all_handlers() {
+    teleop_start_all();
+    mjpeg_start_all();
+    h264_start_all();
+}
+function stop_all_handlers() {
+    teleop_stop_all();
+    mjpeg_stop_all();
+    h264_stop_all();
+}
+
+// Set the name of the hidden property and the change event for visibility
+var hidden, visibilityChange;
+if (typeof document.hidden !== "undefined") { // Opera 12.10 and Firefox 18 and later support
+  hidden = "hidden";
+  visibilityChange = "visibilitychange";
+} else if (typeof document.msHidden !== "undefined") {
+  hidden = "msHidden";
+  visibilityChange = "msvisibilitychange";
+} else if (typeof document.webkitHidden !== "undefined") {
+  hidden = "webkitHidden";
+  visibilityChange = "webkitvisibilitychange";
+}
+
+function handleVisibilityChange() {
+  if (document[hidden]) {
+    stop_all_handlers();
+  } else {
+    start_all_handlers();
+  }
+}
 
 $(function () {
+    window.history.pushState({}, 'application_index_loaded', '/');
     if (page_utils.get_stream_type() == 'mjpeg') {
         $('a#video_stream_mjpeg').addClass('active');
         $('a#video_stream_h264').addClass('inactive');
@@ -230,7 +262,10 @@ $(function () {
         $('a#video_stream_h264').addClass('active');
         $('div#mjpeg_stream_controls').hide();
     }
-    window.history.pushState({}, 'application_index_loaded', '/');
+    document.addEventListener(visibilityChange, handleVisibilityChange, false);
+    window.addEventListener('focus', start_all_handlers);
+    window.addEventListener('blur', stop_all_handlers);
+    start_all_handlers();
 });
 </script>
 </body>

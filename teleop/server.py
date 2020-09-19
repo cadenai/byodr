@@ -26,7 +26,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_control = kwargs.get('fn_control')
-        self._operator_timeout_micro = 60 * 1e6  # 60 seconds.
+        self._operator_timeout_micro = 10 * 1e6  # 10 seconds.
 
     def check_origin(self, origin):
         return True
@@ -39,6 +39,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
         if self.operators:
             _last_msg_micro = self.operator_access_times[-1] if self.operator_access_times else 0
             if (timestamp() - _last_msg_micro > self._operator_timeout_micro) or next(iter(self.operators)).ws_connection is None:
+                logger.info("Operator server-side timeout.")
                 self.operators.clear()
         # Proceed.
         if self.operators:
@@ -50,10 +51,13 @@ class ControlServerSocket(websocket.WebSocketHandler):
 
     def on_close(self):
         if self in self.operators:
-            self.operators.remove(self)
+            self.operators.clear()
             logger.info("Operator {} disconnected.".format(self.request.remote_ip))
         else:
-            self.viewers.remove(self)
+            try:
+                self.viewers.remove(self)
+            except KeyError:
+                pass
             logger.info("Viewer {} disconnected.".format(self.request.remote_ip))
 
     def on_message(self, json_message):

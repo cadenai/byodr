@@ -16,11 +16,12 @@ var socket_utils = {
             ws.binaryType = 'arraybuffer';
         }
         assign(ws);
-        var on_close = ws.onclose;
         ws.onclose = function() {
-            setTimeout(function() {socket_utils.create_socket(path, binary, reconnect, assign);}, reconnect);
-            if (typeof on_close === "function") {
-                on_close();
+            if (typeof ws.is_reconnect == "function" && ws.is_reconnect()) {
+                setTimeout(function() {socket_utils.create_socket(path, binary, reconnect, assign);}, reconnect);
+            }
+            if (typeof ws.on_close === "function") {
+                ws.on_close();
             }
         };
     }

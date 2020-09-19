@@ -3,6 +3,7 @@ if (page_utils.get_stream_type() == 'h264') {
         constructor(uri, reconnect_ms) {
             this.uri = uri;
             this.reconnect_ms = reconnect_ms;
+            this.attemt_reconnect = true;
         }
 
         onopen(player) {
@@ -10,26 +11,43 @@ if (page_utils.get_stream_type() == 'h264') {
         }
 
         onclose(player) {
-            setTimeout(function() {
-                player.connect(this.uri);
-            }, this.reconnect_ms);
+            if (this.attemt_reconnect) {
+                setTimeout(function() {player.connect(this.uri);}, this.reconnect_ms);
+            }
         }
     }
 
     var camera_player = {
         el_canvas: null,
         wsavc: null,
+        socket: null,
 
-        init: function(parent, port) {
+        start: function(parent, port) {
             this.el_canvas = document.createElement("canvas");
             parent.appendChild(this.el_canvas);
             uri = "ws://" + document.location.hostname + ':' + port;
-            this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", new CameraSocketResumer(uri, 100));
+            this.socket = new CameraSocketResumer(uri, 100);
+            this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", camera_socket);
             this.wsavc.connect(uri);
+        },
+        stop: function() {
+            if (this.socket != undefined) {
+                this.socket.attemt_reconnect = false;
+                this.wsavc.disconnect();
+                this.socket = null;
+            }
         }
     }
+}
 
-    document.addEventListener("DOMContentLoaded", function() {
-        camera_player.init(document.getElementById('camera1'), 9101);
-    });
+function h264_start_all() {
+    if (camera_player != undefined && camera_player.socket == undefined) {
+        camera_player.start(document.getElementById('camera1'), 9101);
+    }
+}
+
+function h264_stop_all() {
+    if (camera_player != undefined) {
+        camera_player.stop();
+    }
 }
