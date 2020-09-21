@@ -5,8 +5,6 @@ import os
 import sys
 from functools import partial
 
-import numpy as np
-
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.option import parse_option
@@ -96,9 +94,8 @@ class TFRunner(Configurable):
         critic = self._fn_corridor_norm(critic_out)
         surprise = self._fn_corridor_norm(surprise_out)
 
-        # The critic is a good indicator at inference time which is why the difference between them does not work.
-        # Using the geometric mean would lessen the impact of large differences between the values.
-        _corridor = np.mean([surprise, critic])
+        # The critic is a good indicator at inference time. Use it to scale the actor variance.
+        _corridor = 2 * (surprise / (critic + 1))
 
         # The decision points were made dependant on turn marked samples during training.
         _intention_index = maneuver_index(intention)
