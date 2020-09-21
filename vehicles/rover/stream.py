@@ -52,7 +52,7 @@ def main():
                             'port={}'.format(_tcp_port),
                             'sync=false',
                             'async=false'
-                            ])
+                            ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
 if __name__ == "__main__":

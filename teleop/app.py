@@ -122,7 +122,7 @@ def main():
             (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=(UserOptions(application.get_user_config_file())),
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", ApiSystemStateHandler, dict(fn_list_start_messages=list_process_start_messages)),
-            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.20.5e', permanent=False)),
+            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.20.6', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
         port = args.port

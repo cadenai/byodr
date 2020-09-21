@@ -92,10 +92,12 @@ if (page_utils.get_stream_type() == 'mjpeg') {
         camera_controller.clear_socket_timeout();
         camera_controller.socket_close_timer_id = setTimeout(function() {camera_controller.socket_close(socket);}, 1000);
         // E.g. '{"quality": 50, "display": "vga"}'
-        socket.send(JSON.stringify({
-            quality: mjpeg_controller.jpeg_quality,
-            display: mjpeg_controller.display_resolution
-        }));
+        if (socket != undefined && socket.readyState == 1) {
+            socket.send(JSON.stringify({
+                quality: mjpeg_controller.jpeg_quality,
+                display: mjpeg_controller.display_resolution
+            }));
+        }
     };
     camera_controller.start_socket = function() {
         socket_utils.create_socket("/ws/cam", true, 100, function(ws) {

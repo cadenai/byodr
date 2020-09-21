@@ -22,12 +22,16 @@ if (page_utils.get_stream_type() == 'h264') {
         wsavc: null,
         socket: null,
 
-        start: function(parent, port) {
-            this.el_canvas = document.createElement("canvas");
-            parent.appendChild(this.el_canvas);
+        init: function(el_parent) {
+            if (this.el_canvas == undefined) {
+                this.el_canvas = document.createElement("canvas");
+                el_parent.appendChild(this.el_canvas)
+            }
+        },
+        start: function(port) {
             uri = "ws://" + document.location.hostname + ':' + port;
             this.socket = new CameraSocketResumer(uri, 100);
-            this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", camera_socket);
+            this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", this.socket);
             this.wsavc.connect(uri);
         },
         stop: function() {
@@ -42,7 +46,8 @@ if (page_utils.get_stream_type() == 'h264') {
 
 function h264_start_all() {
     if (camera_player != undefined && camera_player.socket == undefined) {
-        camera_player.start(document.getElementById('camera1'), 9101);
+        camera_player.init(document.getElementById('camera1'));
+        camera_player.start(9101);
     }
 }
 
