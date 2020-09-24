@@ -109,3 +109,6 @@ data_root
 
 # Google protocol buffers
 *.pb
+
+# Read the docs
+/docs/rtd/site/
