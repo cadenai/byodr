@@ -50,7 +50,7 @@ Networks are configured with the following parties:
 > If the VPN-manager decides to operate a robot, he or she has to use a computer which is part of the network.
 > When a VPN-manager is responsible for multiple robots, all of them can be made accessible using the same network.  
 
-#### Procedure
+### Procedure
 
 MWLC creates a ZeroTier-account with an MWLC-email account and initiates a network.  
 Cloud-management of MWLC adds robots to this network.  
@@ -64,7 +64,7 @@ Most necessary functions are describe in this document but please be aware of an
 
 ## ZeroTier Hub 
 
-#### Log in
+### Log in
 
 Go to [my.zerotier.com/login](https://my.zerotier.com/login)
 
@@ -105,7 +105,7 @@ Adding computers is done in three steps.
 1. The VPN-manager authorises the computer.  
 
 
-#### Ad 1. The invitation
+### Ad 1. The invitation
 There are no special requirements to the invitation. At the bottom of the 'members' section there is a little tool. 
 By just filling in the email-address the proposed candidate gets all necessary information.  
 
@@ -114,7 +114,7 @@ By just filling in the email-address the proposed candidate gets all necessary i
 `If the VPN-manager already knows the nodeID, its possible to use ‘MANUALLY ADD MEMBER’ 
 and add the node directly to the network.`
 
-#### Ad 2. Create a new Node
+### Ad 2. Create a new Node
 To add a computer to the network, the computer has to run the ZeroTier-client.  
 Install the application from ZeroTier: [www.zerotier.com/download](https://www.zerotier.com/download)
 
@@ -133,7 +133,7 @@ Inform the VPN-manager of your nodeID so he or she can check if it appears in th
 on the complexity of the internet routes between your node and the other nodes.  
 Keep in mind that changing your IP number on the internet wil be seen as a trigger to recalculate the managed routes.  
 
-#### Ad 3. Authorisation of the computer by the VPN-manager
+### Ad 3. Authorisation of the computer by the VPN-manager
 The moment the computer has joined the network it can be authorised.  
 This authorisation has to be done by the VPN-manager
 
@@ -171,6 +171,8 @@ The VPN client makes the computers and robots part of a closed, virtual IP-netwo
 The ZeroTier infrastructure calculates the most optimal route between the nodes of the network. This is necessary to avoid delay in the 
 video-stream. If somewhere in the route changes are made a recalculation can be triggered.  
 If a computer is connected to the ZeroTier VPN a request will be first resolved in the VPN before going outside to the internet.
+
+---
 
 ### Connection issues
 
