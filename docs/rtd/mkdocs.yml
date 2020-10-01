@@ -1,5 +1,8 @@
 site_name: Byodr - Docs
 nav:
     - Home: index.md
-    - About: about.md
+    - Startup and maintenance: startup_manual.md
+    - ZeroTier VPN: zerotier_manual.md
+    - Controller and Browser: operator_manual.md
+    - Autopilot: autopilot_manual.md
 theme: readthedocs
