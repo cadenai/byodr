@@ -1,6 +1,6 @@
 # Build Your Own Delivery Robot
 
-![](img/robot_action_shot.png)
+![](img/autopilot/rover_front.png)
 
 Welcome, please feel free to browse or follow along the reading order as outlined below.
 

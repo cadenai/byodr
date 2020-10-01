@@ -5,4 +5,5 @@ nav:
     - ZeroTier VPN: zerotier_manual.md
     - Controller and Browser: operator_manual.md
     - Autopilot: autopilot_manual.md
+    - About: about.md
 theme: readthedocs

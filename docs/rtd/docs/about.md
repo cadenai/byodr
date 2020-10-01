@@ -2,6 +2,6 @@
 
 ### MWLC
 
-For more information please visit [mwlc.global](http://www.mwlc.global).  
+For more information please visit [www.mwlc.global](http://www.mwlc.global).  
 
 Thank you.
