@@ -20,7 +20,7 @@ To teach the robot to complete a route autonomously go through the following ste
 
 Press the red button on the outside of the casing.  
 
-![](img/autopilot/rover_front.png)
+![](img/autopilot/rover_front.jpg)
 
 > On the port side of the robot there is a red button that stops the engine when pressed.
 

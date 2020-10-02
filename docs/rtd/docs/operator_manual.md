@@ -11,7 +11,7 @@ Wait a few minutes until the robot's internal lights are on and you can hear the
 
 On your computer open chrome and type in the robot's [ZeroTier managed IP](zerotier_manual.md) in the browser address bar.  
 
-![](img/controller/ui_overview.png)
+![](img/controller/ui_overview.jpg)
 
 > On connection success the browser window should look like this (with a different view, perhaps).  
   In the top section of the screen you can see status information.
@@ -20,7 +20,7 @@ On your computer open chrome and type in the robot's [ZeroTier managed IP](zerot
 
 Press the `east` button twice to stop the robot.
 
-![](img/controller/ps4_teleop.png)
+![](img/controller/ps4_teleop.jpg)
 
 > 'East' is the rightmost button, red or with a red circle
 
@@ -74,7 +74,7 @@ Press `east` twice:
 * if the robot's engine is in sleep mode, start it, don’t drive the robot
 * if the robot is in autopilot mode; go to teleoperation mode and stop
 
-![](img/controller/ps4_teleop.png)
+![](img/controller/ps4_teleop.jpg)
 
 > Warning: if connections are lost, the robot will not respond. If you have physical access to the robot, press the red button, use the key
 > or simply move the robot aside by force.
@@ -176,7 +176,7 @@ Teleoperation has two sub modes:
 * Forward with braking or
 * Backward with braking  
 
-![](img/controller/ps4_forward_backward.png)
+![](img/controller/ps4_forward_backward.jpg)
 
 > There is no visual on screen indication of the sub mode.
 
@@ -201,13 +201,13 @@ Teleoperation has two sub modes:
     - move left/right, turn wheels 
     - move up/down, not in use
 
-![](img/controller/ps4_reverse_gear.png)
+![](img/controller/ps4_reverse_gear.jpg)
 
 ### Camera
 
 The camera has a pan and tilt function which can be operated using the controller.
 
-![](img/controller/ps4_camera.png)
+![](img/controller/ps4_camera.jpg)
 
 * `Left joystick`: Move to change the camera's pan and tilt positions
 * `South`: Move the camera to its preset home position
@@ -230,7 +230,7 @@ The autopilot can be overridden by commands from the operator:
 
 #### Instructions
 
-![](img/controller/ps4_overview.png)
+![](img/controller/ps4_overview.jpg)
 
 * `East`
     - wake up the controller and start the engine
@@ -269,7 +269,7 @@ The autopilot can be overridden by commands from the operator:
 
 #### Operator interventions overrule the autopilot 
 
-![](img/controller/ps4_forward_backward.png)
+![](img/controller/ps4_forward_backward.jpg)
 
 * `Left trigger` 
     - increase speed up to the set autopilot max speed   

@@ -5,5 +5,7 @@ nav:
     - ZeroTier VPN: zerotier_manual.md
     - Controller and Browser: operator_manual.md
     - Autopilot: autopilot_manual.md
+    - Assembly kit: mwlc_kit.md
+    - Order: mwlc_order.md
     - About: about.md
 theme: readthedocs
