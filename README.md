@@ -5,7 +5,7 @@ An unmanned vehicle is built to be smaller, cheaper and more energy efficient, b
 Such a vehicle requires teleoperation by an operator and self-driving software.  
 This project comprises the set of software services that run this rover and others like it.  
 
-[![](docs/rtd/docs/img/readme/rover_front_small.jpg)](https://vimeo.com/461308029 "Type 'Industrial'")
+[![](docs/img/readme/rover_front_small.jpg)](https://vimeo.com/461308029 "Type 'Industrial'")
 
 > We went ahead and designed a rover that can be assembled from **generally available** components on the internet.  
 
