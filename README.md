@@ -3,6 +3,7 @@
 Routine transport of small goods - packages, medicine, inspection equipment - can be done autonomously with simple routes. 
 An unmanned vehicle is built to be smaller, cheaper and more energy efficient, because there is no driver on board. 
 Such a vehicle requires teleoperation by an operator and self-driving software.  
+  
 This project comprises the set of software services that run this rover and others like it.  
 
 [![](docs/img/readme/rover_front_small.jpg)](https://vimeo.com/461308029 "Type 'Industrial'")
