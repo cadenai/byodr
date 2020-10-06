@@ -175,7 +175,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
     def initialize(self, **kwargs):
         self._capture_front = kwargs.get('capture_front')
         self._capture_rear = kwargs.get('capture_rear')
-        self._black_img = np.zeros(shape=(240, 320, 3), dtype=np.uint8)
+        self._black_img = np.zeros(shape=(1, 1, 3), dtype=np.uint8)
 
     def check_origin(self, origin):
         return True
