@@ -2,10 +2,11 @@
 <head>
     <meta charset="UTF-8">
     <title>Teleop</title>
+    <link rel="stylesheet" href="jquery/jquery-ui-1.12.1.min.css">
     <style type="text/css">
         html {
           height: 100%;
-          background-image: linear-gradient(to top, white, black);
+          background-image: linear-gradient(to top, black, black);
         }
 
         body {
@@ -58,7 +59,7 @@
         }
 
         div#dashboard {
-            margin: 0 0 0 30%;
+            margin: 0 0 0 20%;
         }
 
         img#arrow {
@@ -99,7 +100,7 @@
           font-family: "Lucida Console";
           font-size: 10px;
           float: right;
-          margin: 5px 0 0 50px;
+          margin: 0 0 3px 50px;;
         }
         div#debug_values > p {
           margin-block-start: 0;
@@ -142,6 +143,14 @@
         div#mjpeg_stream_controls > img#caret_down {
             margin-left: 3px;
         }
+        div#preview_cameras {
+            margin: 15px 0 0 5px;
+        }
+        div#preview_cameras img {
+            width: 60px;
+            height: 40px;
+            border: 1px solid white;
+        }
         span#autopilot_status {
             display: inline-block;
             width: 45px;
@@ -153,8 +162,20 @@
             width: 50px;
             height: 50px;
         }
+        img#mjpeg_front_camera_main_image {
+            width: 1280px;
+            height: 720px;
+            border: 1px solid white;
+            border-radius: 5px;
+        }
+        img#mjpeg_rear_camera_main_image {
+            width: 320px;
+            height: 240px;
+            border: 1px solid white;
+        }
     </style>
-    <script src="jquery-3.4.1.min.js"></script>
+    <script src="jquery/jquery-3.4.1.min.js"></script>
+    <script src="jquery/jquery-ui-1.12.1.min.js"></script>
     <script src="performance-polyfill.js?v=0.20.7"></script>
 	<script src="http-live-player.js?v=0.20.7"></script>
 	<script src="index_utils.js?v=0.20.7"></script>
@@ -180,6 +201,10 @@
                 <img id="caret_down" src='caret.png?v=0.20.7' onclick="mjpeg_caret_down();"/>
                 <img id="caret_up" src='caret.png?v=0.20.7' onclick="mjpeg_caret_up();"/>
             </div>
+            <div id="preview_cameras" class="left">
+                <img id="camera0_preview"/>
+                <img id="camera1_preview"/>
+            </div>
             <div id="dashboard" class="left">
                 <span id="autopilot_status"></span>
                 <img id="arrow"/>
@@ -201,21 +226,21 @@
                 <p class="debug_line"><span id="inference_fps">0</span>&nbsp;fps</p>
             </div>
         </div>
-        <div id="camera1"></div>
+        <div id="cameras_container"></div>
     </div>
 </div>
 <script type="text/javascript">
 function mjpeg_refresh_page_values() {
-    $('span#mjpeg_quality_val').text(mjpeg_controller.max_jpeg_quality);
+    $('span#mjpeg_quality_val').text(mjpeg_page_controller.get_max_quality());
 }
 
 function mjpeg_caret_up() {
-    mjpeg_controller.set_max_quality(mjpeg_controller.max_jpeg_quality + 5);
+    mjpeg_page_controller.increase_quality();
     mjpeg_refresh_page_values();
 }
 
 function mjpeg_caret_down() {
-    mjpeg_controller.set_max_quality(mjpeg_controller.max_jpeg_quality - 5);
+    mjpeg_page_controller.decrease_quality();
     mjpeg_refresh_page_values();
 }
 function start_all_handlers() {

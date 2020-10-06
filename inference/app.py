@@ -185,7 +185,7 @@ def main():
     collector = CollectorThread(receivers=(pilot, ipc_chatter), event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
-    application.camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
+    application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/inference_c.sock', name='inference', event=quit_event)
     application.pilot = lambda: collector.get(0)
     application.ipc_chatter = lambda: collector.get(1)

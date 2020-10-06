@@ -59,8 +59,9 @@ class ImagePublisher(object):
         self._publisher = publisher
         self._topic = topic
 
-    def publish(self, _img):
-        self._publisher.send_multipart([self._topic,
+    def publish(self, _img, topic=None):
+        _topic = self._topic if topic is None else topic
+        self._publisher.send_multipart([_topic,
                                         json.dumps(dict(time=timestamp(), shape=_img.shape)),
                                         np.ascontiguousarray(_img, dtype=np.uint8)],
                                        flags=zmq.NOBLOCK)

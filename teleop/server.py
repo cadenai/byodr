@@ -173,7 +173,8 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._capture = kwargs.get('fn_capture')
+        self._capture_front = kwargs.get('capture_front')
+        self._capture_rear = kwargs.get('capture_rear')
         self._black_img = np.zeros(shape=(240, 320, 3), dtype=np.uint8)
 
     def check_origin(self, origin):
@@ -192,8 +193,9 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         try:
             request = json.loads(message)
             quality = request.get('quality', 90)
+            camera = request.get('camera', 'front').strip().lower()
             display = request.get('display', 'HVGA').strip().upper()
-            img = self._capture()
+            img = self._capture_front() if camera == 'front' else self._capture_rear()
             if img is None:
                 # Always send something to the client is able to resume polling.
                 img = self._black_img
