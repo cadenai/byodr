@@ -88,10 +88,26 @@ class RoverHandler(Configurable):
             errors.extend(item.get_errors())
         return errors
 
+    def _cycle_ptz_cameras(self, c_pilot, c_teleop):
+        # The front camera ptz function is enabled for teleop direct driving only.
+        # Set the front camera to the home position anytime the autopilot is switched on.
+        if self._ptz_cameras and c_teleop is not None:
+            c_camera = c_teleop.get('camera_id', -1)
+            button_north_pressed = bool(c_teleop.get('button_y', 0))
+            if button_north_pressed:
+                self._ptz_cameras[0].add({'goto_home': 1})
+            elif c_camera in (0, 1) and (c_camera == 1 or (c_pilot is not None and c_pilot.get('driver') == 'driver_mode.teleop.direct')):
+                button_south_pressed = bool(c_teleop.get('button_a', 0))
+                button_west_pressed = bool(c_teleop.get('button_x', 0))
+                command = {'pan': c_teleop.get('pan', 0),
+                           'tilt': c_teleop.get('tilt', 0),
+                           'set_home': 1 if button_west_pressed else 0,
+                           'goto_home': 1 if button_south_pressed else 0
+                           }
+                self._ptz_cameras[c_camera].add(command)
+
     def cycle(self, c_pilot, c_teleop):
-        if self._ptz_cameras:
-            # TBD route to correct camera.
-            self._ptz_cameras[0].add(c_pilot, c_teleop)
+        self._cycle_ptz_cameras(c_pilot, c_teleop)
         map(lambda x: x.check(), self._gst_sources)
         return self._vehicle.state(c_teleop)
 
