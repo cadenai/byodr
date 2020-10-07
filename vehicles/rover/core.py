@@ -93,10 +93,9 @@ class CameraPtzThread(threading.Thread):
             ret = requests.put(self._url + '/continuous', data=self._ptz_xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
         return ret
 
-    def add(self, pilot, teleop):
+    def add(self, command):
         try:
-            if pilot and pilot.get('driver') == 'driver_mode.teleop.direct' and teleop:
-                self._queue.put_nowait(teleop)
+            self._queue.put_nowait(command)
         except Queue.Full:
             pass
 
@@ -109,9 +108,9 @@ class CameraPtzThread(threading.Thread):
                 cmd = self._queue.get(block=True, timeout=0.050)
                 with self._lock:
                     operation = (0, 0)
-                    if cmd.get('button_x', 0):
-                        operation = ('set_home', cmd.get('button_a', 0))
-                    elif any([cmd.get(k, 0) for k in ('button_y', 'button_a')]):
+                    if cmd.get('set_home', 0):
+                        operation = ('set_home', cmd.get('goto_home', 0))
+                    elif cmd.get('goto_home', 0):
                         operation = 'goto_home'
                     elif 'pan' in cmd and 'tilt' in cmd:
                         operation = (self._norm(cmd.get('pan')) * self._flip[0], self._norm(cmd.get('tilt')) * self._flip[1])
@@ -124,18 +123,18 @@ class PTZCamera(Configurable):
     def __init__(self, position):
         super(PTZCamera, self).__init__()
         self._position = position
-        self._camera = None
+        self._worker = None
 
-    def add(self, pilot, teleop):
+    def add(self, command):
         with self._lock:
-            if self._camera:
-                self._camera.add(pilot, teleop)
+            if self._worker and command:
+                self._worker.add(command)
 
     def internal_quit(self, restarting=False):
-        if self._camera:
-            self._camera.quit()
-            self._camera.join()
-            self._camera = None
+        if self._worker:
+            self._worker.quit()
+            self._worker.join()
+            self._worker = None
 
     def internal_start(self, **kwargs):
         errors = []
@@ -156,17 +155,17 @@ class PTZCamera(Configurable):
             _port = 80 if _protocol == 'http' else 443
             _url = '{protocol}://{server}:{port}{path}'.format(**dict(protocol=_protocol, server=_server, port=_port, path=_path))
             logger.info("PTZ camera url={}.".format(_url))
-            if self._camera is None:
-                self._camera = CameraPtzThread(_url, _user, _password, speed=_speed, flip=_flipcode)
-                self._camera.start()
+            if self._worker is None:
+                self._worker = CameraPtzThread(_url, _user, _password, speed=_speed, flip=_flipcode)
+                self._worker.start()
             elif len(errors) == 0:
-                self._camera.set_url(_url)
-                self._camera.set_auth(_user, _password)
-                self._camera.set_speed(_speed)
-                self._camera.set_flip(_flipcode)
+                self._worker.set_url(_url)
+                self._worker.set_auth(_user, _password)
+                self._worker.set_speed(_speed)
+                self._worker.set_flip(_flipcode)
         # Already under lock.
-        elif self._camera:
-            self._camera.quit()
+        elif self._worker:
+            self._worker.quit()
         return errors
 
 
