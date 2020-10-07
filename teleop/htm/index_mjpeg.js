@@ -1,6 +1,7 @@
 class MJPEGFrameController {
     constructor() {
-        this.target_fps = 16;
+        this.actual_fps = 0;
+        this.target_fps = 1;
         this.max_jpeg_quality = 50;
         this.display_resolution = 'HVGA';
         this.jpeg_quality = 20;
@@ -9,7 +10,12 @@ class MJPEGFrameController {
         this.request_time = 0;
         this.request_timeout = 0;
         // larger = more smoothing
-        this.request_time_smoothing = 0.01;
+        this.request_time_smoothing = 0.20;
+        this.request_target_timeout = 0;
+        this.set_target_fps(16);
+    }
+    set_target_fps(v) {
+        this.target_fps = v;
         this.request_target_timeout = 1000. / this.target_fps;
     }
     update_framerate() {
@@ -22,6 +28,7 @@ class MJPEGFrameController {
         var actual_fps = Math.round(1000 / this.request_time);
         var q_step = Math.min(1, Math.max(-1, actual_fps - this.target_fps));
         this.jpeg_quality = Math.min(this.max_jpeg_quality, Math.max(this.min_jpeg_quality, this.jpeg_quality + q_step));
+        this.actual_fps = actual_fps;
     }
 }
 
@@ -126,6 +133,7 @@ class CameraController {
 // One for each camera.
 var front_camera_frame_controller = new MJPEGFrameController();
 var rear_camera_frame_controller = new MJPEGFrameController();
+rear_camera_frame_controller.set_target_fps(2);
 
 // Accessed outside of this module.
 var mjpeg_page_controller = {
@@ -184,30 +192,23 @@ document.addEventListener("DOMContentLoaded", function() {
         var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
         rear_camera_preview.src = _blob;
         rear_camera_main.src = _blob;
+        $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
     });
 
-    const rear_camera_target_fps = rear_camera_frame_controller.target_fps;
+    // The rear camera starts out as hidden.
+    teleop_screen.on_hide_rear_camera();
 
     $("img#mjpeg_rear_camera_preview_image").click(function() {
         if ($(rear_camera_container).is(":visible")) {
             $(rear_camera_container).fadeOut('fast');
             $(rear_camera_preview).toggleClass('active');
-            rear_camera_frame_controller.target_fps = 2;
-            if (teleop_screen.is_camera_selected(1)) {
-                teleop_screen.select_camera(-1);
-            }
+            rear_camera_frame_controller.set_target_fps(2);
+            teleop_screen.on_hide_rear_camera();
         } else {
             $(rear_camera_container).fadeIn('fast');
             $(rear_camera_preview).toggleClass('active');
-            rear_camera_frame_controller.target_fps = rear_camera_target_fps;
-        }
-    });
-
-    $("img#mjpeg_rear_camera_main_image").click(function() {
-        if (teleop_screen.is_camera_selected(1)) {
-            teleop_screen.select_camera(-1);
-        } else {
-            teleop_screen.select_camera(1);
+            rear_camera_frame_controller.set_target_fps(16);
+            teleop_screen.on_show_rear_camera();
         }
     });
 });
@@ -225,24 +226,17 @@ if (page_utils.get_stream_type() == 'mjpeg') {
 
         front_camera = new CameraController('front', front_camera_frame_controller, function(im_data) {
             front_camera_main.src = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
-        });
-
-        $("img#mjpeg_front_camera_main_image").click(function() {
-            if (teleop_screen.is_camera_selected(0)) {
-                teleop_screen.select_camera(-1);
-            } else {
-                teleop_screen.select_camera(0);
-            }
+            $('span#front_camera_framerate').text(front_camera_frame_controller.actual_fps.toFixed(0));
         });
     });
 }
 
-teleop_screen.add_camera_selection_listener(function(previous_id, current_id) {
+teleop_screen.add_camera_selection_listener(function(current) {
     $("img#mjpeg_front_camera_main_image").removeClass('selected');
     $("img#mjpeg_rear_camera_main_image").removeClass('selected');
-    if (current_id == 0) {
+    if (current == 'front') {
         $("img#mjpeg_front_camera_main_image").addClass('selected');
-    } else if (current_id == 1) {
+    } else if (current == 'rear') {
         $("img#mjpeg_rear_camera_main_image").addClass('selected');
     }
 });

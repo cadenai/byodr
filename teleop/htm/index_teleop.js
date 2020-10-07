@@ -8,7 +8,8 @@ var teleop_screen = {
     c_msg_connection_lost: "Connection lost - please wait or refresh the page.",
     c_msg_controller_err: "Controller not detected - please press a button on the device.",
     c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
-    selected_camera_id: -1,
+    selectable_cameras: ['none', 'front', 'rear'],
+    selected_camera: 'none',
     camera_selection_listeners: [],
     camera_cycle_timer: null,
 
@@ -16,28 +17,37 @@ var teleop_screen = {
         this.camera_selection_listeners.push(cb);
     },
 
-    notify_camera_selection_listeners: function(previous_id, current_id) {
+    notify_camera_selection_listeners: function(current) {
         this.camera_selection_listeners.forEach(function(cb) {
-            cb(previous_id, current_id);
+            cb(current);
         });
     },
 
-    is_camera_selected: function(idx) {
-        return this.selected_camera_id == idx;
+    is_camera_selected: function(name) {
+        return this.selected_camera == name;
     },
 
-    select_camera: function(idx) {
-        if (idx > 1) {
-            idx = -1;
-        } else if (idx < -1) {
-            idx = 1;
+    on_hide_rear_camera: function() {
+        if (this.selectable_cameras.indexOf('rear') != -1) {
+            this.selectable_cameras.pop();
         }
-        const previous_id = this.selected_camera_id;
-        this.selected_camera_id = idx;
-        this.notify_camera_selection_listeners(previous_id, this.selected_camera_id);
+        if (this.is_camera_selected('rear')) {
+            this.select_camera('none');
+        }
     },
 
-    request_camera_selection: function(direction) {
+    on_show_rear_camera: function() {
+        if (this.selectable_cameras.indexOf('rear') == -1) {
+            this.selectable_cameras.push('rear');
+        }
+    },
+
+    select_camera: function(name) {
+        this.selected_camera = name;
+        this.notify_camera_selection_listeners(this.selected_camera);
+    },
+
+    request_camera_cycle: function(direction) {
         if (this.camera_cycle_timer == undefined) {
             this.camera_cycle_timer = setTimeout(function() {teleop_screen.cycle_camera_selection(direction);}, 250);
         }
@@ -45,9 +55,17 @@ var teleop_screen = {
 
     cycle_camera_selection: function(direction) {
         if (direction == 'clockwise') {
-            this.select_camera(this.selected_camera_id + 1);
+            idx = this.selectable_cameras.indexOf(this.selected_camera) + 1;
+            if (idx >= this.selectable_cameras.length) {
+                idx = 0;
+            }
+            this.select_camera(this.selectable_cameras[idx]);
         } else {
-            this.select_camera(this.selected_camera_id - 1);
+            idx = this.selectable_cameras.indexOf(this.selected_camera) - 1;
+            if (idx < 0) {
+                idx = this.selectable_cameras.length - 1;
+            }
+            this.select_camera(this.selectable_cameras[idx]);
         }
         this.camera_cycle_timer = null;
     },
@@ -79,9 +97,9 @@ var teleop_screen = {
         }
         //
         if (command.arrow_left) {
-            this.request_camera_selection('counter_clockwise');
+            this.request_camera_cycle('counter_clockwise');
         } else if (command.arrow_right) {
-            this.request_camera_selection('clockwise');
+            this.request_camera_cycle('clockwise');
         }
     }
 }
@@ -97,7 +115,12 @@ gamepad_controller.capture = function(cs_response) {
         command.throttle = ct.throttle;
         command.pan = ct.pan;
         command.tilt = ct.tilt;
-        command.camera_id = teleop_screen.selected_camera_id;
+        command.camera_id = -1;
+        if (teleop_screen.selected_camera == 'front') {
+            command.camera_id = 0;
+        } else if (teleop_screen.selected_camera == 'rear') {
+            command.camera_id = 1;
+        }
         if (ct.button_center) {
             command.button_center = ct.button_center;
         }

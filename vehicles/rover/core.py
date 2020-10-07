@@ -201,11 +201,12 @@ class GstSource(Configurable):
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
         self._camera_shape = _shape
+        # Do not use our method - already under lock.
+        if self._source:
+            self._source.close()
+        #
         _enabled = parse_option(self._position + '.camera.enabled', (lambda v: bool(int(v))), False, _errors, **kwargs)
         if _enabled and len(_errors) == 0:
-            # Do not use our method - already under lock.
-            if self._source:
-                self._source.close()
             _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
                 **dict(user=_user, password=_password, ip=_server, port=_rtsp_port, path=_rtsp_path)
             )
