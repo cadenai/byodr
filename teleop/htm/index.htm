@@ -101,7 +101,7 @@
           font-family: "Lucida Console";
           font-size: 10px;
           float: right;
-          margin: 0 0 1px 50px;
+          margin: 1px 0 1px 50px;
         }
         div#debug_values > p {
           margin-block-start: 0;
@@ -159,30 +159,45 @@
             margin: 15px 0 0 5px;
         }
         div#preview_container img {
-            width: 60px;
-            height: 40px;
+            width: 80px;
+            height: 45px;
+            border-radius: 3px;
             border: 1px solid grey;
         }
         div#preview_container img.active {
-            border: 1px solid white;
         }
         div#viewport_container {
+        }
+        canvas#h264_front_camera_main_image {
+            width: 1280px;
+            height: 720px;
+            border-radius: 5px;
+            border: 1px solid grey;
+        }
+        canvas#h264_front_camera_main_image.selected {
+            border: 2px solid cyan;
         }
         div#mjpeg_rear_camera_main_container {
         }
         img#mjpeg_rear_camera_main_image {
             width: 1280px;
             height: 120px;
-            border: 1px solid white;
             border-radius: 5px;
+            border: 1px solid grey;
+        }
+        img#mjpeg_rear_camera_main_image.selected {
+            border: 2px solid cyan;
         }
         div#mjpeg_front_camera_main_container {
         }
         img#mjpeg_front_camera_main_image {
             width: 1280px;
             height: 720px;
-            border: 1px solid white;
             border-radius: 5px;
+            border: 1px solid grey;
+        }
+        img#mjpeg_front_camera_main_image.selected {
+            border: 2px solid cyan;
         }
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>

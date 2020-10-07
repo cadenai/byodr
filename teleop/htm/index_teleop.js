@@ -8,8 +8,51 @@ var teleop_screen = {
     c_msg_connection_lost: "Connection lost - please wait or refresh the page.",
     c_msg_controller_err: "Controller not detected - please press a button on the device.",
     c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
+    selected_camera_id: -1,
+    camera_selection_listeners: [],
+    camera_cycle_timer: null,
 
-    update: function() {
+    add_camera_selection_listener: function(cb) {
+        this.camera_selection_listeners.push(cb);
+    },
+
+    notify_camera_selection_listeners: function(previous_id, current_id) {
+        this.camera_selection_listeners.forEach(function(cb) {
+            cb(previous_id, current_id);
+        });
+    },
+
+    is_camera_selected: function(idx) {
+        return this.selected_camera_id == idx;
+    },
+
+    select_camera: function(idx) {
+        if (idx > 1) {
+            idx = -1;
+        } else if (idx < -1) {
+            idx = 1;
+        }
+        const previous_id = this.selected_camera_id;
+        this.selected_camera_id = idx;
+        this.notify_camera_selection_listeners(previous_id, this.selected_camera_id);
+    },
+
+    request_camera_selection: function(direction) {
+        if (this.camera_cycle_timer == undefined) {
+            this.camera_cycle_timer = setTimeout(function() {teleop_screen.cycle_camera_selection(direction);}, 250);
+        }
+    },
+
+    cycle_camera_selection: function(direction) {
+        if (direction == 'clockwise') {
+            this.select_camera(this.selected_camera_id + 1);
+        } else {
+            this.select_camera(this.selected_camera_id - 1);
+        }
+        this.camera_cycle_timer = null;
+    },
+
+    update: function(command) {
         is_connection_ok = teleop_screen.is_connection_ok;
         controller_status = teleop_screen.controller_status;
         c_msg_connection_lost = teleop_screen.c_msg_connection_lost;
@@ -34,57 +77,70 @@ var teleop_screen = {
         } else {
             message_box.hide();
         }
+        //
+        if (command.arrow_left) {
+            this.request_camera_selection('counter_clockwise');
+        } else if (command.arrow_right) {
+            this.request_camera_selection('clockwise');
+        }
     }
 }
 
 gamepad_controller.capture = function(cs_response) {
     gc = gamepad_controller;
     ct = gc.controller;
-    msg = {};
+    command = {};
     gc_active = ct.poll();
     if (gc_active) {
         // Skip buttons when not pressed to save bandwidth.
-        msg.steering = ct.steering;
-        msg.throttle = ct.throttle;
-        msg.pan = ct.pan;
-        msg.tilt = ct.tilt;
+        command.steering = ct.steering;
+        command.throttle = ct.throttle;
+        command.pan = ct.pan;
+        command.tilt = ct.tilt;
+        command.camera_id = teleop_screen.selected_camera_id;
         if (ct.button_center) {
-            msg.button_center = ct.button_center;
+            command.button_center = ct.button_center;
         }
         if (ct.button_left) {
-            msg.button_left = ct.button_left;
+            command.button_left = ct.button_left;
         }
         if (ct.button_right) {
-            msg.button_right = ct.button_right;
+            command.button_right = ct.button_right;
         }
         if (ct.button_a) {
-            msg.button_a = ct.button_a;
+            command.button_a = ct.button_a;
         }
         if (ct.button_b) {
-            msg.button_b = ct.button_b;
+            command.button_b = ct.button_b;
         }
         if (ct.button_x) {
-            msg.button_x = ct.button_x;
+            command.button_x = ct.button_x;
         }
         if (ct.button_y) {
-            msg.button_y = ct.button_y;
+            command.button_y = ct.button_y;
         }
         if (ct.arrow_up) {
-            msg.arrow_up = ct.arrow_up;
+            command.arrow_up = ct.arrow_up;
         }
         if (ct.arrow_down) {
-            msg.arrow_down = ct.arrow_down;
+            command.arrow_down = ct.arrow_down;
+        }
+        if (ct.arrow_left) {
+            command.arrow_left = ct.arrow_left;
+        }
+        if (ct.arrow_right) {
+            command.arrow_right = ct.arrow_right;
         }
     }
     if (gc.socket != undefined && gc.socket.readyState == 1) {
-        gc.socket.send(JSON.stringify(msg));
+        gc.socket.send(JSON.stringify(command));
     }
     if (cs_response != undefined && cs_response.control == 'operator') {
         teleop_screen.controller_status = gc_active;
     } else if (cs_response != undefined) {
         teleop_screen.controller_status = 2;
     }
-    teleop_screen.update();
+    teleop_screen.update(command);
 }
 gamepad_controller.start_socket = function() {
     socket_utils.create_socket("/ws/ctl", false, 100, function(ws) {
@@ -100,13 +156,13 @@ gamepad_controller.start_socket = function() {
         };
         ws.onclose = function() {
             teleop_screen.is_connection_ok = 0;
-            teleop_screen.update();
+            teleop_screen.update({});
             console.log("Operator socket connection was closed.");
         };
         ws.onerror = function() {
             teleop_screen.controller_status = gamepad_controller.controller.poll();
             teleop_screen.is_connection_ok = 0;
-            teleop_screen.update();
+            teleop_screen.update({});
         };
         ws.onmessage = function(evt) {
             var message = JSON.parse(evt.data);

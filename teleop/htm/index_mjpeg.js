@@ -166,11 +166,12 @@ mjpeg_page_controller.init([front_camera_frame_controller, rear_camera_frame_con
 document.addEventListener("DOMContentLoaded", function() {
     rear_camera_preview = document.createElement("img");
     rear_camera_preview.id = 'mjpeg_rear_camera_preview_image';
-    rear_camera_preview.classList.add("active");
+    // rear_camera_preview.classList.add("active");
     document.getElementById('preview_container').appendChild(rear_camera_preview);
 
     rear_camera_container = document.createElement("div");
     rear_camera_container.id = 'mjpeg_rear_camera_main_container';
+    rear_camera_container.hidden = true;
     rear_camera_main = document.createElement("img");
     rear_camera_main.id = 'mjpeg_rear_camera_main_image';
     rear_camera_container.appendChild(rear_camera_main);
@@ -192,10 +193,21 @@ document.addEventListener("DOMContentLoaded", function() {
             $(rear_camera_container).fadeOut('fast');
             $(rear_camera_preview).toggleClass('active');
             rear_camera_frame_controller.target_fps = 2;
+            if (teleop_screen.is_camera_selected(1)) {
+                teleop_screen.select_camera(-1);
+            }
         } else {
             $(rear_camera_container).fadeIn('fast');
             $(rear_camera_preview).toggleClass('active');
             rear_camera_frame_controller.target_fps = rear_camera_target_fps;
+        }
+    });
+
+    $("img#mjpeg_rear_camera_main_image").click(function() {
+        if (teleop_screen.is_camera_selected(1)) {
+            teleop_screen.select_camera(-1);
+        } else {
+            teleop_screen.select_camera(1);
         }
     });
 });
@@ -214,8 +226,26 @@ if (page_utils.get_stream_type() == 'mjpeg') {
         front_camera = new CameraController('front', front_camera_frame_controller, function(im_data) {
             front_camera_main.src = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
         });
+
+        $("img#mjpeg_front_camera_main_image").click(function() {
+            if (teleop_screen.is_camera_selected(0)) {
+                teleop_screen.select_camera(-1);
+            } else {
+                teleop_screen.select_camera(0);
+            }
+        });
     });
 }
+
+teleop_screen.add_camera_selection_listener(function(previous_id, current_id) {
+    $("img#mjpeg_front_camera_main_image").removeClass('selected');
+    $("img#mjpeg_rear_camera_main_image").removeClass('selected');
+    if (current_id == 0) {
+        $("img#mjpeg_front_camera_main_image").addClass('selected');
+    } else if (current_id == 1) {
+        $("img#mjpeg_rear_camera_main_image").addClass('selected');
+    }
+});
 
 function mjpeg_start_all() {
     if (rear_camera != undefined && rear_camera.socket == undefined) {
