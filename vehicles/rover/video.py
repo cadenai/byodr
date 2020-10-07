@@ -10,7 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class GstRawSource(object):
-    def __init__(self, boot_time_seconds=20, fn_callback=None, command="videotestsrc ! decodebin ! videoconvert"):
+    def __init__(self, name='raw', boot_time_seconds=20, fn_callback=None, command="videotestsrc ! decodebin ! videoconvert"):
+        self.name = name
         self.boot_time_seconds = boot_time_seconds
         self.fn_callback = fn_callback
         Gst.init(None)
@@ -44,7 +45,7 @@ class GstRawSource(object):
         bus.connect('message::error', self._error)
         self.closed = False
         self._callback_time = time.time() + self.boot_time_seconds
-        logger.info("Source opened.")
+        logger.info("Source {} opened.".format(self.name))
 
     def _callback(self, sink):
         sample = sink.emit('pull-sample')
@@ -74,4 +75,4 @@ class GstRawSource(object):
         if self.video_pipe is not None:
             self.video_pipe.set_state(Gst.State.NULL)
         self.closed = True
-        logger.info("Source closed.")
+        logger.info("Source {} closed.".format(self.name))

@@ -21,11 +21,11 @@ def main():
     camera_cfg = dict(parser.items('camera'))
 
     errors = []
-    _server = parse_option('camera.ip', str, errors=errors, **camera_cfg)
-    _user = parse_option('camera.user', str, errors=errors, **camera_cfg)
-    _password = parse_option('camera.password', str, errors=errors, **camera_cfg)
-    _rtsp_port = parse_option('camera.rtsp.port', int, 0, errors=errors, **camera_cfg)
-    _rtsp_path = parse_option('camera.stream.path', str, errors=errors, **camera_cfg)
+    _server = parse_option('front.camera.ip', str, errors=errors, **camera_cfg)
+    _user = parse_option('front.camera.user', str, errors=errors, **camera_cfg)
+    _password = parse_option('front.camera.password', str, errors=errors, **camera_cfg)
+    _rtsp_port = parse_option('front.camera.rtsp.port', int, 0, errors=errors, **camera_cfg)
+    _rtsp_path = parse_option('front.camera.stream.path', str, errors=errors, **camera_cfg)
     _tcp_port = 5101
 
     _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(

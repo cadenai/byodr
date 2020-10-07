@@ -29,7 +29,7 @@ if (page_utils.get_stream_type() == 'h264') {
         start: function(port) {
             uri = "ws://" + document.location.hostname + ':' + port;
             this.socket = new CameraSocketResumer(uri, 100);
-            this.wsavc = new WSAvcPlayer(this.el_canvas, "2d", this.socket);
+            this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", this.socket);
             this.wsavc.connect(uri);
         },
         stop: function() {

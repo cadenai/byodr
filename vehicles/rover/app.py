@@ -9,7 +9,7 @@ from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, CollectorThread, JSONReceiver
 from byodr.utils.option import parse_option, hash_dict
-from core import GpsPollerThread, PTZCamera, GstSource
+from core import GpsPollerThread, GstSource, PTZCamera
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -46,13 +46,13 @@ class Platform(Configurable):
 
 
 class RoverHandler(Configurable):
-    def __init__(self, gst_source, platform=None, ptz_camera=None):
+    def __init__(self):
         super(RoverHandler, self).__init__()
-        self._gst_source = gst_source
-        self._vehicle = Platform() if platform is None else platform
-        self._camera = PTZCamera() if ptz_camera is None else ptz_camera
+        self._vehicle = Platform()
         self._process_frequency = 10
         self._patience_micro = 100.
+        self._gst_sources = []
+        self._ptz_cameras = []
 
     def get_process_frequency(self):
         return self._process_frequency
@@ -66,21 +66,33 @@ class RoverHandler(Configurable):
     def internal_quit(self, restarting=False):
         if not restarting:
             self._vehicle.quit()
-            self._camera.quit()
-            self._gst_source.quit()
+            map(lambda x: x.quit(), self._ptz_cameras)
+            map(lambda x: x.quit(), self._gst_sources)
 
     def internal_start(self, **kwargs):
         errors = []
         self._process_frequency = parse_option('clock.hz', int, 10, errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 200, errors, **kwargs) * 1000.
         self._vehicle.restart(**kwargs)
-        self._camera.restart(**kwargs)
-        self._gst_source.restart(**kwargs)
-        return errors + self._vehicle.get_errors() + self._camera.get_errors() + self._gst_source.get_errors()
+        errors.extend(self._vehicle.get_errors())
+        if not self._gst_sources:
+            front_camera = ImagePublisher(url='ipc:///byodr/camera_0.sock', topic='aav/camera/0')
+            rear_camera = ImagePublisher(url='ipc:///byodr/camera_1.sock', topic='aav/camera/1')
+            self._gst_sources.append(GstSource(position='front', image_publisher=front_camera))
+            self._gst_sources.append(GstSource(position='rear', image_publisher=rear_camera))
+        if not self._ptz_cameras:
+            self._ptz_cameras.append(PTZCamera(position='front'))
+            self._ptz_cameras.append(PTZCamera(position='rear'))
+        for item in self._gst_sources + self._ptz_cameras:
+            item.restart(**kwargs)
+            errors.extend(item.get_errors())
+        return errors
 
     def cycle(self, c_pilot, c_teleop):
-        self._camera.add(c_pilot, c_teleop)
-        self._gst_source.check()
+        if self._ptz_cameras:
+            # TBD route to correct camera.
+            self._ptz_cameras[0].add(c_pilot, c_teleop)
+        map(lambda x: x.check(), self._gst_sources)
         return self._vehicle.state(c_teleop)
 
 
@@ -90,7 +102,6 @@ class RoverApplication(Application):
         self._config_dir = config_dir
         self._handler = handler
         self._config_hash = -1
-        self.image_publisher = None
         self.state_publisher = None
         self.ipc_server = None
         self.pilot = None
@@ -112,8 +123,6 @@ class RoverApplication(Application):
         return cfg
 
     def setup(self):
-        if self._handler is None:
-            self._handler = RoverHandler(gst_source=GstSource(self.image_publisher))
         if self.active():
             _config = self._config()
             _hash = hash_dict(**_config)
@@ -146,7 +155,8 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    application = RoverApplication(config_dir=args.config)
+    rover = RoverHandler()
+    application = RoverApplication(handler=rover, config_dir=args.config)
     quit_event = application.quit_event
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
@@ -154,7 +164,6 @@ def main():
     ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
     collector = CollectorThread(receivers=(pilot, teleop, ipc_chatter), event=quit_event)
 
-    application.image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
     application.state_publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
     application.pilot = lambda: collector.get(0)
