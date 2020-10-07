@@ -100,7 +100,7 @@ class RoverApplication(Application):
     def __init__(self, handler=None, config_dir=os.getcwd()):
         super(RoverApplication, self).__init__()
         self._config_dir = config_dir
-        self._handler = handler
+        self._handler = RoverHandler() if handler is None else handler
         self._config_hash = -1
         self.state_publisher = None
         self.ipc_server = None
@@ -155,8 +155,7 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    rover = RoverHandler()
-    application = RoverApplication(handler=rover, config_dir=args.config)
+    application = RoverApplication(config_dir=args.config)
     quit_event = application.quit_event
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
