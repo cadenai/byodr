@@ -74,19 +74,6 @@ class Blob(AttrDict):
             self.forced_deceleration = self.forced_throttle and self.throttle < 0
 
 
-class IgnoreDifferences(object):
-    """Use previous value if the new value did not change enough."""
-
-    def __init__(self, init_value=0., threshold=0.):
-        self._value = init_value
-        self._threshold = threshold
-
-    def calculate(self, x):
-        if abs(x - self._value) > self._threshold:
-            self._value = x
-        return self._value
-
-
 class DynamicMomentum(object):
     """Low-pass filter with separate acceleration and deceleration momentum."""
 
@@ -101,6 +88,16 @@ class DynamicMomentum(object):
         _new_value = min(self._ceiling, _momentum * value + (1. - _momentum) * self._previous_value)
         self._previous_value = _new_value
         return _new_value
+
+
+class LowPassFilter(object):
+    def __init__(self, alpha=0.90):
+        self._alpha = alpha
+        self._value = 0
+
+    def calculate(self, x):
+        self._value = (self._alpha * x) + (1. - self._alpha) * self._value
+        return self._value
 
 
 class AbstractDriverBase(object):
@@ -437,8 +434,8 @@ class DriverManager(Configurable):
         _errors = []
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
-        _steer_threshold = parse_option('driver.handler.steering.diff.threshold', float, 0, _errors, **kwargs)
-        self._steering_stabilizer = IgnoreDifferences(threshold=_steer_threshold)
+        _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
+        self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None
