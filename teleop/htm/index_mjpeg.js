@@ -187,20 +187,35 @@ document.addEventListener("DOMContentLoaded", function() {
     // $('div#mjpeg_rear_camera_main_container').draggable({containment: "#container"});
     $('img#mjpeg_rear_camera_main_image').resizable({containment: "#viewport_container"});
 
-    // The rear camera starts out as hidden.
-    teleop_screen.on_hide_rear_camera();
+    function mjpeg_rear_camera_main_image_show() {
+        $(rear_camera_container).fadeIn('fast');
+        $(rear_camera_preview).toggleClass('active');
+        rear_camera_frame_controller.set_target_fps(16);
+        teleop_screen.on_show_rear_camera();
+        window.localStorage.setItem('mjpeg.visibility.camera.rear', JSON.stringify(1));
+    }
+
+    function mjpeg_rear_camera_main_image_hide() {
+        $(rear_camera_container).fadeOut('fast');
+        $(rear_camera_preview).toggleClass('active');
+        rear_camera_frame_controller.set_target_fps(2);
+        teleop_screen.on_hide_rear_camera();
+        window.localStorage.setItem('mjpeg.visibility.camera.rear', JSON.stringify(0));
+    }
+
+    // The rear camera starts out as hidden unless stored otherwise.
+    const _rear_camera_visibility = window.localStorage.getItem('mjpeg.visibility.camera.rear');
+    if (_rear_camera_visibility && JSON.parse(_rear_camera_visibility)) {
+        mjpeg_rear_camera_main_image_show();
+    } else {
+        mjpeg_rear_camera_main_image_hide();
+    }
 
     $("img#mjpeg_rear_camera_preview_image").click(function() {
         if ($(rear_camera_container).is(":visible")) {
-            $(rear_camera_container).fadeOut('fast');
-            $(rear_camera_preview).toggleClass('active');
-            rear_camera_frame_controller.set_target_fps(2);
-            teleop_screen.on_hide_rear_camera();
+            mjpeg_rear_camera_main_image_hide();
         } else {
-            $(rear_camera_container).fadeIn('fast');
-            $(rear_camera_preview).toggleClass('active');
-            rear_camera_frame_controller.set_target_fps(16);
-            teleop_screen.on_show_rear_camera();
+            mjpeg_rear_camera_main_image_show();
         }
     });
 

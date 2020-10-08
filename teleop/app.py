@@ -129,7 +129,7 @@ def main():
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
-            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.40.0', permanent=False)),
+            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.40.1', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
         port = args.port
