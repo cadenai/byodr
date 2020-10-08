@@ -274,11 +274,10 @@ class ApiUserOptionsHandler(JSONRequestHandler):
         self.write(json.dumps(dict(message='ok')))
 
 
-class ApiSystemStateHandler(JSONRequestHandler):
+class JSONMethodDumpRequestHandler(JSONRequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._list_start_messages = kwargs.get('fn_list_start_messages')
+        self._method = kwargs.get('fn_method')
 
     def get(self):
-        messages = self._list_start_messages()
-        self.write(json.dumps(messages))
+        self.write(json.dumps(self._method()))

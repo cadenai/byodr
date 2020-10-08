@@ -225,12 +225,12 @@ class LocalIPCServer(JSONServerThread):
         super(LocalIPCServer, self).__init__(url, event, receive_timeout_ms)
         self._name = name
         self._m_startup = collections.deque(maxlen=1)
+        self._m_capabilities = collections.deque(maxlen=1)
 
-    def register_start(self, errors):
+    def register_start(self, errors, capabilities=None):
+        capabilities = {} if capabilities is None else capabilities
         self._m_startup.append((datetime.datetime.utcnow().strftime('%b %d %H:%M:%S.%s UTC'), errors))
-
-    def serve_local(self, message):
-        return {}
+        self._m_capabilities.append(capabilities)
 
     def serve(self, message):
         try:
@@ -242,9 +242,11 @@ class LocalIPCServer(JSONServerThread):
                     [d_errors.update({error.key: error.message}) for error in errors]
                     messages = ['{} - {}'.format(k, d_errors[k]) for k in d_errors.keys()]
                 return {self._name: {ts: messages}}
+            elif message.get('request') == 'system/service/capabilities' and self._m_capabilities:
+                return {self._name: self._m_capabilities[-1]}
         except IndexError:
             pass
-        return self.serve_local(message)
+        return {}
 
 
 class JSONZmqClient(object):

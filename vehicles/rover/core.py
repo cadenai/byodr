@@ -176,10 +176,14 @@ class GstSource(Configurable):
         self._image_publisher = image_publisher
         self._camera_shape = None
         self._source = None
+        self._enabled = False
 
     def _publish(self, _b):
         if self._camera_shape is not None:
             self._image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(self._camera_shape))
+
+    def is_enabled(self):
+        return self._enabled
 
     def check(self):
         with self._lock:
@@ -204,8 +208,9 @@ class GstSource(Configurable):
         # Do not use our method - already under lock.
         if self._source:
             self._source.close()
-        #
+        # The enabled property may change between restarts.
         _enabled = parse_option(self._position + '.camera.enabled', (lambda v: bool(int(v))), False, _errors, **kwargs)
+        self._enabled = _enabled
         if _enabled and len(_errors) == 0:
             _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
                 **dict(user=_user, password=_password, ip=_server, port=_rtsp_port, path=_rtsp_path)

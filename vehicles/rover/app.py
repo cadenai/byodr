@@ -60,6 +60,9 @@ class RoverHandler(Configurable):
     def get_patience_micro(self):
         return self._patience_micro
 
+    def is_rear_camera_enabled(self):
+        return self._gst_sources and self._gst_sources[-1].is_enabled()
+
     def is_reconfigured(self, **kwargs):
         return True
 
@@ -138,6 +141,11 @@ class RoverApplication(Application):
         cfg.update(dict(parser.items('camera')))
         return cfg
 
+    def _capabilities(self):
+        return {
+            'rear_camera_enabled': 1 if self._handler.is_rear_camera_enabled() else 0
+        }
+
     def setup(self):
         if self.active():
             _config = self._config()
@@ -147,7 +155,7 @@ class RoverApplication(Application):
                 self._check_user_file()
                 _restarted = self._handler.restart(**_config)
                 if _restarted:
-                    self.ipc_server.register_start(self._handler.get_errors())
+                    self.ipc_server.register_start(self._handler.get_errors(), self._capabilities())
                     _frequency = self._handler.get_process_frequency()
                     self.set_hz(_frequency)
                     self.logger.info("Processing at {} Hz.".format(_frequency))

@@ -76,12 +76,16 @@ class CarlaApplication(Application):
         cfg.update(dict(parser.items('platform')))
         return cfg
 
+    @staticmethod
+    def _capabilities():
+        return {'rear_camera_enabled': 1}
+
     def setup(self):
         if self.active():
             self._check_user_file()
             _restarted = self._runner.restart(**self._config())
             if _restarted:
-                self.ipc_server.register_start(self._runner.get_errors())
+                self.ipc_server.register_start(self._runner.get_errors(), self._capabilities())
                 _process_frequency = self._runner.get_process_frequency()
                 _patience_micro = self._runner.get_patience_micro()
                 self.set_hz(_process_frequency)

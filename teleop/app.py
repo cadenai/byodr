@@ -13,7 +13,8 @@ from tornado import web, ioloop
 from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, ApiSystemStateHandler
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
+    JSONMethodDumpRequestHandler
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,9 @@ def main():
     def list_process_start_messages():
         return zm_client.call(dict(request='system/startup/list'))
 
+    def list_service_capabilities():
+        return zm_client.call(dict(request='system/service/capabilities'))
+
     try:
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket,
@@ -123,7 +127,8 @@ def main():
                                                  capture_rear=(lambda: camera_rear.capture()[-1]))),
             (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=(UserOptions(application.get_user_config_file())),
                                                                fn_on_save=on_options_save)),
-            (r"/api/system/state", ApiSystemStateHandler, dict(fn_list_start_messages=list_process_start_messages)),
+            (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
+            (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
             (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.20.7', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])

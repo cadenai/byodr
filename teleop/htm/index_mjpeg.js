@@ -169,7 +169,6 @@ var mjpeg_page_controller = {
 }
 mjpeg_page_controller.init([front_camera_frame_controller, rear_camera_frame_controller]);
 
-
 // Setup the rear camera - always as an mjpeg camera.
 document.addEventListener("DOMContentLoaded", function() {
     rear_camera_preview = document.createElement("img");
@@ -188,13 +187,6 @@ document.addEventListener("DOMContentLoaded", function() {
     // $('div#mjpeg_rear_camera_main_container').draggable({containment: "#container"});
     $('img#mjpeg_rear_camera_main_image').resizable({containment: "#viewport_container"});
 
-    rear_camera = new CameraController('rear', rear_camera_frame_controller, function(im_data) {
-        var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
-        rear_camera_preview.src = _blob;
-        rear_camera_main.src = _blob;
-        $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
-    });
-
     // The rear camera starts out as hidden.
     teleop_screen.on_hide_rear_camera();
 
@@ -210,6 +202,14 @@ document.addEventListener("DOMContentLoaded", function() {
             rear_camera_frame_controller.set_target_fps(16);
             teleop_screen.on_show_rear_camera();
         }
+    });
+
+    // Start the rear camera stream only if the capability is set.
+    mjpeg_rear_camera = new CameraController('rear', rear_camera_frame_controller, function(im_data) {
+        var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
+        rear_camera_preview.src = _blob;
+        rear_camera_main.src = _blob;
+        $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
     });
 });
 
@@ -241,9 +241,21 @@ teleop_screen.add_camera_selection_listener(function(current) {
     }
 });
 
+function mjpeg_request_rear_camera_start() {
+    // There might be a timing issue because the capabilities are requested from the backend.
+    system_capabilities = page_utils.system_capabilities;
+    if ('platform' in system_capabilities) {
+        if (system_capabilities['platform'].rear_camera_enabled) {
+            mjpeg_rear_camera.start_socket();
+        }
+    } else {
+        setTimeout(mjpeg_request_rear_camera_start, 200);
+    }
+}
+
 function mjpeg_start_all() {
-    if (rear_camera != undefined && rear_camera.socket == undefined) {
-        rear_camera.start_socket();
+    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket == undefined) {
+        mjpeg_request_rear_camera_start();
     }
     if (page_utils.get_stream_type() == 'mjpeg' && front_camera != undefined && front_camera.socket == undefined) {
         front_camera.start_socket();
@@ -251,8 +263,8 @@ function mjpeg_start_all() {
 }
 
 function mjpeg_stop_all() {
-    if (rear_camera != undefined && rear_camera.socket != undefined) {
-        rear_camera.stop_socket();
+    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket != undefined) {
+        mjpeg_rear_camera.stop_socket();
     }
     if (page_utils.get_stream_type() == 'mjpeg' && front_camera != undefined && front_camera.socket != undefined) {
         front_camera.stop_socket();
