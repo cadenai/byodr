@@ -16,6 +16,7 @@ class Chassis(object):
     def __init__(self):
         self._steer_servo = None
         self._motor_servo = None
+        self._steering_config = dict(scale=1)
         self._throttle_config = dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
 
     @staticmethod
@@ -34,16 +35,19 @@ class Chassis(object):
 
     def set_configuration(self, config):
         if config is not None:
-            self._steer_servo = self._create_servo(self._steer_servo, config.get('steering'))
-            self._motor_servo = self._create_servo(self._motor_servo, config.get('motor'))
-            self._throttle_config = config.get('throttle')
+            self._steer_servo = self._create_servo(self._steer_servo, config.get('steer_servo'))
+            self._motor_servo = self._create_servo(self._motor_servo, config.get('motor_servo'))
+            self._steering_config = config.get('steering_config')
+            self._throttle_config = config.get('throttle_config')
 
     def is_configured(self):
         return None not in (self._steer_servo, self._motor_servo)
 
     def apply_steering(self, value):
         if self._steer_servo is not None:
-            self._steer_servo.angle = 90. * min(1, max(-1, value))
+            config = self._steering_config
+            scale = config.get('scale')
+            self._steer_servo.angle = scale * 90. * min(1, max(-1, value))
 
     def apply_throttle(self, throttle, in_reverse):
         if self._motor_servo is not None:
