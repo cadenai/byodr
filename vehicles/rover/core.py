@@ -199,6 +199,7 @@ class GstSource(Configurable):
         _server = parse_option(self._position + '.camera.ip', str, errors=_errors, **kwargs)
         _user = parse_option(self._position + '.camera.user', str, errors=_errors, **kwargs)
         _password = parse_option(self._position + '.camera.password', str, errors=_errors, **kwargs)
+        _decode_rate = parse_option(self._position + '.camera.decode.rate', int, 20, errors=_errors, **kwargs)
         _rtsp_port = parse_option(self._position + '.camera.rtsp.port', int, 0, errors=_errors, **kwargs)
         _rtsp_path = parse_option(self._position + '.camera.image.path', str, errors=_errors, **kwargs)
         _img_wh = parse_option(self._position + '.camera.image.shape', str, errors=_errors, **kwargs)
@@ -218,9 +219,10 @@ class GstSource(Configurable):
             _url = "rtspsrc " \
                    "location={url} " \
                    "latency=0 drop-on-latency=true ! queue ! " \
-                   "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
+                   "rtph264depay ! h264parse ! queue ! omxh264dec ! videoconvert ! " \
+                   "videorate ! video/x-raw,framerate={framerate}/1 ! " \
                    "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
-                format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1]))
+                format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1], framerate=_decode_rate))
             logger.info("Camera rtsp url = {}.".format(_rtsp_url))
             logger.info("Image shape={}.".format(self._camera_shape))
             self._source = GstRawSource(name=self._position, fn_callback=self._publish, command=_url)
