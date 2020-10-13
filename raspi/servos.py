@@ -144,7 +144,7 @@ class ChassisApplication(Application):
             self._relay.close()
 
         self._chassis.apply_steering(v_steering)
-        # Immediately zero out throttle when violations start occuring.
+        # Immediately zero out throttle when violations start occurring.
         self._chassis.apply_throttle(0 if n_violations > 0 else v_throttle, v_reverse)
         # Let the communication partner know we are operational.
         self.publisher.publish(data=dict(time=timestamp(), configured=int(self._chassis.is_configured())))
