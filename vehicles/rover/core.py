@@ -219,7 +219,7 @@ class GstSource(Configurable):
             _url = "rtspsrc " \
                    "location={url} " \
                    "latency=0 drop-on-latency=true ! queue ! " \
-                   "rtph264depay ! h264parse ! queue ! omxh264dec ! videoconvert ! " \
+                   "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
                    "videorate ! video/x-raw,framerate={framerate}/1 ! " \
                    "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
                 format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1], framerate=_decode_rate))
