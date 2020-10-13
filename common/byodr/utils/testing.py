@@ -95,19 +95,22 @@ class CollectServer(object):
         """
         A drop-in replacement for ipc LocalIPCServer.
         """
-        self._list = []
+        self._errors = []
+        self._capabilities = []
 
-    def register_start(self, errors):
-        self._list.append(errors)
+    def register_start(self, errors, capabilities=None):
+        capabilities = {} if capabilities is None else capabilities
+        self._errors.append(errors)
+        self._capabilities.append(capabilities)
 
     def collect(self):
-        return self._list
+        return self._errors
 
     def get_latest(self):
-        return self._list[-1]
+        return self._errors[-1]
 
     def clear(self):
-        self._list = []
+        self._errors = []
 
 
 class CollectJSONClient(object):
