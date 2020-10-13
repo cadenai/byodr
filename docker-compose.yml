@@ -72,6 +72,7 @@ services:
     image: centipede2donald/byodr-ce:rover_vehicle
     container_name: byodr_vehicle
     restart: always
+    privileged: true  # NvMedia device creation for omx decoder.
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
