@@ -76,10 +76,12 @@ class CommandHistory(object):
         if wakeup:
             self._num_missing = 0
         else:
-            no_steering = steering is None or abs(steering) < 1e-3
-            no_throttle = throttle is None or abs(throttle) < 1e-3
-            if no_steering and no_throttle:
+            has_steering = steering is not None and abs(steering) > 1e-3
+            has_throttle = throttle is not None and abs(throttle) > 1e-3
+            if not has_steering and not has_throttle:
                 self._num_missing += 1
+            elif not self.is_missing():
+                self._num_missing = 0
 
     def reset(self):
         self._num_missing = self._threshold + 1
