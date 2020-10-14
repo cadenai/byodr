@@ -52,7 +52,7 @@ def test_relay():
     assert relay.is_open()
     publisher.clear()
 
-    # Send wakeup to close the relais after startup.
+    # Send wakeup to close the relay after startup.
     platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(wakeup=1)))
     application.step()
     assert not relay.is_open()
@@ -74,7 +74,7 @@ def test_relay():
     assert relay.is_open()
     publisher.clear()
 
-    # The communication requirements must still be met to let the other side know we are opertional.
+    # The communication requirements must still be met to let the other side know we are operational.
     platform.send(dict(time=timestamp(), method='ras/servo/drive', data=_null_command))
     application.step()
     assert len(publisher.collect()) > 0
@@ -84,6 +84,39 @@ def test_relay():
     platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(wakeup=1)))
     application.step()
     assert not relay.is_open()
-
     application.finish()
     assert relay.is_open()
+
+
+def test_wakeup():
+    relay = MyRelay()
+    publisher = CollectPublisher(topic='test/status')
+    platform = MyPlatform()
+
+    # With hz=1 the command history threshold is 180.
+    application = ChassisApplication(relay=relay, hz=1)
+    application.platform = platform
+    application.publisher = publisher
+    application.setup()
+
+    # Send the first commands to do valid communication.
+    command = dict(steering=0.1, throttle=0.2, reverse=0)
+    map(lambda _: (platform.send(dict(time=timestamp(), method='ras/servo/drive', data=command)), application.step()), range(10))
+    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(wakeup=1)))
+    application.step()
+    assert not relay.is_open()
+    publisher.clear()
+
+    # Send the zero commands and wakeup.
+    zero = dict(steering=0, throttle=0, reverse=0)
+    map(lambda _: (platform.send(dict(time=timestamp(), method='ras/servo/drive', data=zero)), application.step()), range(180))
+    platform.send(dict(time=timestamp(), method='ras/servo/drive', data=dict(wakeup=1)))
+    application.step()
+    assert not relay.is_open()
+
+    # After wakeup the counters need to have been reset in order not to revert immediately.
+    map(lambda _: (platform.send(dict(time=timestamp(), method='ras/servo/drive', data=zero)), application.step()), range(10))
+    assert not relay.is_open()
+    publisher.clear()
+
+    application.finish()

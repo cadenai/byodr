@@ -73,15 +73,16 @@ class CommandHistory(object):
         self.reset()
 
     def touch(self, steering, throttle, wakeup=False):
-        no_steering = steering is None or abs(steering) < 1e-3
-        no_throttle = throttle is None or abs(throttle) < 1e-3
-        if self.is_missing() and wakeup:
+        if wakeup:
             self._num_missing = 0
-        elif no_steering and no_throttle:
-            self._num_missing += 1
+        else:
+            no_steering = steering is None or abs(steering) < 1e-3
+            no_throttle = throttle is None or abs(throttle) < 1e-3
+            if no_steering and no_throttle:
+                self._num_missing += 1
 
     def reset(self):
-        self._num_missing = self._threshold * 2
+        self._num_missing = self._threshold + 1
 
     def is_missing(self):
         return self._num_missing > self._threshold
@@ -122,7 +123,7 @@ class ChassisApplication(Application):
         self._chassis.quit()
 
     def step(self):
-        # At startup the relay is open untill non empty commands while the integrity requirements are met.
+        # At startup the relay is open until non empty commands while the integrity requirements are met.
         # After a number of missing commands open the relay and close it again when commands resume.
         n_violations = self._integrity.check()
         if n_violations > 5:
