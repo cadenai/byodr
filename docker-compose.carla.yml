@@ -15,6 +15,11 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
+  rosnode:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./rosnode:/app
   vehicle:
     build:
       context: .

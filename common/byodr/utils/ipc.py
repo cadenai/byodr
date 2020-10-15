@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import sys
 import threading
+import time
 
 import numpy as np
 import zmq
@@ -93,11 +94,12 @@ class JSONReceiver(object):
 
 
 class CollectorThread(threading.Thread):
-    def __init__(self, receivers, event=None):
+    def __init__(self, receivers, event=None, hz=1000):
         super(CollectorThread, self).__init__()
         _list = (isinstance(receivers, tuple) or isinstance(receivers, list))
         self._receivers = receivers if _list else [receivers]
         self._quit_event = multiprocessing.Event() if event is None else event
+        self._sleep = 1. / hz
 
     def get(self, index):
         # Get the latest message.
@@ -111,7 +113,8 @@ class CollectorThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             # Empty the receiver queues to not block upstream senders.
-            map(lambda recv: recv.consume(), self._receivers)
+            map(lambda receiver: receiver.consume(), self._receivers)
+            time.sleep(self._sleep)
 
 
 class ReceiverThread(threading.Thread):

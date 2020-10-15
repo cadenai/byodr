@@ -30,6 +30,19 @@ services:
     volumes:
       - volume_ftpd_config:/etc/pureftpd:rw
       - volume_byodr_sessions:/home/ftpuser:rw
+  rosnode:
+    cpuset: "0,1"
+    build:
+      context: .
+      dockerfile: rosnode/Dockerfile
+    image: centipede2donald/byodr-ce:rover_ros
+    container_name: byodr_ros
+    restart: always
+    network_mode: "host"
+    stop_signal: SIGKILL
+    volumes:
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
   relay:
     cpuset: "0,1"
     build:

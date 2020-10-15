@@ -8,6 +8,10 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
+  rosnode:
+    image: rwgrim/docker-noop:latest
+    restart: 'no'
+    command: ["/bin/true"]
   relay:
     restart: 'no'
     command: ["python", "-m", "pytest", "-vvv", "tests_relay.py"]
