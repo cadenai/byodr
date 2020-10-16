@@ -49,14 +49,19 @@ class Chassis(object):
             scale = config.get('scale')
             self._steer_servo.angle = scale * 90. * min(1, max(-1, value))
 
-    def apply_throttle(self, throttle, in_reverse):
+    @staticmethod
+    def _motor_angle(config, throttle):
+        _shift = config.get('forward_shift') if throttle > 0 else config.get('backward_shift')
+        _angle = min(90, max(-90, _shift + config.get('scale') * throttle))
+        return _angle
+
+    def apply_throttle(self, throttle):
         if self._motor_servo is not None:
             config = self._throttle_config
-            if throttle < -.95 and in_reverse:
-                _angle = config.get('reverse')
-            else:
-                _angle = config.get('forward_shift') if throttle > 0 else config.get('backward_shift')
-                _angle = min(90, max(-90, _angle + config.get('scale') * throttle))
+            _angle = self._motor_angle(config, throttle)
+            _reverse_boost = config.get('reverse')
+            if throttle < -.990 and _reverse_boost < _angle:
+                _angle = _reverse_boost
             self._motor_servo.angle = _angle
 
     def quit(self):
@@ -138,7 +143,7 @@ class ChassisApplication(Application):
 
         v_steering = 0 if c_drive is None else c_drive.get('steering', 0)
         v_throttle = 0 if c_drive is None else c_drive.get('throttle', 0)
-        v_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
+        # v_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
         v_wakeup = False if c_drive is None else bool(c_drive.get('wakeup'))
         self._cmd_history.touch(steering=v_steering, throttle=v_throttle, wakeup=v_wakeup)
         if self._cmd_history.is_missing():
@@ -148,7 +153,7 @@ class ChassisApplication(Application):
 
         self._chassis.apply_steering(v_steering)
         # Immediately zero out throttle when violations start occurring.
-        self._chassis.apply_throttle(0 if n_violations > 0 else v_throttle, v_reverse)
+        self._chassis.apply_throttle(0 if n_violations > 0 else v_throttle)
         # Let the communication partner know we are operational.
         self.publisher.publish(data=dict(time=timestamp(), configured=int(self._chassis.is_configured())))
 
