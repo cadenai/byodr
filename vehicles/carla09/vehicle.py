@@ -168,7 +168,7 @@ class CarlaHandler(Configurable):
         if self._on_reverse:
             self._on_reverse = command.get('throttle') <= 0
         else:
-            self._on_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.9 and command.get('arrow_down', 0) == 1
+            self._on_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.99  # and command.get('arrow_down', 0) == 1
 
     def _set_random_weather(self):
         if self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
