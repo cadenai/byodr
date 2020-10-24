@@ -139,9 +139,6 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'debug5': 0 if inference is None else inference.get('critic'),
                 'debug6': 0 if inference is None else inference.get('fallback'),
                 'debug7': 0 if inference is None else inference.get('_fps'),
-                'debug8': 'n/a' if inference is None else str(
-                    zip(inference.get('internal1'), ['{:+2.4f}'.format(x) for x in inference.get('internal2')])
-                ),
                 'rec_act': False if recorder is None else recorder.get('active'),
                 'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),
