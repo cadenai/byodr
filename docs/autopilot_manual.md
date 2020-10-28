@@ -5,7 +5,7 @@
 The robot has an option to drive autonomously, the autopilot. Only in few situations will the autopilot be able to drive your route 
 without any extra training. To have the robot drive your route there is an option to train the robot.  
 
-To teach the robot to complete a route autonomously go through the following steps:  
+To teach the robot to complete a route autonomously, without holds (planned stops), go through the following steps:  
 * Decide upon a route
 * Send route information to MWLC    
     - For an inside environment: a map or drawing  
@@ -16,7 +16,7 @@ To teach the robot to complete a route autonomously go through the following ste
 * Wait for the model update to complete - this may take several days to weeks
 * Repeat the training steps until satisfied
 
-### Stop
+### To stop the robot
 
 Press the red button on the outside of the casing.  
 
@@ -170,9 +170,9 @@ In this case the operator should override the autopilot and drive the robot whil
 When continuing like this the data will be collected and stored.  
 Steps:  
 1. Check the last update of the [Controller and Browser](operator_manual.md) manual.
-1. Have an instructed person accompany the robot, out of sight of the forward facing camera.
-1. Ensure that this person knows how to stop the robot.
-1. Place the robot at the start of the route. This can be done with teleoperation.
+2. Have an instructed person accompany the robot, out of sight of the forward facing camera.
+3. Ensure that this person knows how to stop the robot.
+4. Place the robot at the start of the route. This can be done with teleoperation.
 1. Make a note of the start time of the training.
 1. Set the robot to autopilot mode.
 1. The operator has to drive the robot as long as the steering wheel is shown in red.
@@ -203,7 +203,7 @@ It might be useful to collect extra data for difficult parts and expand your cor
 
 
 ##### Complex situations
-To train a complex situation have the autopilot drive the route.  
+To train a complex situation have the autopilot drive the route.  ``````
 1. If the steering wheel is red, the operator has to override the autopilot.
 1. The operator should drive the robot until the steering wheel is blue again.
 1.  When de steering wheel is blue, take the robot off autopilot and drive the robot back to just before the point where the 
@@ -222,3 +222,23 @@ the corridor. Put the robot in autopilot mode and steer it back to the preferred
 
 #### Using the model
 Never leave the robot unattended.
+
+### Adding holds to your own route
+
+The autopilot will stop the robot at the end of a route.
+If the route ends at the at the same position and orientation as it started then there is no end to the route.
+In many cases this can be useful, f.i. routine inspections. But it might also be usefull to plan stops at certain points.
+A planned stop is called a hold.
+To add holds to your route you have to take the steps:  
+* Decide about the locations and positions where the robot has to stop.  
+* Take care that there are enough visual clues so the robot can recognise the location.  
+* Let the robot make images, in training mode, at this location and orientation.  
+* Select at least 3 images from different angles, and send them to cloud-management.  
+Cloud-management will add the holds to your route.
+
+##### How to fetch images from the robot
+The image-management system on the robot stores the image in zip-files.
+The name of the zip-file refers to the timestamp of the first image in the zip-file.
+The zip-files can be downloaded from te robot with via ftp.
+The address is the ip-no of the robot in the Zerotier-network.
+Ask cloud-management for the login-ID and password.
