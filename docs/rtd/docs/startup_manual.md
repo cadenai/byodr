@@ -46,7 +46,8 @@ As an example assume the robotâ€™s managed ip is 192.168.193.42. In the browserâ
 
 ## Introduction
 You have or will receive a robot from MWLC. To get it operational, you have to make arrangements:
-* Check the contents of the package 
+
+* Check the contents of the package   
 * The emailed documentation
 * Study the documentation
 * Install software 
@@ -57,15 +58,16 @@ To ensure security, the robot is only accessible via a VPN.
 Familiarise yourself with the documentation from ZeroTier.
 
 ## Pack-list
-Your package should include:  
-* 1 robot
-* 2 keys with the number mentioned in your credentials list
+Your package should include:
+
+* 1 robot * 2 keys with the number mentioned in your credentials list
 * 1 Victron charger with a Rosenberger connector
 * 1 PS4 controller
 * 1 USB cable
 
 ### E-mailed information
 In your email you should have:  
+
 * The manual starter and maintenance (this document)
 * The manual Connections and ZeroTier
 * The manual Controller and Browser
@@ -75,6 +77,7 @@ In your email you should have:
 
 ### Credentials
 In your credentials you should have:  
+  
 * RobotID
 * 1 ZeroTier login email/ID
 * 1 ZeroTier password
