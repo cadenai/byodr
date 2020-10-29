@@ -5,6 +5,8 @@ import os
 import sys
 from functools import partial
 
+import numpy as np
+
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.option import parse_option
@@ -95,7 +97,7 @@ class TFRunner(Configurable):
         surprise = self._fn_corridor_norm(surprise_out)
 
         # The critic is a good indicator at inference time. Use it to scale the actor variance.
-        _corridor = 2 * (surprise / (critic + 1))
+        _corridor_penalty = max(0, (np.exp(max(critic, surprise)) / np.exp(min(critic, surprise))) - 1)
 
         # The decision points were made dependant on turn marked samples during training.
         _intention_index = maneuver_index(intention)
@@ -103,10 +105,10 @@ class TFRunner(Configurable):
 
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
-        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor + _obstacle_penalty)))
+        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         return dict(action=float(self._dnn_steering(action_out)),
-                    corridor=float(_corridor),
+                    corridor=float(_corridor_penalty),
                     surprise=float(surprise),
                     critic=float(critic),
                     fallback=int(self._fallback),
