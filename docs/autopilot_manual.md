@@ -5,7 +5,7 @@
 The robot has an option to drive autonomously, the autopilot. Only in few situations will the autopilot be able to drive your route 
 without any extra training. To have the robot drive your route there is an option to train the robot.  
 
-To teach the robot to complete a route autonomously, without holds (planned stops), go through the following steps:  
+To teach the robot to complete a route autonomously, without halts (planned stops), go through the following steps:  
 * Decide upon a route
 * Send route information to MWLC    
     - For an inside environment: a map or drawing  
@@ -123,13 +123,14 @@ The robot will stop if there is no free passage.
 ![](img/autopilot/blocked_passage.png)
 
 
-### Your own route using autopilot
+## Your own route using autopilot
 
 Training a new route is done in steps. For a simple route it wil take less than a day collecting data. 
 More complex routes will take more time.  
 To train a route follow these steps:  
-* Define a route
-* Collect data by driving and thereby showing how to complete the route
+  
+* Define a route  
+* Collect data by driving and thereby showing how to complete the route  
 * MWLC will train the model  
 
 As long as you are not satisfied with the route you can improve it by collecting additional data.
@@ -203,7 +204,8 @@ It might be useful to collect extra data for difficult parts and expand your cor
 
 
 ##### Complex situations
-To train a complex situation have the autopilot drive the route.  ``````
+To train a complex situation have the autopilot drive the route.  
+  
 1. If the steering wheel is red, the operator has to override the autopilot.
 1. The operator should drive the robot until the steering wheel is blue again.
 1.  When de steering wheel is blue, take the robot off autopilot and drive the robot back to just before the point where the 
@@ -220,25 +222,28 @@ It is possible to train the robot to go back to the center of the corridor. Take
 the corridor. Put the robot in autopilot mode and steer it back to the preferred path.  
 
 
-#### Using the model
-Never leave the robot unattended.
 
-### Adding holds to your own route
+
+### Adding halts to your route
 
 The autopilot will stop the robot at the end of a route.
 If the route ends at the at the same position and orientation as it started then there is no end to the route.
-In many cases this can be useful, f.i. routine inspections. But it might also be usefull to plan stops at certain points.
-A planned stop is called a hold.
-To add holds to your route you have to take the steps:  
-* Decide about the locations and positions where the robot has to stop.  
-* Take care that there are enough visual clues so the robot can recognise the location.  
-* Let the robot make images, in training mode, at this location and orientation.  
-* Select at least 3 images from different angles, and send them to cloud-management.  
+In many cases this can be useful, f.i. in case of routine inspections.
+Often its useful to have planned stops at certain points at the route.
+A planned stop is called a halt.
+To add halts to your route you have to take the steps:   
+ * Decide about the position and orientation where the robot has to stop.  
+ * Take care that there are enough visual clues so the robot can recognise the location.  
+ * Let the robot make images, in training mode, at this position and orientation.  
+ * Select at least 3 images from different angles, and send them to cloud-management.  
 Cloud-management will add the holds to your route.
 
 ##### How to fetch images from the robot
-The image-management system on the robot stores the image in zip-files.
-The name of the zip-file refers to the timestamp of the first image in the zip-file.
-The zip-files can be downloaded from te robot with via ftp.
-The address is the ip-no of the robot in the Zerotier-network.
+The image-management system on the robot stores the images in zip-files.  
+The name of the zip-file refers to the timestamp of the first image in the zip-file.  
+The zip-files can be downloaded from te robot with via ftp, f.i. 'ftp://192.126.164.78'.  
+The address is the ip-no of the robot in the ZeroTier-network.  
 Ask cloud-management for the login-ID and password.
+
+## Using the model
+Never leave the robot unattended.
