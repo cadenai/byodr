@@ -236,7 +236,7 @@ To add halts to your route you have to take the steps:
  * Take care that there are enough visual clues so the robot can recognise the location.  
  * Let the robot make images, in training mode, at this position and orientation.  
  * Select at least 3 images from different angles, and send them to cloud-management.  
-Cloud-management will add the holds to your route.
+Cloud-management will add the halts to your route.
 
 ##### How to fetch images from the robot
 The image-management system on the robot stores the images in zip-files.  
