@@ -239,6 +239,8 @@ log_controller.start_socket = function() {
             view = log_controller;
             var el_pilot_steering = $('span#pilot_steering');
             var el_pilot_throttle = $('span#pilot_throttle');
+            var el_inference_surprise = $('span#inference_surprise');
+            var el_inference_critic = $('span#inference_critic');
             var el_inference_penalty = $('span#inference_penalty');
             var el_inference_obstacle = $('span#inference_obstacle');
             var el_inference_fps = $('span#inference_fps');
@@ -253,8 +255,10 @@ log_controller.start_socket = function() {
             var command = JSON.parse(evt.data);
             el_pilot_steering.text(command.ste.toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
-            el_inference_penalty.text(command.debug3.toFixed(2));
             el_inference_obstacle.text(command.debug2.toFixed(2));
+            el_inference_penalty.text(command.debug3.toFixed(2));
+            el_inference_surprise.text(command.debug4.toFixed(2));
+            el_inference_critic.text(command.debug5.toFixed(2));
             el_inference_fps.text(command.debug7.toFixed(0));
             // el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
             // speed is the desired speed

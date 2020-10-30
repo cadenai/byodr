@@ -5,11 +5,11 @@ import os
 import sys
 from functools import partial
 
-import numpy as np
+from Equation import Expression
 
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
-from byodr.utils.option import parse_option
+from byodr.utils.option import parse_option, PropertyError
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
 
@@ -31,6 +31,7 @@ class TFRunner(Configurable):
         self._fn_obstacle_norm = None
         self._fn_brake_critic_norm = None
         self._fn_corridor_norm = None
+        self._fn_corridor_penalty = None
         self._fn_dave_image = None
         self._fn_alex_image = None
         self._driver = None
@@ -62,6 +63,14 @@ class TFRunner(Configurable):
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
         _brake_critic_scale_max = parse_option('driver.dnn.brake.critic.scale.max', float, 1e-6, _errors, **kwargs)
         _corridor_scale_max = parse_option('driver.dnn.steer.corridor.scale.max', float, 1e-6, _errors, **kwargs)
+        _corridor_equation_key = 'driver.dnn.steer.corridor.equation'
+        _corridor_penalty_eq = parse_option(_corridor_equation_key, str, "e ** (critic + surprise)", _errors, **kwargs)
+        try:
+            self._fn_corridor_penalty = Expression(_corridor_penalty_eq)
+            self._fn_corridor_penalty(surprise=0, critic=0)
+        except (TypeError, IndexError, ZeroDivisionError) as te:
+            _errors.append(PropertyError(_corridor_equation_key, str(te)))
+            self._fn_corridor_penalty = lambda surprise, critic: 100
         self._fn_obstacle_norm = partial(self._norm_scale, min_=0, max_=_brake_scale_max)
         self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)
         self._fn_corridor_norm = partial(self._norm_scale, min_=0, max_=_corridor_scale_max)
@@ -95,9 +104,7 @@ class TFRunner(Configurable):
 
         critic = self._fn_corridor_norm(critic_out)
         surprise = self._fn_corridor_norm(surprise_out)
-
-        # The critic is a good indicator at inference time. Use it to scale the actor variance.
-        _corridor_penalty = max(0, (np.exp(max(critic, surprise)) / np.exp(min(critic, surprise))) - 1)
+        _corridor_penalty = max(0, self._fn_corridor_penalty(surprise=surprise, critic=critic))
 
         # The decision points were made dependant on turn marked samples during training.
         _intention_index = maneuver_index(intention)

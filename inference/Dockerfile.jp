@@ -1,5 +1,7 @@
 FROM centipede2donald/nvidia-jetson:jp43-cp27-tf113-2
 
+RUN pip install "Equation==1.2.1"
+
 COPY ./common common/
 COPY ./inference app/
 WORKDIR /app
