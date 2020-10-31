@@ -116,8 +116,8 @@ class TFRunner(Configurable):
 
         return dict(action=float(self._dnn_steering(action_out)),
                     corridor=float(_corridor_penalty),
-                    surprise=float(surprise),
-                    critic=float(critic),
+                    surprise_out=float(surprise_out),
+                    critic_out=float(critic_out),
                     fallback=int(self._fallback),
                     dagger=int(dagger),
                     obstacle=float(_obstacle_penalty),
