@@ -12,19 +12,17 @@ class MessageStreamProtocol(object):
         2. local as recorded by the receiver
         -
         The protocol can be validated or invalidated.
-        There is a warmup period with invalidated protocol, after system reboot.
+        There is a warm-up period with invalidated protocol, after system reboot.
         -
         The incoming stream needs to be continuous (or uninterrupted) and recent (timely).
         Continuity violation
         Age violation
-        Violations are counted during a time window using a ttl cache.
-        A threshold invalidates the protocol.
     """
 
     def __init__(self, max_age_ms=200, max_delay_ms=250):
         self._max_age_micro = max_age_ms * 1000.
         self._max_delay_micro = max_delay_ms * 1000.
-        # There is no distinction in violation types for now.
+        # There is currently no distinction in violation types.
         self._n_violations = 0L
         self._last_message_time = 0
         self._last_protocol_time = 0

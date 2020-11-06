@@ -5,7 +5,6 @@ import multiprocessing
 import threading
 import time
 
-import cv2
 import numpy as np
 import requests
 from pymodbus.client.sync import ModbusTcpClient
@@ -94,10 +93,9 @@ class CameraPtzThread(threading.Thread):
             ret = requests.put(self._url + '/continuous', data=self._ptz_xml.format(**dict(pan=pan, tilt=tilt)), auth=self._auth)
         return ret
 
-    def add(self, pilot, teleop):
+    def add(self, command):
         try:
-            if pilot and pilot.get('driver') == 'driver_mode.teleop.direct' and teleop:
-                self._queue.put_nowait(teleop)
+            self._queue.put_nowait(command)
         except Queue.Full:
             pass
 
@@ -110,9 +108,9 @@ class CameraPtzThread(threading.Thread):
                 cmd = self._queue.get(block=True, timeout=0.050)
                 with self._lock:
                     operation = (0, 0)
-                    if cmd.get('button_x', 0):
-                        operation = ('set_home', cmd.get('button_a', 0))
-                    elif any([cmd.get(k, 0) for k in ('button_y', 'button_a')]):
+                    if cmd.get('set_home', 0):
+                        operation = ('set_home', cmd.get('goto_home', 0))
+                    elif cmd.get('goto_home', 0):
                         operation = 'goto_home'
                     elif 'pan' in cmd and 'tilt' in cmd:
                         operation = (self._norm(cmd.get('pan')) * self._flip[0], self._norm(cmd.get('tilt')) * self._flip[1])
@@ -122,32 +120,34 @@ class CameraPtzThread(threading.Thread):
 
 
 class PTZCamera(Configurable):
-    def __init__(self):
+    def __init__(self, position):
         super(PTZCamera, self).__init__()
-        self._camera = None
+        self._position = position
+        self._worker = None
 
-    def add(self, pilot, teleop):
+    def add(self, command):
         with self._lock:
-            if self._camera:
-                self._camera.add(pilot, teleop)
+            if self._worker and command:
+                self._worker.add(command)
 
     def internal_quit(self, restarting=False):
-        if self._camera:
-            self._camera.quit()
-            self._camera.join()
-            self._camera = None
+        if self._worker:
+            self._worker.quit()
+            self._worker.join()
+            self._worker = None
 
     def internal_start(self, **kwargs):
         errors = []
-        ptz_enabled = parse_option('camera.ptz.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
-        if ptz_enabled:
-            _server = parse_option('camera.ip', str, errors=errors, **kwargs)
-            _user = parse_option('camera.user', str, errors=errors, **kwargs)
-            _password = parse_option('camera.password', str, errors=errors, **kwargs)
-            _protocol = parse_option('camera.ptz.protocol', str, errors=errors, **kwargs)
-            _path = parse_option('camera.ptz.path', str, errors=errors, **kwargs)
-            _flip = parse_option('camera.ptz.flip', str, errors=errors, **kwargs)
-            _speed = parse_option('camera.ptz.speed', float, 1.0, errors=errors, **kwargs)
+        cam_enabled = parse_option(self._position + '.camera.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
+        ptz_enabled = parse_option(self._position + '.camera.ptz.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
+        if cam_enabled and ptz_enabled:
+            _server = parse_option(self._position + '.camera.ip', str, errors=errors, **kwargs)
+            _user = parse_option(self._position + '.camera.user', str, errors=errors, **kwargs)
+            _password = parse_option(self._position + '.camera.password', str, errors=errors, **kwargs)
+            _protocol = parse_option(self._position + '.camera.ptz.protocol', str, errors=errors, **kwargs)
+            _path = parse_option(self._position + '.camera.ptz.path', str, errors=errors, **kwargs)
+            _flip = parse_option(self._position + '.camera.ptz.flip', str, errors=errors, **kwargs)
+            _speed = parse_option(self._position + '.camera.ptz.speed', float, 1.0, errors=errors, **kwargs)
             _flipcode = [1, 1]
             if _flip in ('pan', 'tilt', 'both'):
                 _flipcode[0] = -1 if _flip in ('pan', 'both') else 1
@@ -155,32 +155,35 @@ class PTZCamera(Configurable):
             _port = 80 if _protocol == 'http' else 443
             _url = '{protocol}://{server}:{port}{path}'.format(**dict(protocol=_protocol, server=_server, port=_port, path=_path))
             logger.info("PTZ camera url={}.".format(_url))
-            if self._camera is None:
-                self._camera = CameraPtzThread(_url, _user, _password, speed=_speed, flip=_flipcode)
-                self._camera.start()
+            if self._worker is None:
+                self._worker = CameraPtzThread(_url, _user, _password, speed=_speed, flip=_flipcode)
+                self._worker.start()
             elif len(errors) == 0:
-                self._camera.set_url(_url)
-                self._camera.set_auth(_user, _password)
-                self._camera.set_speed(_speed)
-                self._camera.set_flip(_flipcode)
+                self._worker.set_url(_url)
+                self._worker.set_auth(_user, _password)
+                self._worker.set_speed(_speed)
+                self._worker.set_flip(_flipcode)
         # Already under lock.
-        elif self._camera:
-            self._camera.quit()
+        elif self._worker:
+            self._worker.quit()
         return errors
 
 
 class GstSource(Configurable):
-    def __init__(self, image_publisher):
+    def __init__(self, position, image_publisher):
         super(GstSource, self).__init__()
+        self._position = position
         self._image_publisher = image_publisher
         self._camera_shape = None
-        self._flipcode = None
         self._source = None
+        self._enabled = False
 
     def _publish(self, _b):
         if self._camera_shape is not None:
-            _img = np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(self._camera_shape)
-            self._image_publisher.publish(cv2.flip(_img, self._flipcode) if self._flipcode is not None else _img)
+            self._image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(self._camera_shape))
+
+    def is_enabled(self):
+        return self._enabled
 
     def check(self):
         with self._lock:
@@ -193,37 +196,36 @@ class GstSource(Configurable):
 
     def internal_start(self, **kwargs):
         _errors = []
-        _server = parse_option('camera.ip', str, errors=_errors, **kwargs)
-        _user = parse_option('camera.user', str, errors=_errors, **kwargs)
-        _password = parse_option('camera.password', str, errors=_errors, **kwargs)
-        _rtsp_port = parse_option('camera.rtsp.port', int, 0, errors=_errors, **kwargs)
-        _rtsp_path = parse_option('camera.image.path', str, errors=_errors, **kwargs)
-        _img_wh = parse_option('camera.image.shape', str, errors=_errors, **kwargs)
+        _server = parse_option(self._position + '.camera.ip', str, errors=_errors, **kwargs)
+        _user = parse_option(self._position + '.camera.user', str, errors=_errors, **kwargs)
+        _password = parse_option(self._position + '.camera.password', str, errors=_errors, **kwargs)
+        _decode_rate = parse_option(self._position + '.camera.decode.rate', int, 20, errors=_errors, **kwargs)
+        _rtsp_port = parse_option(self._position + '.camera.rtsp.port', int, 0, errors=_errors, **kwargs)
+        _rtsp_path = parse_option(self._position + '.camera.image.path', str, errors=_errors, **kwargs)
+        _img_wh = parse_option(self._position + '.camera.image.shape', str, errors=_errors, **kwargs)
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
-        _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
-            **dict(user=_user, password=_password, ip=_server, port=_rtsp_port, path=_rtsp_path)
-        )
-        _url = "rtspsrc " \
-               "location={url} " \
-               "latency=0 drop-on-latency=true ! queue ! " \
-               "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-               "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
-            format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1]))
         self._camera_shape = _shape
-        # flipcode = 0: flip vertically
-        # flipcode > 0: flip horizontally
-        # flipcode < 0: flip vertically and horizontally
-        # Must be done at stream source in order to be the same for all clients.
-        # if _img_flip in ('both', 'vertical', 'horizontal'):
-        #    self._flipcode = 0 if _img_flip == 'vertical' else 1 if _img_flip == 'horizontal' else -1
-        if len(_errors) == 0:
-            # Do not use our method - already under lock.
-            if self._source:
-                self._source.close()
+        # Do not use our method - already under lock.
+        if self._source:
+            self._source.close()
+        # The enabled property may change between restarts.
+        _enabled = parse_option(self._position + '.camera.enabled', (lambda v: bool(int(v))), False, _errors, **kwargs)
+        self._enabled = _enabled
+        if _enabled and len(_errors) == 0:
+            _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
+                **dict(user=_user, password=_password, ip=_server, port=_rtsp_port, path=_rtsp_path)
+            )
+            _url = "rtspsrc " \
+                   "location={url} " \
+                   "latency=0 drop-on-latency=true ! queue ! " \
+                   "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
+                   "videorate ! video/x-raw,framerate={framerate}/1 ! " \
+                   "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
+                format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1], framerate=_decode_rate))
             logger.info("Camera rtsp url = {}.".format(_rtsp_url))
             logger.info("Image shape={}.".format(self._camera_shape))
-            self._source = GstRawSource(fn_callback=self._publish, command=_url)
+            self._source = GstRawSource(name=self._position, fn_callback=self._publish, command=_url)
         return _errors
 
 

@@ -3,21 +3,19 @@ if (page_utils.get_stream_type() == 'h264') {
         constructor(uri, reconnect_ms) {
             this.uri = uri;
             this.reconnect_ms = reconnect_ms;
-            this.attemt_reconnect = true;
+            this.attempt_reconnect = true;
         }
-
         onopen(player) {
             player.playStream();
         }
-
         onclose(player) {
-            if (this.attemt_reconnect) {
+            if (this.attempt_reconnect) {
                 setTimeout(function() {player.connect(this.uri);}, this.reconnect_ms);
             }
         }
     }
 
-    var camera_player = {
+    var camera_controller = {
         el_canvas: null,
         wsavc: null,
         socket: null,
@@ -25,6 +23,7 @@ if (page_utils.get_stream_type() == 'h264') {
         init: function(el_parent) {
             if (this.el_canvas == undefined) {
                 this.el_canvas = document.createElement("canvas");
+                this.el_canvas.id = 'h264_front_camera_main_image';
                 el_parent.appendChild(this.el_canvas)
             }
         },
@@ -36,23 +35,30 @@ if (page_utils.get_stream_type() == 'h264') {
         },
         stop: function() {
             if (this.socket != undefined) {
-                this.socket.attemt_reconnect = false;
+                this.socket.attempt_reconnect = false;
                 this.wsavc.disconnect();
                 this.socket = null;
             }
         }
     }
+
+    teleop_screen.add_camera_selection_listener(function(current) {
+        $("canvas#h264_front_camera_main_image").removeClass('selected');
+        if (current == 'front') {
+            $("canvas#h264_front_camera_main_image").addClass('selected');
+        }
+    });
 }
 
 function h264_start_all() {
-    if (camera_player != undefined && camera_player.socket == undefined) {
-        camera_player.init(document.getElementById('camera1'));
-        camera_player.start(9101);
+    if (page_utils.get_stream_type() == 'h264' && camera_controller != undefined && camera_controller.socket == undefined) {
+        camera_controller.init(document.getElementById('viewport_container'));
+        camera_controller.start(9101);
     }
 }
 
 function h264_stop_all() {
-    if (camera_player != undefined) {
-        camera_player.stop();
+    if (page_utils.get_stream_type() == 'h264' && camera_controller != undefined) {
+        camera_controller.stop();
     }
 }

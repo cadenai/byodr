@@ -1,7 +1,7 @@
 version: '2'
 services:
   pigpiod:
-    image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.10.2
+    image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0
     container_name: pigpiod
     privileged: true
     user: root

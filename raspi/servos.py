@@ -16,6 +16,7 @@ class Chassis(object):
     def __init__(self):
         self._steer_servo = None
         self._motor_servo = None
+        self._steering_config = dict(scale=1)
         self._throttle_config = dict(reverse=0, forward_shift=0, backward_shift=0, scale=0)
 
     @staticmethod
@@ -34,25 +35,33 @@ class Chassis(object):
 
     def set_configuration(self, config):
         if config is not None:
-            self._steer_servo = self._create_servo(self._steer_servo, config.get('steering'))
-            self._motor_servo = self._create_servo(self._motor_servo, config.get('motor'))
-            self._throttle_config = config.get('throttle')
+            self._steer_servo = self._create_servo(self._steer_servo, config.get('steer_servo'))
+            self._motor_servo = self._create_servo(self._motor_servo, config.get('motor_servo'))
+            self._steering_config = config.get('steering_config')
+            self._throttle_config = config.get('throttle_config')
 
     def is_configured(self):
         return None not in (self._steer_servo, self._motor_servo)
 
     def apply_steering(self, value):
         if self._steer_servo is not None:
-            self._steer_servo.angle = 90. * min(1, max(-1, value))
+            config = self._steering_config
+            scale = config.get('scale')
+            self._steer_servo.angle = scale * 90. * min(1, max(-1, value))
 
-    def apply_throttle(self, throttle, in_reverse):
+    @staticmethod
+    def _motor_angle(config, throttle):
+        _shift = config.get('forward_shift') if throttle > 0 else config.get('backward_shift')
+        _angle = min(90, max(-90, _shift + config.get('scale') * throttle))
+        return _angle
+
+    def apply_throttle(self, throttle):
         if self._motor_servo is not None:
             config = self._throttle_config
-            if throttle < -.95 and in_reverse:
-                _angle = config.get('reverse')
-            else:
-                _angle = config.get('forward_shift') if throttle > 0 else config.get('backward_shift')
-                _angle = min(90, max(-90, _angle + config.get('scale') * throttle))
+            _angle = self._motor_angle(config, throttle)
+            _reverse_boost = config.get('reverse')
+            if throttle < -.990 and _reverse_boost < _angle:
+                _angle = _reverse_boost
             self._motor_servo.angle = _angle
 
     def quit(self):
@@ -69,15 +78,18 @@ class CommandHistory(object):
         self.reset()
 
     def touch(self, steering, throttle, wakeup=False):
-        no_steering = steering is None or abs(steering) < 1e-3
-        no_throttle = throttle is None or abs(throttle) < 1e-3
-        if self.is_missing() and wakeup:
+        if wakeup:
             self._num_missing = 0
-        elif no_steering and no_throttle:
-            self._num_missing += 1
+        else:
+            has_steering = steering is not None and abs(steering) > 1e-3
+            has_throttle = throttle is not None and abs(throttle) > 1e-3
+            if not has_steering and not has_throttle:
+                self._num_missing += 1
+            elif not self.is_missing():
+                self._num_missing = 0
 
     def reset(self):
-        self._num_missing = self._threshold * 2
+        self._num_missing = self._threshold + 1
 
     def is_missing(self):
         return self._num_missing > self._threshold
@@ -118,7 +130,7 @@ class ChassisApplication(Application):
         self._chassis.quit()
 
     def step(self):
-        # At startup the relay is open untill non empty commands while the integrity requirements are met.
+        # At startup the relay is open until non empty commands while the integrity requirements are met.
         # After a number of missing commands open the relay and close it again when commands resume.
         n_violations = self._integrity.check()
         if n_violations > 5:
@@ -131,7 +143,7 @@ class ChassisApplication(Application):
 
         v_steering = 0 if c_drive is None else c_drive.get('steering', 0)
         v_throttle = 0 if c_drive is None else c_drive.get('throttle', 0)
-        v_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
+        # v_reverse = False if c_drive is None else bool(c_drive.get('reverse'))
         v_wakeup = False if c_drive is None else bool(c_drive.get('wakeup'))
         self._cmd_history.touch(steering=v_steering, throttle=v_throttle, wakeup=v_wakeup)
         if self._cmd_history.is_missing():
@@ -140,8 +152,8 @@ class ChassisApplication(Application):
             self._relay.close()
 
         self._chassis.apply_steering(v_steering)
-        # Immediately zero out throttle when violations start occuring.
-        self._chassis.apply_throttle(0 if n_violations > 0 else v_throttle, v_reverse)
+        # Immediately zero out throttle when violations start occurring.
+        self._chassis.apply_throttle(0 if n_violations > 0 else v_throttle)
         # Let the communication partner know we are operational.
         self.publisher.publish(data=dict(time=timestamp(), configured=int(self._chassis.is_configured())))
 

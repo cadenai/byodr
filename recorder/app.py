@@ -242,7 +242,7 @@ def main():
     collector = CollectorThread(receivers=(pilot, vehicle, ipc_chatter), event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
-    application.camera = CameraThread(url='ipc:///byodr/camera.sock', topic=b'aav/camera/0', event=quit_event)
+    application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/recorder_c.sock', name='recorder', event=quit_event)
     application.pilot = lambda: collector.get(0)
     application.vehicle = lambda: collector.get(1)

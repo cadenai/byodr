@@ -1,3 +1,14 @@
+jQuery.fn.visible = function() {
+    return this.css('visibility', 'visible');
+};
+
+jQuery.fn.invisible = function() {
+    return this.css('visibility', 'hidden');
+};
+
+jQuery.fn.is_visible = function() {
+    return this.css('visibility') == 'visible';
+};
 
 function extend(proto, literal) {
     var result = Object.create(proto);
@@ -28,6 +39,8 @@ var socket_utils = {
 }
 
 var page_utils = {
+    system_capabilities: {},
+
     get_stream_type: function() {
         var stream_type = window.localStorage.getItem('video.stream.type');
         if (stream_type == null) {
@@ -41,3 +54,7 @@ var page_utils = {
         window.localStorage.setItem('video.stream.type', stream_type);
     }
 }
+
+jQuery.get("/api/system/capabilities", function(data) {
+    page_utils.system_capabilities = data;
+});

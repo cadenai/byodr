@@ -14,6 +14,8 @@ var NoneController = {
     button_center: 0,
     arrow_up: 0,
     arrow_down: 0,
+    arrow_left: 0,
+    arrow_right: 0,
     healthy: false,
 
     collapse: function(value, zone=0) {
@@ -62,6 +64,8 @@ var Xbox360StandardController = extend(NoneController, {
             this.button_center = pad.buttons[16].value;
             this.arrow_up = pad.buttons[12].value;
             this.arrow_down = pad.buttons[13].value;
+            this.arrow_left = pad.buttons[14].value;
+            this.arrow_right = pad.buttons[15].value;
         }
         return this.healthy;
     }
@@ -87,6 +91,8 @@ var PS4StandardController = extend(NoneController, {
             this.button_center = pad.buttons[16].value;
             this.arrow_up = pad.buttons[12].value;
             this.arrow_down = pad.buttons[13].value;
+            this.arrow_left = pad.buttons[14].value;
+            this.arrow_right = pad.buttons[15].value;
         }
         return this.healthy;
     }

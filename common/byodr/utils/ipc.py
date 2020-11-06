@@ -6,6 +6,7 @@ import multiprocessing
 import os
 import sys
 import threading
+import time
 
 import numpy as np
 import zmq
@@ -59,8 +60,9 @@ class ImagePublisher(object):
         self._publisher = publisher
         self._topic = topic
 
-    def publish(self, _img):
-        self._publisher.send_multipart([self._topic,
+    def publish(self, _img, topic=None):
+        _topic = self._topic if topic is None else topic
+        self._publisher.send_multipart([_topic,
                                         json.dumps(dict(time=timestamp(), shape=_img.shape)),
                                         np.ascontiguousarray(_img, dtype=np.uint8)],
                                        flags=zmq.NOBLOCK)
@@ -92,11 +94,12 @@ class JSONReceiver(object):
 
 
 class CollectorThread(threading.Thread):
-    def __init__(self, receivers, event=None):
+    def __init__(self, receivers, event=None, hz=1000):
         super(CollectorThread, self).__init__()
         _list = (isinstance(receivers, tuple) or isinstance(receivers, list))
         self._receivers = receivers if _list else [receivers]
         self._quit_event = multiprocessing.Event() if event is None else event
+        self._sleep = 1. / hz
 
     def get(self, index):
         # Get the latest message.
@@ -110,7 +113,8 @@ class CollectorThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             # Empty the receiver queues to not block upstream senders.
-            map(lambda recv: recv.consume(), self._receivers)
+            map(lambda receiver: receiver.consume(), self._receivers)
+            time.sleep(self._sleep)
 
 
 class ReceiverThread(threading.Thread):
@@ -224,12 +228,12 @@ class LocalIPCServer(JSONServerThread):
         super(LocalIPCServer, self).__init__(url, event, receive_timeout_ms)
         self._name = name
         self._m_startup = collections.deque(maxlen=1)
+        self._m_capabilities = collections.deque(maxlen=1)
 
-    def register_start(self, errors):
+    def register_start(self, errors, capabilities=None):
+        capabilities = {} if capabilities is None else capabilities
         self._m_startup.append((datetime.datetime.utcnow().strftime('%b %d %H:%M:%S.%s UTC'), errors))
-
-    def serve_local(self, message):
-        return {}
+        self._m_capabilities.append(capabilities)
 
     def serve(self, message):
         try:
@@ -241,9 +245,11 @@ class LocalIPCServer(JSONServerThread):
                     [d_errors.update({error.key: error.message}) for error in errors]
                     messages = ['{} - {}'.format(k, d_errors[k]) for k in d_errors.keys()]
                 return {self._name: {ts: messages}}
+            elif message.get('request') == 'system/service/capabilities' and self._m_capabilities:
+                return {self._name: self._m_capabilities[-1]}
         except IndexError:
             pass
-        return self.serve_local(message)
+        return {}
 
 
 class JSONZmqClient(object):

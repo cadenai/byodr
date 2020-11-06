@@ -19,7 +19,7 @@ class CarlaRunner(Configurable):
         super(CarlaRunner, self).__init__()
         self._process_frequency = 10
         self._patience_micro = 1000.
-        self._vehicle = CarlaHandler((lambda x: image_publisher.publish(x)))
+        self._vehicle = CarlaHandler((lambda img, camera: image_publisher.publish(img, camera=camera)))
 
     def internal_quit(self, restarting=False):
         if not restarting:
@@ -54,9 +54,8 @@ class CarlaRunner(Configurable):
 class CarlaApplication(Application):
     def __init__(self, image_publisher, config_dir=os.getcwd()):
         super(CarlaApplication, self).__init__()
-        self._image_publisher = image_publisher
-        self._config_dir = config_dir
         self._runner = CarlaRunner(image_publisher)
+        self._config_dir = config_dir
         self.publisher = None
         self.ipc_chatter = None
         self.pilot = None
@@ -77,12 +76,16 @@ class CarlaApplication(Application):
         cfg.update(dict(parser.items('platform')))
         return cfg
 
+    @staticmethod
+    def _capabilities():
+        return {'rear_camera_enabled': 1}
+
     def setup(self):
         if self.active():
             self._check_user_file()
             _restarted = self._runner.restart(**self._config())
             if _restarted:
-                self.ipc_server.register_start(self._runner.get_errors())
+                self.ipc_server.register_start(self._runner.get_errors(), self._capabilities())
                 _process_frequency = self._runner.get_process_frequency()
                 _patience_micro = self._runner.get_patience_micro()
                 self.set_hz(_process_frequency)
@@ -107,13 +110,27 @@ class CarlaApplication(Application):
             self.setup()
 
 
+class RoutingImagePublisher(object):
+    def __init__(self, front_camera, rear_camera):
+        self.front_camera = front_camera
+        self.rear_camera = rear_camera
+
+    def publish(self, _img, camera=0):
+        if camera == 0:
+            self.front_camera.publish(_img)
+        else:
+            self.rear_camera.publish(_img)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    image_publisher = ImagePublisher(url='ipc:///byodr/camera.sock', topic='aav/camera/0')
-    application = CarlaApplication(image_publisher=image_publisher, config_dir=args.config)
+    front_camera = ImagePublisher(url='ipc:///byodr/camera_0.sock', topic='aav/camera/0')
+    rear_camera = ImagePublisher(url='ipc:///byodr/camera_1.sock', topic='aav/camera/1')
+
+    application = CarlaApplication(image_publisher=(RoutingImagePublisher(front_camera, rear_camera)), config_dir=args.config)
     quit_event = application.quit_event
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')

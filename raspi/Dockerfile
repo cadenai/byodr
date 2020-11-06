@@ -1,4 +1,4 @@
-FROM centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.10.2
+FROM centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0
 
 RUN apt-get update && apt-get install -y \
     usbutils \

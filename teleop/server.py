@@ -4,6 +4,7 @@ import collections
 import json
 import logging
 import os
+import time
 import traceback
 from ConfigParser import SafeConfigParser
 
@@ -20,13 +21,14 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # There can be only one operator in control at any time.
     # Do not use a single variable since class attributes mutate to be instance attributes.
     operators = set()
-    operator_access_times = collections.deque(maxlen=1)
+    operator_access_control = collections.deque(maxlen=1)
     viewers = set()
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_control = kwargs.get('fn_control')
         self._operator_timeout_micro = 10 * 1e6  # 10 seconds.
+        self._operator_throttle_micro = 10 * 1e3  # 10 milliseconds.
 
     def check_origin(self, origin):
         return True
@@ -37,7 +39,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
     def open(self, *args, **kwargs):
         # Perhaps the operator has timed-out but the control connection was not closed somehow.
         if self.operators:
-            _last_msg_micro = self.operator_access_times[-1] if self.operator_access_times else 0
+            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
             if (timestamp() - _last_msg_micro > self._operator_timeout_micro) or next(iter(self.operators)).ws_connection is None:
                 logger.info("Operator server-side timeout.")
                 self.operators.clear()
@@ -63,10 +65,13 @@ class ControlServerSocket(websocket.WebSocketHandler):
     def on_message(self, json_message):
         _response = json.dumps(dict(control='viewer'))
         if self in self.operators:
-            msg = json.loads(json_message)
             _micro_time = timestamp()
+            # Throttle very fast operator connections.
+            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
+            time.sleep(max(0, self._operator_throttle_micro - (_micro_time - _last_msg_micro)) * 1e-6)
+            msg = json.loads(json_message)
             msg['time'] = _micro_time
-            self.operator_access_times.append(_micro_time)
+            self.operator_access_control.append(_micro_time)
             self._fn_control(msg)
             _response = json.dumps(dict(control='operator'))
         try:
@@ -130,8 +135,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'debug1': 0 if inference is None else inference.get('corridor'),
                 'debug2': 0 if inference is None else inference.get('obstacle'),
                 'debug3': 0 if inference is None else inference.get('penalty'),
-                'debug4': 0 if inference is None else inference.get('surprise'),
-                'debug5': 0 if inference is None else inference.get('critic'),
+                'debug4': 0 if inference is None else inference.get('surprise_out'),
+                'debug5': 0 if inference is None else inference.get('critic_out'),
                 'debug6': 0 if inference is None else inference.get('fallback'),
                 'debug7': 0 if inference is None else inference.get('_fps'),
                 'rec_act': False if recorder is None else recorder.get('active'),
@@ -173,8 +178,9 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._capture = kwargs.get('fn_capture')
-        self._black_img = np.zeros(shape=(240, 320, 3), dtype=np.uint8)
+        self._capture_front = kwargs.get('capture_front')
+        self._capture_rear = kwargs.get('capture_rear')
+        self._black_img = np.zeros(shape=(1, 1, 3), dtype=np.uint8)
 
     def check_origin(self, origin):
         return True
@@ -192,8 +198,9 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         try:
             request = json.loads(message)
             quality = request.get('quality', 90)
+            camera = request.get('camera', 'front').strip().lower()
             display = request.get('display', 'HVGA').strip().upper()
-            img = self._capture()
+            img = self._capture_front() if camera == 'front' else self._capture_rear()
             if img is None:
                 # Always send something to the client is able to resume polling.
                 img = self._black_img
@@ -272,11 +279,10 @@ class ApiUserOptionsHandler(JSONRequestHandler):
         self.write(json.dumps(dict(message='ok')))
 
 
-class ApiSystemStateHandler(JSONRequestHandler):
+class JSONMethodDumpRequestHandler(JSONRequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._list_start_messages = kwargs.get('fn_list_start_messages')
+        self._method = kwargs.get('fn_method')
 
     def get(self):
-        messages = self._list_start_messages()
-        self.write(json.dumps(messages))
+        self.write(json.dumps(self._method()))
