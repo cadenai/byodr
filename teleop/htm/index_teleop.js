@@ -207,6 +207,17 @@ var log_controller = {
     command_turn: null,
     command_ctl: null,
     recorders: {551: 'driving', 594: 'interventions'},
+    server_message_listeners: [],
+
+    add_server_message_listener: function(cb) {
+        this.server_message_listeners.push(cb);
+    },
+
+    notify_server_message_listeners: function(message) {
+        this.server_message_listeners.forEach(function(cb) {
+            cb(message);
+        });
+    },
 
     str_recorder: function(mode, active) {
         mode = parseInt(mode);
@@ -253,6 +264,7 @@ log_controller.start_socket = function() {
             var el_autopilot_status = $('#autopilot_status');
             //
             var command = JSON.parse(evt.data);
+            view.notify_server_message_listeners(command);
             el_pilot_steering.text(command.ste.toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
             el_inference_penalty.text(command.debug1.toFixed(2));

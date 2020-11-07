@@ -5,10 +5,14 @@ import os
 import sys
 from functools import partial
 
+import numpy as np
 from Equation import Expression
+from scipy.cluster.vq import vq
+from scipy.spatial.distance import cosine
 
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
+from byodr.utils.navigate import FileSystemRouteDataSource
 from byodr.utils.option import parse_option, PropertyError
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
@@ -19,10 +23,39 @@ else:
     from ConfigParser import SafeConfigParser
 
 
+class FeatureCluster(object):
+
+    def __init__(self):
+        self._features = None
+        self._code_book = None
+
+    def reload(self, features):
+        self._features = features
+        self._code_book = np.array(features)
+
+    def get_best_match(self, query):
+        match_id, match_value = None, None
+        if self._code_book is not None:
+            query = np.reshape(np.array([query]), [1, -1])
+            match_id = vq(query, self._code_book)[0][0]
+            match_value = cosine(query, self._code_book[match_id])
+        return match_id, match_value
+
+    def release(self):
+        self._features = None
+        self._code_book = None
+
+    def quit(self):
+        self.release()
+
+
 class TFRunner(Configurable):
-    def __init__(self, model_directories):
+    def __init__(self, model_directories, navigation_routes=None):
         super(TFRunner, self).__init__()
         self._model_directories = model_directories
+        self._navigation_routes = navigation_routes
+        self._cluster = FeatureCluster()
+        self._store = None
         self._gpu_id = 0
         self._process_frequency = 10
         self._steering_scale_left = 1
@@ -45,6 +78,10 @@ class TFRunner(Configurable):
         return self._process_frequency
 
     def internal_quit(self, restarting=False):
+        if self._store is not None:
+            self._store.close()
+        if self._cluster is not None:
+            self._cluster.quit()
         if self._driver is not None:
             self._driver.deactivate()
 
@@ -75,12 +112,27 @@ class TFRunner(Configurable):
         self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)
         self._fn_corridor_norm = partial(self._norm_scale, min_=0, max_=_corridor_scale_max)
         p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
+        self._dagger = p_conv_dropout > 0
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
         self._driver = TFDriver(model_directories=self._model_directories, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
-        self._dagger = p_conv_dropout > 0
         self._driver.activate()
+        _key_route_name = 'dnn.image.navigation.route.name'
+        _route = parse_option(_key_route_name, str, None, _errors, **kwargs)
+        self._store = FileSystemRouteDataSource(directory=self._navigation_routes, fn_load_image=self._fn_alex_image)
+        self._store.open(route_name=_route)
+        if len(self._store) == 0:
+            _errors.append(PropertyError(_key_route_name, "Route '{}' is empty or could not be found.".format(_route)))
+        else:
+            self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
         return _errors
+
+    def _pull_image_features(self, image):
+        return self._driver.forward(dave_image=self._fn_dave_image(image),
+                                    alex_image=self._fn_alex_image(image),
+                                    turn=None,
+                                    fallback=True,
+                                    dagger=False)[-1]
 
     def _dnn_steering(self, raw):
         return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
@@ -95,7 +147,7 @@ class TFRunner(Configurable):
         _alex_img = self._fn_alex_image(image)
         dagger = self._dagger
 
-        action_out, critic_out, surprise_out, brake_out, brake_critic_out = \
+        action_out, critic_out, surprise_out, brake_out, brake_critic_out, features_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
@@ -114,7 +166,10 @@ class TFRunner(Configurable):
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
-        return dict(action=float(self._dnn_steering(action_out)),
+        _nav_id, _nav_distance = self._cluster.get_best_match(features_out)
+
+        return dict(time=timestamp(),
+                    action=float(self._dnn_steering(action_out)),
                     corridor=float(_corridor_penalty),
                     surprise_out=float(surprise_out),
                     critic_out=float(critic_out),
@@ -123,17 +178,18 @@ class TFRunner(Configurable):
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
                     internal=[float(0)],
-                    time=timestamp()
+                    navigator_image=int(-1 if _nav_id is None else _nav_id),
+                    navigator_distance=float(1 if _nav_distance is None else _nav_distance)
                     )
 
 
 class InferenceApplication(Application):
-    def __init__(self, runner=None, config_dir=os.getcwd(), internal_models=os.getcwd(), user_models=None):
+    def __init__(self, runner=None, config_dir=os.getcwd(), internal_models=os.getcwd(), user_models=None, navigation_routes=None):
         super(InferenceApplication, self).__init__()
         self._config_dir = config_dir
         self._internal_models = internal_models
         self._user_models = user_models
-        self._runner = TFRunner(model_directories=[user_models, internal_models]) if runner is None else runner
+        self._runner = TFRunner([user_models, internal_models], navigation_routes=navigation_routes) if runner is None else runner
         self.publisher = None
         self.camera = None
         self.ipc_server = None
@@ -148,7 +204,9 @@ class InferenceApplication(Application):
         parser = SafeConfigParser()
         # The end-user config overrides come last so all settings are modifiable.
         [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(self._config_dir, '*.ini')]
-        return dict(parser.items('inference'))
+        cfg = dict(parser.items('inference'))
+        cfg.update(dict(parser.items('navigation')))
+        return cfg
 
     def get_process_frequency(self):
         return self._runner.get_frequency()
@@ -183,9 +241,13 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     parser.add_argument('--internal', type=str, default='/models', help='Directory with the default inference models.')
     parser.add_argument('--user', type=str, default='/user_models', help='Directory with the user inference models.')
+    parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    application = InferenceApplication(config_dir=args.config, internal_models=args.internal, user_models=args.user)
+    application = InferenceApplication(config_dir=args.config,
+                                       internal_models=args.internal,
+                                       user_models=args.user,
+                                       navigation_routes=args.routes)
     quit_event = application.quit_event
     logger = application.logger
 

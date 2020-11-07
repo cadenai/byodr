@@ -10,6 +10,7 @@ from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
+import tornado
 from tornado import web, websocket
 
 from byodr.utils import timestamp
@@ -150,10 +151,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'speed': 0 if pilot is None else pilot.get('desired_speed') * _speed_scale,
                 'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * _speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
-                'route': None,
-                'route_np': None,
-                'route_np_sim': 0.,
-                'route_np_debug1': 0.,
+                'nav_image': 'none' if inference is None else inference.get('navigator_image'),
+                'nav_distance': 1 if inference is None else inference.get('navigator_distance'),
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))
@@ -213,6 +212,30 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
             logger.error("JSON message:---\n{}\n---".format(message))
+
+
+class NavImageHandler(web.RequestHandler):
+
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self._fn_get_image = kwargs.get('fn_get_image')
+        self._black_img = np.zeros(shape=(1, 1, 3), dtype=np.uint8)
+        self._jpeg_quality = 90
+
+    def data_received(self, chunk):
+        pass
+
+    # noinspection PyUnresolvedReferences
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def get(self):
+        image = self._fn_get_image()
+        image = self._black_img if image is None else image
+        chunk = jpeg_encode(image, quality=self._jpeg_quality)
+        self.set_header('Content-Type', 'image/jpeg')
+        self.set_header('Content-Length', len(chunk))
+        self.write(chunk.tobytes())
+        yield tornado.gen.Task(self.flush)
 
 
 class UserOptions(object):

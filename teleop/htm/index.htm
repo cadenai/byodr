@@ -107,7 +107,6 @@
           text-align: right;
         }
         div#debug_drive_values {
-          float: right;
           margin: 1px 0 1px 50px;
           cursor: zoom-in;
         }
@@ -178,6 +177,19 @@
         }
         div#preview_container img.active {
         }
+
+        div#navigation_container {
+            margin: 15px 0 5px 5px;
+        }
+        div#navigation_container img {
+            width: 80px;
+            height: 45px;
+            border-radius: 3px;
+            border: 1px solid grey;
+        }
+        div#navigation_container img.active {
+        }
+
         div#viewport_container {
         }
         canvas#h264_front_camera_main_image {
@@ -221,6 +233,7 @@
 	<script src="http-live-player.js?v=0.40.0"></script>
 	<script src="index_utils.js?v=0.40.0"></script>
 	<script src="index_gamepad.js?v=0.40.0"></script>
+	<script src="index_navigator.js?v=0.41.0"></script>
 	<script src="index_teleop.js?v=0.40.2"></script>
 	<script src="index_mjpeg.js?v=0.40.1"></script>
 	<script src="index_h264.js?v=0.40.0"></script>
@@ -261,7 +274,7 @@
                     <div id="beta_speed_label">km/h</div>
                 </div>
             </div>
-            <div class="debug_values" id="debug_drive_values">
+            <div class="right debug_values" id="debug_drive_values">
                 <p id="p_inference_fps" style="visibility: hidden;"><span id="inference_fps">0</span>&nbsp;fps</p>
                 <p id="p_inference_penalty" style="visibility: hidden;">
                     <span id="inference_surprise">0</span>&nbsp;<span id="inference_critic">0</span>
@@ -271,6 +284,8 @@
                 </p>
                 <p><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
+            </div>
+            <div id="navigation_container" class="right">
             </div>
         </div>
         <div id="viewport_container"></div>
@@ -309,11 +324,13 @@ function mjpeg_caret_down() {
     mjpeg_refresh_page_values();
 }
 function start_all_handlers() {
+    navigator_start_all();
     teleop_start_all();
     mjpeg_start_all();
     h264_start_all();
 }
 function stop_all_handlers() {
+    navigator_stop_all();
     teleop_stop_all();
     mjpeg_stop_all();
     h264_stop_all();

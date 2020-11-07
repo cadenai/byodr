@@ -8,13 +8,16 @@ import signal
 import threading
 from ConfigParser import SafeConfigParser
 
+import cv2
+import numpy as np
 from tornado import web, ioloop
 
 from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
+from byodr.utils.navigate import FileSystemRouteDataSource
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
-    JSONMethodDumpRequestHandler
+    JSONMethodDumpRequestHandler, NavImageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +37,20 @@ def _interrupt():
 
 
 class TeleopApplication(Application):
-    def __init__(self, event, config_dir=os.getcwd()):
+    def __init__(self, event, config_dir=os.getcwd(), routes_dir=os.getcwd()):
         super(TeleopApplication, self).__init__(quit_event=event)
         self._config_dir = config_dir
         self._display_speed_scale = 0
         self._user_config_file = os.path.join(self._config_dir, 'config.ini')
         self._config_hash = -1
+        self._store = FileSystemRouteDataSource(directory=routes_dir, fn_load_image=self._load_nav_image)
         self._lock = threading.Lock()
+
+    @staticmethod
+    def _load_nav_image(image):
+        image = cv2.resize(image, (160, 120))
+        image = image.astype(np.uint8)
+        return image
 
     def _check_user_config(self):
         _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
@@ -50,7 +60,9 @@ class TeleopApplication(Application):
     def _config(self):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        return dict(parser.items('teleop'))
+        cfg = dict(parser.items('teleop'))
+        cfg.update(dict(parser.items('navigation')))
+        return cfg
 
     def get_user_config_file(self):
         return self._user_config_file
@@ -58,6 +70,11 @@ class TeleopApplication(Application):
     def get_display_speed_scale(self):
         with self._lock:
             return self._display_speed_scale
+
+    def get_navigation_image(self, image_id):
+        image_id = -1 if image_id is None else image_id
+        images = self._store.list_all_images()
+        return images[image_id] if len(images) > image_id >= 0 else None
 
     def setup(self):
         if self.active():
@@ -70,15 +87,18 @@ class TeleopApplication(Application):
                 self.logger.info("Speed scale = {}.".format(_scale))
                 with self._lock:
                     self._display_speed_scale = _scale
+                _route = _config.get('dnn.image.navigation.route.name')
+                self._store.open(route_name=_route)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--port', type=int, default=9100, help='Port number')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
+    parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    application = TeleopApplication(event=quit_event, config_dir=args.config)
+    application = TeleopApplication(event=quit_event, config_dir=args.config, routes_dir=args.routes)
     application.setup()
 
     camera_front = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
@@ -103,6 +123,11 @@ def main():
                                     'ipc:///byodr/relay_c.sock',
                                     'ipc:///byodr/recorder_c.sock'])
 
+    def get_navigation_image():
+        inf_state = collector.get(2)
+        image_id = None if inf_state is None else inf_state.get('navigator_image')
+        return application.get_navigation_image(image_id)
+
     def on_options_save():
         chatter.publish(dict(time=timestamp(), command='restart'))
         application.setup()
@@ -125,6 +150,7 @@ def main():
                                      collector.get(3))))),
             (r"/ws/cam", CameraMJPegSocket, dict(capture_front=(lambda: camera_front.capture()[-1]),
                                                  capture_rear=(lambda: camera_rear.capture()[-1]))),
+            (r'/ws/nav', NavImageHandler, dict(fn_get_image=(lambda: get_navigation_image()))),
             (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=(UserOptions(application.get_user_config_file())),
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
