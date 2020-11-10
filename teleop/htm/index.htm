@@ -189,6 +189,9 @@
         }
         div#navigation_container img.active {
         }
+        div#navigation_container > p {
+            display: inline;
+        }
 
         div#viewport_container {
         }
@@ -286,6 +289,13 @@
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
             <div id="navigation_container" class="right">
+                <p>
+                    <span id="navigation_route_sel_prev">&lt;</span>
+                    <span id="navigation_route_name">None defined</span>
+                    <span id="navigation_route_sel_next">&gt;</span>
+                </p>
+                <p><span id="navigation_image_distance">1</span></p>
+                <img id="navigation_image"/>
             </div>
         </div>
         <div id="viewport_container"></div>

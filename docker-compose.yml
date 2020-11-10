@@ -122,11 +122,13 @@ services:
     image: centipede2donald/byodr-ce:pilot
     container_name: byodr_pilot
     restart: always
+    command: ["python", "app.py", "--routes", "/sessions/routes"]
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
+      - volume_byodr_sessions:/sessions:ro
   recorder:
     cpuset: "0,1"
     build:

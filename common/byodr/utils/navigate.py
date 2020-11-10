@@ -1,11 +1,56 @@
 import glob
+import json
 import logging
+import multiprocessing
 import os
 from abc import ABCMeta, abstractmethod
 
-import cv2
-
 logger = logging.getLogger(__name__)
+
+
+class NavigationCommand(object):
+    DEFAULT, LEFT, AHEAD, RIGHT = (0, 1, 2, 3)
+
+    def __init__(self, sleep=None, direction=None, speed=None):
+        self._sleep = sleep
+        self._direction = direction
+        self._speed = speed
+
+    def get_sleep(self):
+        return self._sleep
+
+    def get_direction(self):
+        return self._direction
+
+    def get_speed(self):
+        return self._speed
+
+
+def _translate_navigation_direction(value):
+    if value is not None:
+        value = value.lower()
+        if value == 'left':
+            return NavigationCommand.LEFT
+        elif value == 'right':
+            return NavigationCommand.RIGHT
+        elif value == 'ahead':
+            return NavigationCommand.AHEAD
+        elif value == 'default':
+            return NavigationCommand.DEFAULT
+    # No change in direction.
+    return None
+
+
+def _parse_navigation_instructions(m):
+    # version = m.get('version')
+    pilot = m.get('pilot')
+    if pilot is None:
+        return NavigationCommand()
+    return NavigationCommand(
+        sleep=None if pilot.get('sleep') is None else float(pilot.get('sleep')),
+        direction=_translate_navigation_direction(pilot.get('direction')),
+        speed=None if pilot.get('speed') is None else float(pilot.get('speed'))
+    )
 
 
 class AbstractRouteDataSource(object):
@@ -50,20 +95,20 @@ class AbstractRouteDataSource(object):
 
 class FileSystemRouteDataSource(AbstractRouteDataSource):
 
-    def __init__(self, directory, fn_load_image):
+    def __init__(self, directory, fn_load_image=(lambda x: x), load_instructions=True):
         self.directory = directory
         self.fn_load_image = fn_load_image
+        self.load_instructions = load_instructions
+        self.quit_event = multiprocessing.Event()
         self.routes = []
         self.selected_route = None
         # Route specific data follows.
         self.points = []
         self.all_images = []
         self.image_index_to_point = {}
-        self.point_to_instruction = {}
-        # Proceed with initial loading.
-        self._load_routes()
+        self.point_to_instructions = {}
 
-    def _load_routes(self):
+    def load_routes(self):
         # Each route is a sub-directory of the base folder.
         self.routes = [d for d in os.listdir(self.directory) if not d.startswith('.')]
         logger.info("Directory '{}' contains the following routes {}.".format(self.directory, self.routes))
@@ -72,7 +117,16 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         self.points = []
         self.all_images = []
         self.image_index_to_point = {}
-        self.point_to_instruction = {}
+        self.point_to_instructions = {}
+        self.quit_event.clear()
+
+    @staticmethod
+    def _get_command(fname):
+        try:
+            with open(fname) as f:
+                return json.load(f)
+        except IOError:
+            return {}
 
     def __len__(self):
         # Zero when no route selected.
@@ -94,6 +148,8 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
             # Take the existing sort-order.
             image_index = 0
             for point_name in np_dirs:
+                if self.quit_event.is_set():
+                    break
                 self.points.append(point_name)
                 np_dir = os.path.join(self.directory, route_name, point_name)
                 _pattern = np_dir + os.path.sep
@@ -101,18 +157,18 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                 if len(im_files) < 1:
                     logger.info("Skipping point '{}' as there are no images for it.".format(point_name))
                     continue
-                # instruction_file = os.path.join(np_dir, 'instructions.json')
-                # with open(instruction_file) as f:
-                #     cmd, speed = f.read().split(',')
-                self.point_to_instruction[point_name] = 'n/a'
+                if self.load_instructions:
+                    command = self._get_command(os.path.join(np_dir, 'command.json'))
+                    command = command if command else self._get_command(os.path.join(np_dir, point_name + '.json'))
+                    self.point_to_instructions[point_name] = _parse_navigation_instructions(command)
                 # Collect images by navigation point.
                 for im_file in im_files:
-                    self.all_images.append(self.fn_load_image(cv2.imread(im_file)))
+                    self.all_images.append(self.fn_load_image(im_file))
                     self.image_index_to_point[image_index] = point_name
                     image_index += 1
 
     def close(self):
-        self._reset()
+        self.quit_event.set()
 
     def list_navigation_points(self):
         return self.points
@@ -124,4 +180,4 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         return self.image_index_to_point[idx]
 
     def get_instructions(self, point):
-        return self.point_to_instruction[point]
+        return self.point_to_instructions.get(point)

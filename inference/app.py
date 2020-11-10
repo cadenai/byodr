@@ -5,6 +5,7 @@ import os
 import sys
 from functools import partial
 
+import cv2
 import numpy as np
 from Equation import Expression
 from scipy.cluster.vq import vq
@@ -78,12 +79,25 @@ class TFRunner(Configurable):
         return self._process_frequency
 
     def internal_quit(self, restarting=False):
-        if self._store is not None:
-            self._store.close()
-        if self._cluster is not None:
-            self._cluster.quit()
         if self._driver is not None:
             self._driver.deactivate()
+        if not restarting:
+            if self._store is not None:
+                self._store.close()
+            if self._cluster is not None:
+                self._cluster.quit()
+
+    def _pull_image_features(self, image):
+        return self._driver.forward(dave_image=self._fn_dave_image(image),
+                                    alex_image=self._fn_alex_image(image),
+                                    turn=None,
+                                    fallback=True,
+                                    dagger=False)[-1]
+
+    def start_route(self, route):
+        self._store.open(route_name=route)
+        if len(self._store) > 0:
+            self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
 
     def internal_start(self, **kwargs):
         _errors = []
@@ -115,24 +129,13 @@ class TFRunner(Configurable):
         self._dagger = p_conv_dropout > 0
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
+        self._store = FileSystemRouteDataSource(directory=self._navigation_routes,
+                                                fn_load_image=(lambda fname: self._fn_alex_image(cv2.imread(fname))),
+                                                load_instructions=False)
+        self._store.load_routes()
         self._driver = TFDriver(model_directories=self._model_directories, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._driver.activate()
-        _key_route_name = 'dnn.image.navigation.route.name'
-        _route = parse_option(_key_route_name, str, None, _errors, **kwargs)
-        self._store = FileSystemRouteDataSource(directory=self._navigation_routes, fn_load_image=self._fn_alex_image)
-        self._store.open(route_name=_route)
-        if len(self._store) == 0:
-            _errors.append(PropertyError(_key_route_name, "Route '{}' is empty or could not be found.".format(_route)))
-        else:
-            self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
         return _errors
-
-    def _pull_image_features(self, image):
-        return self._driver.forward(dave_image=self._fn_dave_image(image),
-                                    alex_image=self._fn_alex_image(image),
-                                    turn=None,
-                                    fallback=True,
-                                    dagger=False)[-1]
 
     def _dnn_steering(self, raw):
         return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
@@ -178,8 +181,8 @@ class TFRunner(Configurable):
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
                     internal=[float(0)],
-                    navigator_image=int(-1 if _nav_id is None else _nav_id),
-                    navigator_distance=float(1 if _nav_distance is None else _nav_distance)
+                    navigation_image=int(-1 if _nav_id is None else _nav_id),
+                    navigation_distance=float(1 if _nav_distance is None else _nav_distance)
                     )
 
 
@@ -205,7 +208,6 @@ class InferenceApplication(Application):
         # The end-user config overrides come last so all settings are modifiable.
         [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(self._config_dir, '*.ini')]
         cfg = dict(parser.items('inference'))
-        cfg.update(dict(parser.items('navigation')))
         return cfg
 
     def get_process_frequency(self):
@@ -232,8 +234,13 @@ class InferenceApplication(Application):
             state['_fps'] = self.get_actual_hz()
             self.publisher.publish(state)
         chat = self.ipc_chatter()
-        if chat and chat.get('command') == 'restart':
-            self.setup()
+        if chat is not None:
+            if chat.get('command') == 'restart':
+                self.setup()
+            elif 'navigator' in chat:
+                navigation_command = chat.get('navigator')
+                if navigation_command.get('action') == 'start':
+                    self._runner.start_route(navigation_command.get('route'))
 
 
 def main():

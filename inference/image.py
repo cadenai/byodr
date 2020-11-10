@@ -15,7 +15,8 @@ def hwc_to_chw(img):
     return None if img is None else img.transpose((2, 0, 1))
 
 
-def hwc_alexnet(image):
+def hwc_alexnet(image, resize_wh=None, ):
+    image = image if resize_wh is None else cv2.resize(image, resize_wh)
     image = cv2.resize(image, (227, 227))
     image = image.astype(np.uint8)
     return image
@@ -55,7 +56,7 @@ class Alternator(object):
 
 
 _registered_functions = {
-    'alex__227_227': partial(hwc_alexnet),
+    'alex__227_227': partial(hwc_alexnet, resize_wh=(320, 240)),
     'dave__320_240__200_66__0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(0, 0, 0, 0)),
     'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0)),
     'dave__exr1': partial(_exr_dave_img),

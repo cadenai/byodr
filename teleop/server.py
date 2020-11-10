@@ -151,8 +151,9 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'speed': 0 if pilot is None else pilot.get('desired_speed') * _speed_scale,
                 'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * _speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
-                'nav_image': 'none' if inference is None else inference.get('navigator_image'),
-                'nav_distance': 1 if inference is None else inference.get('navigator_distance'),
+                'nav_image': 'none' if inference is None else inference.get('navigation_image'),
+                'nav_point': 'none' if pilot is None else pilot.get('navigation_point'),
+                'nav_distance': 1 if inference is None else inference.get('navigation_distance'),
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))

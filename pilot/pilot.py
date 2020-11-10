@@ -9,6 +9,7 @@ import numpy as np
 import pid_controller.pid as pic
 
 from byodr.utils import timestamp, Configurable
+from byodr.utils.navigate import NavigationCommand
 from byodr.utils.option import parse_option
 
 logger = logging.getLogger(__name__)
@@ -487,7 +488,7 @@ class DriverManager(Configurable):
             self._pilot_state.cruise_speed = max(0., value)
             logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
-    def turn_instruction(self, turn):
+    def turn_instruction(self, turn='general.fallback'):
         with self._lock:
             self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
 
@@ -495,7 +496,7 @@ class DriverManager(Configurable):
         return self._driver_ctl
 
     def switch_ctl(self, control='driver_mode.teleop.direct'):
-        self.turn_instruction('general.fallback')
+        # self.turn_instruction()
         if control is not None and control.lower() not in ('none', 'null', 'ignore', '0', 'false'):
             with self._lock:
                 # There is not feedback of this speed in teleoperation mode. Reset at driver changes.
@@ -529,15 +530,46 @@ class DriverManager(Configurable):
             return blob
 
 
+class Navigator(object):
+    def __init__(self, route_store):
+        self._store = route_store
+        self._point = None
+
+    def load_routes(self):
+        self._store.load_routes()
+
+    def open(self, route):
+        self._store.open(route)
+
+    def update(self, c_inference):
+        navigation_point = self._store.get_image_navigation_point(c_inference.get('navigation_image'))
+        if self._point == navigation_point:
+            return None
+        self._point = navigation_point
+        return self._store.get_instructions(navigation_point)
+
+    @staticmethod
+    def translate_direction(direction):
+        if direction == NavigationCommand.LEFT:
+            return 'intersection.left'
+        elif direction == NavigationCommand.AHEAD:
+            return 'intersection.ahead'
+        elif direction == NavigationCommand.RIGHT:
+            return 'intersection.right'
+        return 'general.fallback'
+
+
 class CommandProcessor(Configurable):
-    def __init__(self):
+    def __init__(self, route_store):
         super(CommandProcessor, self).__init__()
+        self._navigator = Navigator(route_store)
         self._driver = DriverManager()
         self._process_frequency = 10
         self._patience_ms = 10
         self._button_north_ctl = None
         self._button_west_ctl = None
         self._patience_micro = 1000.
+        self._navigation_recognition_threshold = 0.
         self._cache = None
 
     def get_patience_ms(self):
@@ -545,6 +577,9 @@ class CommandProcessor(Configurable):
 
     def get_frequency(self):
         return self._process_frequency
+
+    def start_route(self, route):
+        self._navigator.open(route)
 
     def internal_quit(self, restarting=False):
         if not restarting:
@@ -557,10 +592,12 @@ class CommandProcessor(Configurable):
         self._patience_ms = parse_option('patience.ms', int, 100, _errors, **kwargs)
         self._button_north_ctl = parse_option('controller.button.north.mode', str, 0, _errors, **kwargs)
         self._button_west_ctl = parse_option('controller.button.west.mode', str, 0, _errors, **kwargs)
+        self._navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
         self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
         self._cache = cachetools.TTLCache(maxsize=100, ttl=(self._patience_ms * 1e-3))
+        self._navigator.load_routes()
         return _errors + self._driver.get_errors()
 
     def _cache_safe(self, key, func, *arguments):
@@ -570,14 +607,24 @@ class CommandProcessor(Configurable):
             finally:
                 self._cache[key] = 1
 
-    def _process(self, c_teleop, c_ros):
+    def _process(self, c_teleop, c_ros, c_inference):
+        c_inference = {} if c_inference is None else c_inference
+        if c_inference.get('navigation_distance', 1e9) < self._navigation_recognition_threshold:
+            navigation_instruction = self._navigator.update(c_inference)
+            if navigation_instruction is not None:
+                if navigation_instruction.get_direction() is not None:
+                    self._driver.turn_instruction(self._navigator.translate_direction(navigation_instruction.get_direction()))
+                if navigation_instruction.get_speed() is not None:
+                    self._driver.set_cruise_speed(navigation_instruction.get_speed())
+
+        # Continue with teleop instructions which take precedence over a route.
         c_ros = {} if c_ros is None else c_ros
         if 'pilot.driver.set' in c_ros:
             self._cache_safe('ros switch driver', lambda: self._driver.switch_ctl(c_ros.get('pilot.driver.set')))
         if 'pilot.maximum.speed' in c_ros:
             self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed')))
 
-        # Continue with teleop instructions which take precedence.
+        # Continue with teleop instructions which take precedence over the rest.
         c_teleop = {} if c_teleop is None else c_teleop
         if 'quit' in c_teleop:
             self._driver.switch_ctl()
@@ -613,8 +660,8 @@ class CommandProcessor(Configurable):
         teleop, ros, vehicle, inference = arguments
         # What to do on message timeout depends on which driver is active.
         _ctl = self._driver.get_driver_ctl()
-        # First process teleop commands.
-        self._process(teleop, ros)
+        # Handle instructions.
+        self._process(teleop, ros, inference)
         # Switch off autopilot on internal errors.
         if _ctl == 'driver_mode.inference.dnn' and None in (vehicle, inference):
             self._cache_safe('teleop driver', lambda: self._driver.switch_ctl('driver_mode.teleop.direct'))
