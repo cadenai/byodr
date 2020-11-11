@@ -302,8 +302,11 @@
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
             <div class="right debug_values" id="debug_navigation_values">
-                <p id="p_inference_image_distance" style="visibility: hidden;">
-                    <span id="navigation_image_distance">1</span>
+                <p id="p_inference_match_image_distance" style="visibility: hidden;">
+                    <span id="navigation_match_image_distance">1</span>
+                </p>
+                <p id="p_inference_candidate_image_distance" style="visibility: hidden;">
+                    <span id="navigation_candidate_image_distance">1</span>
                 </p>
             </div>
             <div id="navigation_image_container" class="right">
@@ -329,7 +332,8 @@ $("div#debug_drive_values").click(function() {
         $("p#p_inference_penalty").invisible();
         $("p#p_inference_obstacle").invisible();
         $("p#p_inference_fps").invisible();
-        $("p#p_inference_image_distance").invisible();
+        $("p#p_inference_match_image_distance").invisible();
+        $("p#p_inference_candidate_image_distance").invisible();
         $("div#debug_drive_values").removeClass('expanded');
     } else {
         $("p#p_rear_camera_framerate").visible();
@@ -337,7 +341,8 @@ $("div#debug_drive_values").click(function() {
         $("p#p_inference_penalty").visible();
         $("p#p_inference_obstacle").visible();
         $("p#p_inference_fps").visible();
-        $("p#p_inference_image_distance").visible();
+        $("p#p_inference_match_image_distance").visible();
+        $("p#p_inference_candidate_image_distance").visible();
         $("div#debug_drive_values").addClass('expanded');
     }
 });

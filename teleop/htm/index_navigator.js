@@ -3,6 +3,8 @@ class NavigatorController {
         const location = document.location;
         this.nav_path = location.protocol + "//" + location.hostname + ":" + location.port + "/ws/nav";
         this.el_image = null;
+        this.el_image_width = null;
+        this.el_image_height = null;
         this.el_route = null;
         this.el_point = null;
         this.el_debug_distance = null;
@@ -12,6 +14,8 @@ class NavigatorController {
         this.routes = [];
         this.selected_route = null;
         this.active = false;
+        this.backend_active = false;
+        this.in_mouse_over = false;
     }
     get_selected_route() {
         return this.selected_route;
@@ -64,31 +68,47 @@ class NavigatorController {
             this.select_route(this.routes[idx >= t_size ? 0 : idx]);
         }
     }
+    render_navigation_image(image_src) {
+        this.el_image.attr('src', image_src).width(this.el_image_width).height(this.el_image_height);
+    }
     initialize() {
         this.el_image = $('img#navigation_image');
+        this.el_image_width = this.el_image.width();
+        this.el_image_height = this.el_image.height();
         this.el_route = $('span#navigation_route_name');
         this.el_point = $('span#navigation_point_name');
-        this.el_debug_distance = $('span#navigation_image_distance');
+        this.el_debug_match_distance = $('span#navigation_match_image_distance');
+        this.el_debug_candidate_distance = $('span#navigation_candidate_image_distance');
         this.el_route_select_prev = $('span#navigation_route_sel_prev');
         this.el_route_select_next = $('span#navigation_route_sel_next');
+        this.schedule_navigation_image_update();
     }
     schedule_navigation_image_update() {
-        // Randomize the url so the browser does not cache the image - it changes on the server at route switches.
-        const nc = navigator_controller;
-        const image_id = nc.matched_image_id;
-        setTimeout(function() {nc.el_image.attr('src', nc.nav_path + '?im=' + image_id + '&n=' + Math.random());}, 10);
+        var image_src = this.backend_active? 'icon_pause.png?v=0.45.0' : 'icon_play.png?v=0.45.0';
+        const image_id = this.matched_image_id;
+        if (this.backend_active && !this.in_mouse_over && image_id >=0) {
+            // Randomize the url so the browser does not cache the image - it changes on the server at route switches.
+            image_src = image_id >= 0 ? this.nav_path + '?im=' + image_id + '&n=' + Math.random() : 'pause'
+        }
+        setTimeout(function() {
+            navigator_controller.render_navigation_image(image_src);
+        }, 0);
     }
     on_message(message) {
         if (this.active) {
-            // Use the pilot properties unless in debug mode.
-            const is_debug = this.el_debug_distance.is_visible();
-            const column_id = is_debug ? 1 : 0;
-            this.el_point.text(message.nav_point[column_id]);
-            this.el_debug_distance.text(message.nav_distance.toFixed(3));
-            const nav_id = message.nav_image[column_id];
-            if (nav_id != this.matched_image_id) {
-                this.matched_image_id = nav_id;
+            const image_id = message.nav_image;
+            const backend_active = message.nav_active;
+            const is_image_change = image_id != this.matched_image_id;
+            const is_backend_change = backend_active != this.backend_active;
+            this.matched_image_id = image_id;
+            this.backend_active = backend_active;
+            if (is_image_change || is_backend_change) {
                 this.schedule_navigation_image_update();
+            }
+            if (backend_active) {
+                this.el_point.text(message.nav_point);
+                this.el_debug_match_distance.text(message.nav_distance[0].toFixed(3));
+                this.el_debug_candidate_distance.text(message.nav_distance[1].toFixed(3));
             }
         }
     }
@@ -102,10 +122,19 @@ navigator_controller.api_route_command = function(command, fn_done) {
 navigator_controller.toggle_route = function() {
     navigator_controller.api_route_command({'action': 'toggle', 'route': this.get_selected_route()}, function(data) {})
 }
-
+navigator_controller.mouse_over = function() {
+    navigator_controller.in_mouse_over = true;
+    navigator_controller.schedule_navigation_image_update();
+}
+navigator_controller.mouse_out = function() {
+    navigator_controller.in_mouse_over = false;
+    navigator_controller.schedule_navigation_image_update();
+}
 
 document.addEventListener("DOMContentLoaded", function() {
     navigator_controller.initialize();
+    navigator_controller.el_image.mouseover(function() {navigator_controller.mouse_over()});
+    navigator_controller.el_image.mouseout(function() {navigator_controller.mouse_out()});
     navigator_controller.el_image.click(function() {navigator_controller.toggle_route()});
     navigator_controller.el_route_select_prev.click(function() {navigator_controller.select_prev_route()});
     navigator_controller.el_route_select_next.click(function() {navigator_controller.select_next_route()});

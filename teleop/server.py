@@ -131,10 +131,12 @@ class MessageServerSocket(websocket.WebSocketHandler):
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
             _speed_scale = self._speed_scale
-            pilot_navigation_image = -1 if pilot is None else pilot.get('navigation_image', -1)
-            pilot_navigation_point = '' if pilot is None else pilot.get('navigation_point', '')
-            inference_navigation_image = -1 if inference is None else inference.get('navigation_image', -1)
-            inference_navigation_point = '' if inference is None else inference.get('navigation_point', '')
+            pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
+            pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
+            pilot_match_point = '' if pilot is None else pilot.get('navigation_match_point', '')
+            pilot_match_sim = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
+            pilot_candidate_sim = 1 if pilot is None else pilot.get('navigation_candidate_distance', 1)
+            assert None not in (pilot_match_image, pilot_match_sim, pilot_candidate_sim)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -148,16 +150,16 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),
                 'thr': 0 if pilot is None else pilot.get('throttle'),
-                'rev': 0,
                 'vel_y': 0 if vehicle is None else vehicle.get('velocity') * _speed_scale,
                 'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
                 'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
                 'speed': 0 if pilot is None else pilot.get('desired_speed') * _speed_scale,
                 'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * _speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
-                'nav_image': [pilot_navigation_image, inference_navigation_image],
-                'nav_point': [pilot_navigation_point, inference_navigation_point],
-                'nav_distance': 1 if inference is None else inference.get('navigation_distance'),
+                'nav_active': pilot_navigation_active,
+                'nav_image': pilot_match_image,
+                'nav_point': pilot_match_point,
+                'nav_distance': [pilot_match_sim, pilot_candidate_sim],
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))

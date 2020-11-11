@@ -67,8 +67,10 @@ class Blob(AttrDict):
         self.arrow_down = kwargs.get('arrow_down')
         self.navigation_active = kwargs.get('navigation_active')
         self.navigation_route = kwargs.get('navigation_route')
-        self.navigation_image = kwargs.get('navigation_image', -1)
-        self.navigation_point = kwargs.get('navigation_point')
+        self.navigation_match_image = kwargs.get('navigation_match_image', -1)
+        self.navigation_match_distance = kwargs.get('navigation_match_distance', 1)
+        self.navigation_match_point = kwargs.get('navigation_match_point')
+        self.navigation_candidate_distance = kwargs.get('navigation_candidate_distance', 1)
         if self.forced_steering is None:
             self.forced_steering = abs(self.steering) > 0
         if self.forced_throttle is None:
@@ -96,11 +98,14 @@ class DynamicMomentum(object):
 
 
 class LowPassFilter(object):
-    def __init__(self, alpha=0.90):
+    def __init__(self, initial_value=0., alpha=0.90):
+        self._value = initial_value
         self._alpha = alpha
-        self._value = 0
 
-    def calculate(self, x):
+    def get(self):
+        return self._value
+
+    def update(self, x):
         self._value = (self._alpha * x) + (1. - self._alpha) * self._value
         return self._value
 
@@ -431,47 +436,70 @@ def _translate_navigation_direction(direction):
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
-        self._matched_image_id = None
-        self._point = None
-        self._active = False
+        self._recognition_threshold = 0.
+        self._filter_alpha = 0.100
+        # To become the match the candidate has to win first.
+        self._match = None  # Tuple of (image_id, navigation_point, filter)
+        self._candidate = None  # Pair of (image_id, filter)
 
-    def reset(self):
-        self._matched_image_id = None
-        self._point = None
-        self._active = False
+    def _reset(self):
+        self._match = None
+        self._candidate = None
+
+    def initialize(self, threshold=0.):
+        self._recognition_threshold = threshold
+        self.reload()
+
+    def reload(self):
+        self._reset()
+        self._store.load_routes()
 
     def is_active(self):
-        return self._active
+        return len(self._store) > 0
 
     def get_navigation_route(self):
         return self._store.get_selected_route()
 
-    def get_matched_image_id(self):
-        return self._matched_image_id
+    def get_match_image_id(self):
+        return None if self._match is None else self._match[0]
 
-    def get_navigation_point(self):
-        return self._point
+    def get_match_point(self):
+        return None if self._match is None else self._match[1]
 
-    def load_routes(self):
-        self._store.load_routes()
+    def get_match_distance(self):
+        return None if self._match is None else self._match[-1].get()
+
+    def get_candidate_distance(self):
+        return None if self._candidate is None else self._candidate[-1].get()
 
     def command(self, action, route=None):
-        if action == 'start' or (action == 'toggle' and not self._active):
+        if action == 'start' or (action == 'toggle' and not self.is_active()):
             self._store.open(route)
         elif action in ('close', 'toggle'):
             self._store.close()
-            self.reset()
-            threading.Thread(target=self.load_routes).start()
-        self._active = len(self._store) > 0
-        logger.info("Selected route '{}' is active {}.".format(self._store.get_selected_route(), self._active))
+            threading.Thread(target=self.reload).start()
+        logger.info("Selected route '{}' is active {}.".format(self._store.get_selected_route(), self.is_active()))
 
-    def update(self, c_inference, matched=False):
-        if self._active and matched:
-            self._matched_image_id = c_inference.get('navigation_image')
-            navigation_point = self._store.get_image_navigation_point(self._matched_image_id)
-            if self._point != navigation_point:
-                self._point = navigation_point
-                return self._store.get_instructions(navigation_point)
+    def update(self, c_inference):
+        if self.is_active():
+            # Calculate if the candidate has defeated the current match.
+            c_image = c_inference.get('navigation_image')
+            c_distance = c_inference.get('navigation_distance', 1e9)
+            # Restart the candidate until it stabilizes.
+            if self._candidate is None or self._candidate[0] != c_image:
+                # New candidates start at a high value against false positives.
+                self._candidate = c_image, LowPassFilter(initial_value=1., alpha=self._filter_alpha)
+            # Replace the match once the threshold has been reached.
+            c_distance = self._candidate[1].update(c_distance)
+            if c_distance < self._recognition_threshold:
+                navigation_point = self._store.get_image_navigation_point(c_image)
+                if self.get_match_point() != navigation_point:
+                    self._match = c_image, navigation_point, LowPassFilter(initial_value=c_distance, alpha=self._filter_alpha)
+                    return self._store.get_instructions(navigation_point)
+            # Update the information we have on the match.
+            if self._match is not None and c_image == self.get_match_image_id():
+                self._match[-1].update(c_distance)
+        # No new match.
         return None
 
 
@@ -487,7 +515,6 @@ class DriverManager(Configurable):
         self._lock = multiprocessing.RLock()
         self._driver = None
         self._driver_ctl = None
-        self._navigation_recognition_threshold = 0.
 
     def navigation_command(self, action, route=None):
         self._navigator.command(action, route)
@@ -499,12 +526,12 @@ class DriverManager(Configurable):
 
     def internal_start(self, **kwargs):
         _errors = []
+        _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
+        _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
-        self._navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
-        _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
-        self._navigator.load_routes()
+        self._navigator.initialize(threshold=_navigation_recognition_threshold)
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None
@@ -540,11 +567,10 @@ class DriverManager(Configurable):
             self._lock.release()
 
     def process_navigation(self, c_inference):
-        match = c_inference.get('navigation_distance', 1e9) < self._navigation_recognition_threshold
-        navigation_instruction = self._navigator.update(c_inference, matched=match)
+        navigation_instruction = self._navigator.update(c_inference)
         if self.get_driver_ctl() == 'driver_mode.inference.dnn' and navigation_instruction is not None:
             if navigation_instruction.get_direction() is not None:
-                self.turn_instruction(_translate_navigation_direction(navigation_instruction.get_direction()))
+                self._set_direction(_translate_navigation_direction(navigation_instruction.get_direction()))
             if navigation_instruction.get_speed() is not None:
                 self.set_cruise_speed(navigation_instruction.get_speed())
 
@@ -565,7 +591,11 @@ class DriverManager(Configurable):
             self._pilot_state.cruise_speed = max(0., value)
             logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
-    def turn_instruction(self, turn='general.fallback'):
+    def _set_direction(self, turn='general.fallback'):
+        with self._lock:
+            self._pilot_state.instruction = turn
+
+    def teleop_direction(self, turn='general.fallback'):
         with self._lock:
             self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
 
@@ -596,22 +626,26 @@ class DriverManager(Configurable):
         with self._lock:
             # The blob time is now.
             # If downstream processes need the teleop time then use an extra attribute.
-            _navigator_active = self._navigator.is_active()
-            _navigator_route = self._navigator.get_navigation_route() if _navigator_active else None
-            _navigator_point = self._navigator.get_navigation_point() if _navigator_active else None
-            _navigator_image = self._navigator.get_matched_image_id() if _navigator_active else None
+            _nav_active = self._navigator.is_active()
+            _nav_route = self._navigator.get_navigation_route() if _nav_active else None
+            _nav_point = self._navigator.get_match_point() if _nav_active else None
+            _nav_image = self._navigator.get_match_image_id() if _nav_active else None
+            _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
+            _nav_candidate_distance = self._navigator.get_candidate_distance() if _nav_active else None
             blob = Blob(driver=self._driver_ctl,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
-                        navigation_active=_navigator_active,
-                        navigation_route=_navigator_route,
-                        navigation_point=_navigator_point,
-                        navigation_image=_navigator_image,
+                        navigation_active=_nav_active,
+                        navigation_route=_nav_route,
+                        navigation_match_image=_nav_image,
+                        navigation_match_distance=_nav_match_distance,
+                        navigation_match_point=_nav_point,
+                        navigation_candidate_distance=_nav_candidate_distance,
                         **teleop)
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
-            blob.steering = self._steering_stabilizer.calculate(blob.steering)
+            blob.steering = self._steering_stabilizer.update(blob.steering)
             return blob
 
 
@@ -691,11 +725,11 @@ class CommandProcessor(Configurable):
         elif c_teleop.get('arrow_down', 0) == 1:
             self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
         elif c_teleop.get('button_left', 0) == 1:
-            self._cache_safe('turn left', lambda: self._driver.turn_instruction('intersection.left'))
+            self._cache_safe('turn left', lambda: self._driver.teleop_direction('intersection.left'))
         elif c_teleop.get('button_center', 0) == 1:
-            self._cache_safe('turn ahead', lambda: self._driver.turn_instruction('intersection.ahead'))
+            self._cache_safe('turn ahead', lambda: self._driver.teleop_direction('intersection.ahead'))
         elif c_teleop.get('button_right', 0) == 1:
-            self._cache_safe('turn right', lambda: self._driver.turn_instruction('intersection.right'))
+            self._cache_safe('turn right', lambda: self._driver.teleop_direction('intersection.right'))
 
     def next_action(self, *args):
         # A higher patience for teleop commands allows to switch driver etc on slow connections.
