@@ -339,6 +339,18 @@ log_controller.stop_socket = function() {
     log_controller.socket = null;
 }
 
+page_utils.add_toggle_debug_values_listener(function(collapse) {
+    if (collapse) {
+        $("p#p_inference_penalty").invisible();
+        $("p#p_inference_obstacle").invisible();
+        $("p#p_inference_fps").invisible();
+    } else {
+        $("p#p_inference_penalty").visible();
+        $("p#p_inference_obstacle").visible();
+        $("p#p_inference_fps").visible();
+    }
+});
+
 function teleop_start_all() {
     if (gamepad_controller.socket == undefined) {
         gamepad_controller.start_socket();

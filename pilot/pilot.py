@@ -472,11 +472,12 @@ class Navigator(object):
     def get_candidate_distance(self):
         return None if self._candidate is None else self._candidate[-1].get()
 
-    def command(self, action, route=None):
+    def command(self, action, route=None, check=False):
         if action == 'start' or (action == 'toggle' and not self.is_active()):
             self._store.open(route)
         elif action in ('close', 'toggle'):
             self._store.close()
+        if check:
             threading.Thread(target=self.reload).start()
         logger.info("Selected route '{}' is active {}.".format(self._store.get_selected_route(), self.is_active()))
 
@@ -484,7 +485,7 @@ class Navigator(object):
         if self.is_active():
             # Calculate if the candidate has defeated the current match.
             c_image = c_inference.get('navigation_image')
-            c_distance = c_inference.get('navigation_distance', 1e9)
+            c_distance = c_inference.get('navigation_distance', 2.)
             # Restart the candidate until it stabilizes.
             if self._candidate is None or self._candidate[0] != c_image:
                 # New candidates start at a high value against false positives.
@@ -516,8 +517,8 @@ class DriverManager(Configurable):
         self._driver = None
         self._driver_ctl = None
 
-    def navigation_command(self, action, route=None):
-        self._navigator.command(action, route)
+    def navigation_command(self, action, route=None, check=False):
+        self._navigator.command(action, route, check)
 
     def internal_quit(self, restarting=False):
         for driver in self._driver_cache.values():
@@ -666,8 +667,8 @@ class CommandProcessor(Configurable):
     def get_frequency(self):
         return self._process_frequency
 
-    def navigation_command(self, action, route=None):
-        self._driver.navigation_command(action, route)
+    def navigation_command(self, action, route=None, check=False):
+        self._driver.navigation_command(action, route, check)
 
     def internal_quit(self, restarting=False):
         if not restarting:

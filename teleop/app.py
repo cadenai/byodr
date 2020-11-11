@@ -91,10 +91,12 @@ class Navigator(object):
         self._active = False
 
     def is_active(self):
-        return self._active
+        with self._lock:
+            return self._active
 
     def reload(self):
-        self._store.load_routes()
+        with self._lock:
+            self._store.load_routes()
 
     def open_route(self, name):
         with self._lock:
@@ -115,7 +117,8 @@ class Navigator(object):
             return images[image_id] if len(images) > image_id >= 0 else None
 
     def list_routes(self):
-        return self._store.list_routes()
+        with self._lock:
+            return self._store.list_routes()
 
 
 class NavigationHandler(JSONRequestHandler):
@@ -124,9 +127,14 @@ class NavigationHandler(JSONRequestHandler):
         self._navigator = kwargs.get('navigator')
         self.fn_publish = kwargs.get('fn_publish')
 
+    def _reload(self):
+        self.fn_publish(dict(time=timestamp(), navigator={'system': 'reload'}))
+        self._navigator.reload()
+
     def get(self):
         action = self.get_query_argument('action')
         if action == 'list':
+            threading.Thread(target=self._reload).start()
             self.write(json.dumps(self._navigator.list_routes()))
         else:
             self.write(json.dumps({}))
@@ -140,7 +148,6 @@ class NavigationHandler(JSONRequestHandler):
             threading.Thread(target=self._navigator.open_route, args=(selected_route,)).start()
         elif action in ('close', 'toggle'):
             self._navigator.close()
-            threading.Thread(target=self._navigator.reload).start()
         self.fn_publish(dict(time=timestamp(), navigator={'action': action, 'route': selected_route}))
         self.write(json.dumps(dict(message='ok')))
 

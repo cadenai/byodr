@@ -191,6 +191,7 @@
         }
 
         div#navigation_image_container {
+            cursor: pointer;
             margin: 15px 0 5px 5px;
         }
         div#navigation_image_container img {
@@ -199,9 +200,13 @@
             border-radius: 3px;
             border: 1px solid grey;
         }
-        div#navigation_image_container img.active {
+        span#navigation_route_sel_prev {
+            cursor: pointer;
         }
-        div#debug_navigation_values {
+        span#navigation_route_sel_next {
+            cursor: pointer;
+        }
+        div#navigation_debug_container {
             margin: 20px 0 0 10px;
         }
 
@@ -290,7 +295,7 @@
                     <div id="beta_speed_label">km/h</div>
                 </div>
             </div>
-            <div class="right debug_values" id="debug_drive_values">
+            <div id="debug_drive_values" class="right debug_values">
                 <p id="p_inference_fps" style="visibility: hidden;"><span id="inference_fps">0</span>&nbsp;fps</p>
                 <p id="p_inference_penalty" style="visibility: hidden;">
                     <span id="inference_surprise">0</span>&nbsp;<span id="inference_critic">0</span>
@@ -301,18 +306,18 @@
                 <p><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
-            <div class="right debug_values" id="debug_navigation_values">
-                <p id="p_inference_match_image_distance" style="visibility: hidden;">
+            <div id="navigation_debug_container" class="right debug_values" style="visibility: hidden;">
+                <p id="p_inference_match_image_distance">
                     <span id="navigation_match_image_distance">1</span>
                 </p>
-                <p id="p_inference_candidate_image_distance" style="visibility: hidden;">
+                <p id="p_inference_candidate_image_distance">
                     <span id="navigation_candidate_image_distance">1</span>
                 </p>
             </div>
-            <div id="navigation_image_container" class="right">
+            <div id="navigation_image_container" class="right" style="visibility: hidden;">
                 <img id="navigation_image"/>
             </div>
-            <div id="navigation_route_container" class="right">
+            <div id="navigation_route_container" class="right" style="visibility: hidden;">
                 <p>
                     <span id="navigation_route_sel_prev">&lt;</span>
                     <span id="navigation_route_name"></span>
@@ -326,24 +331,12 @@
 </div>
 <script type="text/javascript">
 $("div#debug_drive_values").click(function() {
-    if ($("p#p_rear_camera_framerate").is_visible()) {
-        $("p#p_rear_camera_framerate").invisible();
-        $("p#p_front_camera_framerate").invisible();
-        $("p#p_inference_penalty").invisible();
-        $("p#p_inference_obstacle").invisible();
-        $("p#p_inference_fps").invisible();
-        $("p#p_inference_match_image_distance").invisible();
-        $("p#p_inference_candidate_image_distance").invisible();
-        $("div#debug_drive_values").removeClass('expanded');
+    const collapse = $(this).hasClass('expanded');
+    page_utils.notify_toggle_debug_values_listeners(collapse);
+    if (collapse) {
+        $(this).removeClass('expanded');
     } else {
-        $("p#p_rear_camera_framerate").visible();
-        $("p#p_front_camera_framerate").visible();
-        $("p#p_inference_penalty").visible();
-        $("p#p_inference_obstacle").visible();
-        $("p#p_inference_fps").visible();
-        $("p#p_inference_match_image_distance").visible();
-        $("p#p_inference_candidate_image_distance").visible();
-        $("div#debug_drive_values").addClass('expanded');
+        $(this).addClass('expanded');
     }
 });
 

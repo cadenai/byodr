@@ -40,7 +40,7 @@ class NavigatorController {
         this.routes = routes;
         if (routes.length == 0) {
             this.select_route(null);
-            this.el_route.text('No route available');
+            this.el_route.text('No routes');
         } else {
             if (this.selected_route == undefined) {
                 this.selected_route = routes[0];
@@ -130,6 +130,27 @@ navigator_controller.mouse_out = function() {
     navigator_controller.in_mouse_over = false;
     navigator_controller.schedule_navigation_image_update();
 }
+navigator_controller.update_visibility = function () {
+    if (navigator_controller.routes.length < 1) {
+        $('div#navigation_debug_container').invisible();
+        $('div#navigation_image_container').invisible();
+        $('div#navigation_route_container').invisible();
+    } else {
+        // The debug container is invisible until requested.
+        $('div#navigation_image_container').visible();
+        $('div#navigation_route_container').visible();
+    }
+}
+
+page_utils.add_toggle_debug_values_listener(function(collapse) {
+    if (navigator_controller.routes.length > 0) {
+        if (collapse) {
+            $("div#navigation_debug_container").invisible();
+        } else {
+            $("div#navigation_debug_container").visible();
+        }
+    }
+});
 
 document.addEventListener("DOMContentLoaded", function() {
     navigator_controller.initialize();
@@ -143,10 +164,10 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 
-
 function navigator_start_all() {
     $.get("/api/navigation/routes?action=list", function(data) {
         navigator_controller.set_routes(data);
+        navigator_controller.update_visibility();
     });
     navigator_controller.active = true;
 }

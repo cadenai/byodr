@@ -56,7 +56,9 @@ class PilotApplication(Application):
                 self.setup()
             elif 'navigator' in chat:
                 navigation_command = chat.get('navigator')
-                self._processor.navigation_command(navigation_command.get('action'), navigation_command.get('route'))
+                self._processor.navigation_command(action=navigation_command.get('action'),
+                                                   route=navigation_command.get('route'),
+                                                   check=navigation_command.get('system') == 'reload')
 
 
 def main():

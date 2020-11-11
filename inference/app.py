@@ -100,7 +100,7 @@ class TFRunner(Configurable):
     def _navigation_active(self):
         return len(self._store) > 0
 
-    def navigation_command(self, action, route):
+    def navigation_command(self, action, route, check=False):
         if self._store is not None:
             if action == 'start' or (action == 'toggle' and not self._navigation_active() > 0):
                 self._store.open(route)
@@ -109,6 +109,7 @@ class TFRunner(Configurable):
             elif action in ('close', 'toggle'):
                 self._store.close()
                 self._cluster.release()
+            if check:
                 threading.Thread(target=self._store.load_routes).start()
             logger.info("The route '{}' is active {}.".format(self._store.get_selected_route(), self._navigation_active()))
 
@@ -258,7 +259,9 @@ class InferenceApplication(Application):
                 self.setup()
             elif 'navigator' in chat:
                 navigation_command = chat.get('navigator')
-                self._runner.navigation_command(navigation_command.get('action'), navigation_command.get('route'))
+                self._runner.navigation_command(action=navigation_command.get('action'),
+                                                route=navigation_command.get('route'),
+                                                check=navigation_command.get('system') == 'reload')
 
 
 def main():
@@ -274,7 +277,6 @@ def main():
                                        user_models=args.user,
                                        navigation_routes=args.routes)
     quit_event = application.quit_event
-    logger = application.logger
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
     ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
