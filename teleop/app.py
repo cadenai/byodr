@@ -88,6 +88,10 @@ class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
         self._lock = threading.Lock()
+        self._active = False
+
+    def is_active(self):
+        return self._active
 
     def reload(self):
         self._store.load_routes()
@@ -95,6 +99,14 @@ class Navigator(object):
     def open_route(self, name):
         with self._lock:
             self._store.open(name)
+            self._active = len(self._store) > 0
+        logger.info("Opened route '{}' is active {}.".format(self._store.get_selected_route(), self._active))
+
+    def close(self):
+        with self._lock:
+            self._store.close()
+            self._active = False
+        logger.info("Navigator is closed.")
 
     def get_navigation_image(self, image_id):
         image_id = -1 if image_id is None else image_id
@@ -115,8 +127,7 @@ class NavigationHandler(JSONRequestHandler):
     def get(self):
         action = self.get_query_argument('action')
         if action == 'list':
-            routes = self._navigator.list_routes()
-            self.write(json.dumps(routes))
+            self.write(json.dumps(self._navigator.list_routes()))
         else:
             self.write(json.dumps({}))
 
@@ -124,11 +135,13 @@ class NavigationHandler(JSONRequestHandler):
         data = json.loads(self.request.body)
         action = data.get('action')
         selected_route = data.get('route')
-        if action == 'start':
-            self.fn_publish(dict(time=timestamp(), navigator={'action': 'start', 'route': selected_route}))
+        _active = self._navigator.is_active()
+        if action == 'start' or (action == 'toggle' and not _active):
             threading.Thread(target=self._navigator.open_route, args=(selected_route,)).start()
-        elif action == 'stop':
-            self.fn_publish(dict(time=timestamp(), navigator={'action': 'stop'}))
+        elif action in ('close', 'toggle'):
+            self._navigator.close()
+            threading.Thread(target=self._navigator.reload).start()
+        self.fn_publish(dict(time=timestamp(), navigator={'action': action, 'route': selected_route}))
         self.write(json.dumps(dict(message='ok')))
 
 
@@ -178,9 +191,7 @@ def main():
     def list_service_capabilities():
         return zm_client.call(dict(request='system/service/capabilities'))
 
-    def get_navigation_image():
-        inf_state = collector.get(2)
-        image_id = None if inf_state is None else inf_state.get('navigation_image')
+    def get_navigation_image(image_id):
         return navigator.get_navigation_image(image_id)
 
     try:
@@ -195,7 +206,7 @@ def main():
                                      collector.get(3))))),
             (r"/ws/cam", CameraMJPegSocket, dict(capture_front=(lambda: camera_front.capture()[-1]),
                                                  capture_rear=(lambda: camera_rear.capture()[-1]))),
-            (r'/ws/nav', NavImageHandler, dict(fn_get_image=(lambda: get_navigation_image()))),
+            (r'/ws/nav', NavImageHandler, dict(fn_get_image=(lambda image_id: get_navigation_image(image_id)))),
             (r"/api/user/options", ApiUserOptionsHandler, dict(user_options=(UserOptions(application.get_user_config_file())),
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
@@ -211,7 +222,7 @@ def main():
     except KeyboardInterrupt:
         quit_event.set()
 
-    route_store.close()
+    route_store.quit()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

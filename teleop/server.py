@@ -131,6 +131,10 @@ class MessageServerSocket(websocket.WebSocketHandler):
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
             _speed_scale = self._speed_scale
+            pilot_navigation_image = -1 if pilot is None else pilot.get('navigation_image', -1)
+            pilot_navigation_point = '' if pilot is None else pilot.get('navigation_point', '')
+            inference_navigation_image = -1 if inference is None else inference.get('navigation_image', -1)
+            inference_navigation_point = '' if inference is None else inference.get('navigation_point', '')
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -151,8 +155,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'speed': 0 if pilot is None else pilot.get('desired_speed') * _speed_scale,
                 'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * _speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
-                'nav_image': 'none' if inference is None else inference.get('navigation_image'),
-                'nav_point': 'none' if pilot is None else pilot.get('navigation_point'),
+                'nav_image': [pilot_navigation_image, inference_navigation_image],
+                'nav_point': [pilot_navigation_point, inference_navigation_point],
                 'nav_distance': 1 if inference is None else inference.get('navigation_distance'),
                 'turn': None if pilot is None else pilot.get('instruction')
             }
@@ -221,7 +225,7 @@ class NavImageHandler(web.RequestHandler):
     def initialize(self, **kwargs):
         self._fn_get_image = kwargs.get('fn_get_image')
         self._black_img = np.zeros(shape=(1, 1, 3), dtype=np.uint8)
-        self._jpeg_quality = 90
+        self._jpeg_quality = 95
 
     def data_received(self, chunk):
         pass
@@ -230,7 +234,11 @@ class NavImageHandler(web.RequestHandler):
     @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
-        image = self._fn_get_image()
+        try:
+            image_id = int(self.get_query_argument('im'))
+        except ValueError:
+            image_id = -1
+        image = self._fn_get_image(image_id)
         image = self._black_img if image is None else image
         chunk = jpeg_encode(image, quality=self._jpeg_quality)
         self.set_header('Content-Type', 'image/jpeg')

@@ -3,6 +3,7 @@ import glob
 import logging
 import os
 import sys
+import threading
 from functools import partial
 
 import cv2
@@ -22,6 +23,8 @@ if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
 else:
     from ConfigParser import SafeConfigParser
+
+logger = logging.getLogger(__name__)
 
 
 class FeatureCluster(object):
@@ -83,7 +86,7 @@ class TFRunner(Configurable):
             self._driver.deactivate()
         if not restarting:
             if self._store is not None:
-                self._store.close()
+                self._store.quit()
             if self._cluster is not None:
                 self._cluster.quit()
 
@@ -94,9 +97,24 @@ class TFRunner(Configurable):
                                     fallback=True,
                                     dagger=False)[-1]
 
+    def _navigation_active(self):
+        return len(self._store) > 0
+
+    def navigation_command(self, action, route):
+        if self._store is not None:
+            if action == 'start' or (action == 'toggle' and not self._navigation_active() > 0):
+                self._store.open(route)
+                if self._navigation_active():
+                    self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
+            elif action in ('close', 'toggle'):
+                self._store.close()
+                self._cluster.release()
+                threading.Thread(target=self._store.load_routes).start()
+            logger.info("The route '{}' is active {}.".format(self._store.get_selected_route(), self._navigation_active()))
+
     def start_route(self, route):
         self._store.open(route_name=route)
-        if len(self._store) > 0:
+        if self._navigation_active():
             self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
 
     def internal_start(self, **kwargs):
@@ -182,6 +200,7 @@ class TFRunner(Configurable):
                     penalty=float(_total_penalty),
                     internal=[float(0)],
                     navigation_image=int(-1 if _nav_id is None else _nav_id),
+                    navigation_point=str('' if _nav_id is None else self._store.get_image_navigation_point(_nav_id)),
                     navigation_distance=float(1 if _nav_distance is None else _nav_distance)
                     )
 
@@ -239,8 +258,7 @@ class InferenceApplication(Application):
                 self.setup()
             elif 'navigator' in chat:
                 navigation_command = chat.get('navigator')
-                if navigation_command.get('action') == 'start':
-                    self._runner.start_route(navigation_command.get('route'))
+                self._runner.navigation_command(navigation_command.get('action'), navigation_command.get('route'))
 
 
 def main():

@@ -77,6 +77,10 @@ class AbstractRouteDataSource(object):
         raise NotImplementedError()
 
     @abstractmethod
+    def quit(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def list_navigation_points(self):
         raise NotImplementedError()
 
@@ -114,6 +118,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         logger.info("Directory '{}' contains the following routes {}.".format(self.directory, self.routes))
 
     def _reset(self):
+        self.selected_route = None
         self.points = []
         self.all_images = []
         self.image_index_to_point = {}
@@ -139,35 +144,42 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         return self.selected_route
 
     def open(self, route_name=None):
+        # Reopening the selected route constitutes a reload of the disk state.
         self._reset()
         if route_name in self.routes:
-            self.selected_route = route_name
-            # Load the route navigation points.
-            np_dirs = sorted([d for d in os.listdir(os.path.join(self.directory, route_name)) if not d.startswith('.')])
-            logger.info("{} -> {}".format(self.selected_route, np_dirs))
-            # Take the existing sort-order.
-            image_index = 0
-            for point_name in np_dirs:
-                if self.quit_event.is_set():
-                    break
-                self.points.append(point_name)
-                np_dir = os.path.join(self.directory, route_name, point_name)
-                _pattern = np_dir + os.path.sep
-                im_files = [f for f_ in [glob.glob(_pattern + e) for e in ('*.jpg', '*.jpeg')] for f in f_]
-                if len(im_files) < 1:
-                    logger.info("Skipping point '{}' as there are no images for it.".format(point_name))
-                    continue
-                if self.load_instructions:
-                    command = self._get_command(os.path.join(np_dir, 'command.json'))
-                    command = command if command else self._get_command(os.path.join(np_dir, point_name + '.json'))
-                    self.point_to_instructions[point_name] = _parse_navigation_instructions(command)
-                # Collect images by navigation point.
-                for im_file in im_files:
-                    self.all_images.append(self.fn_load_image(im_file))
-                    self.image_index_to_point[image_index] = point_name
-                    image_index += 1
+            try:
+                # Load the route navigation points.
+                np_dirs = sorted([d for d in os.listdir(os.path.join(self.directory, route_name)) if not d.startswith('.')])
+                logger.info("{} -> {}".format(route_name, np_dirs))
+                # Take the existing sort-order.
+                image_index = 0
+                for point_name in np_dirs:
+                    if self.quit_event.is_set():
+                        break
+                    self.points.append(point_name)
+                    np_dir = os.path.join(self.directory, route_name, point_name)
+                    _pattern = np_dir + os.path.sep
+                    im_files = [f for f_ in [glob.glob(_pattern + e) for e in ('*.jpg', '*.jpeg')] for f in f_]
+                    if len(im_files) < 1:
+                        logger.info("Skipping point '{}' as there are no images for it.".format(point_name))
+                        continue
+                    if self.load_instructions:
+                        command = self._get_command(os.path.join(np_dir, 'command.json'))
+                        command = command if command else self._get_command(os.path.join(np_dir, point_name + '.json'))
+                        self.point_to_instructions[point_name] = _parse_navigation_instructions(command)
+                    # Collect images by navigation point.
+                    for im_file in im_files:
+                        self.all_images.append(self.fn_load_image(im_file))
+                        self.image_index_to_point[image_index] = point_name
+                        image_index += 1
+                self.selected_route = route_name
+            except OSError as e:
+                logger.info(e)
 
     def close(self):
+        self._reset()
+
+    def quit(self):
         self.quit_event.set()
 
     def list_navigation_points(self):

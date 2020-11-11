@@ -166,6 +166,7 @@
             width: 50px;
             height: 50px;
         }
+
         div#preview_container {
             margin: 15px 0 5px 5px;
         }
@@ -178,23 +179,35 @@
         div#preview_container img.active {
         }
 
-        div#navigation_container {
+        div#navigation_route_container {
+            margin: 15px 20px 0 0;
+            font-family: "Lucida Console";
+            font-size: 15px;
+        }
+        div#navigation_route_container > p {
+          margin-block-start: 0;
+          margin-block-end: 0;
+          text-align: center;
+        }
+
+        div#navigation_image_container {
             margin: 15px 0 5px 5px;
         }
-        div#navigation_container img {
+        div#navigation_image_container img {
             width: 80px;
             height: 45px;
             border-radius: 3px;
             border: 1px solid grey;
         }
-        div#navigation_container img.active {
+        div#navigation_image_container img.active {
         }
-        div#navigation_container > p {
-            display: inline;
+        div#debug_navigation_values {
+            margin: 20px 0 0 10px;
         }
 
         div#viewport_container {
         }
+
         canvas#h264_front_camera_main_image {
             width: 1280px;
             height: 720px;
@@ -288,14 +301,21 @@
                 <p><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
-            <div id="navigation_container" class="right">
+            <div class="right debug_values" id="debug_navigation_values">
+                <p id="p_inference_image_distance" style="visibility: hidden;">
+                    <span id="navigation_image_distance">1</span>
+                </p>
+            </div>
+            <div id="navigation_image_container" class="right">
+                <img id="navigation_image"/>
+            </div>
+            <div id="navigation_route_container" class="right">
                 <p>
                     <span id="navigation_route_sel_prev">&lt;</span>
-                    <span id="navigation_route_name">None defined</span>
+                    <span id="navigation_route_name"></span>
                     <span id="navigation_route_sel_next">&gt;</span>
                 </p>
-                <p><span id="navigation_image_distance">1</span></p>
-                <img id="navigation_image"/>
+                <p><span id="navigation_point_name"></span></p>
             </div>
         </div>
         <div id="viewport_container"></div>
@@ -309,6 +329,7 @@ $("div#debug_drive_values").click(function() {
         $("p#p_inference_penalty").invisible();
         $("p#p_inference_obstacle").invisible();
         $("p#p_inference_fps").invisible();
+        $("p#p_inference_image_distance").invisible();
         $("div#debug_drive_values").removeClass('expanded');
     } else {
         $("p#p_rear_camera_framerate").visible();
@@ -316,6 +337,7 @@ $("div#debug_drive_values").click(function() {
         $("p#p_inference_penalty").visible();
         $("p#p_inference_obstacle").visible();
         $("p#p_inference_fps").visible();
+        $("p#p_inference_image_distance").visible();
         $("div#debug_drive_values").addClass('expanded');
     }
 });

@@ -56,8 +56,7 @@ class PilotApplication(Application):
                 self.setup()
             elif 'navigator' in chat:
                 navigation_command = chat.get('navigator')
-                if navigation_command.get('action') == 'start':
-                    self._processor.start_route(navigation_command.get('route'))
+                self._processor.navigation_command(navigation_command.get('action'), navigation_command.get('route'))
 
 
 def main():
@@ -92,7 +91,7 @@ def main():
     [t.start() for t in threads]
     application.run()
 
-    route_store.close()
+    route_store.quit()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]
