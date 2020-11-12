@@ -78,7 +78,7 @@ class NavigatorController {
         this.el_route = $('span#navigation_route_name');
         this.el_point = $('span#navigation_point_name');
         this.el_debug_match_distance = $('span#navigation_match_image_distance');
-        this.el_debug_candidate_distance = $('span#navigation_candidate_image_distance');
+        // this.el_debug_candidate_distance = $('span#navigation_candidate_image_distance');
         this.el_route_select_prev = $('span#navigation_route_sel_prev');
         this.el_route_select_next = $('span#navigation_route_sel_next');
         this.schedule_navigation_image_update();
@@ -108,7 +108,7 @@ class NavigatorController {
             if (backend_active) {
                 this.el_point.text(message.nav_point);
                 this.el_debug_match_distance.text(message.nav_distance[0].toFixed(3));
-                this.el_debug_candidate_distance.text(message.nav_distance[1].toFixed(3));
+                // this.el_debug_candidate_distance.text(message.nav_distance[1].toFixed(3));
             }
         }
     }
