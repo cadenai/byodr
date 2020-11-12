@@ -86,9 +86,9 @@ class NavigatorController {
     schedule_navigation_image_update() {
         var image_src = this.backend_active? 'icon_pause.png?v=0.45.0' : 'icon_play.png?v=0.45.0';
         const image_id = this.matched_image_id;
-        if (this.backend_active && !this.in_mouse_over && image_id >=0) {
+        if (this.backend_active && !this.in_mouse_over) {
             // Randomize the url so the browser does not cache the image - it changes on the server at route switches.
-            image_src = image_id >= 0 ? this.nav_path + '?im=' + image_id + '&n=' + Math.random() : 'pause'
+            image_src =  this.nav_path + '?im=' + image_id + '&n=' + Math.random();
         }
         setTimeout(function() {
             navigator_controller.render_navigation_image(image_src);
@@ -106,9 +106,10 @@ class NavigatorController {
                 this.schedule_navigation_image_update();
             }
             if (backend_active) {
+                // Before a match show the candidate distance.
+                const column_id = image_id < 0 ? 1 : 0;
                 this.el_point.text(message.nav_point);
-                this.el_debug_match_distance.text(message.nav_distance[0].toFixed(3));
-                // this.el_debug_candidate_distance.text(message.nav_distance[1].toFixed(3));
+                this.el_debug_match_distance.text(message.nav_distance[column_id].toFixed(3));
             }
         }
     }
@@ -165,11 +166,11 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 function navigator_start_all() {
+    navigator_controller.active = true;
     $.get("/api/navigation/routes?action=list", function(data) {
         navigator_controller.set_routes(data);
         navigator_controller.update_visibility();
     });
-    navigator_controller.active = true;
 }
 
 function navigator_stop_all() {
