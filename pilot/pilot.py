@@ -451,7 +451,6 @@ class Navigator(object):
         self.reload()
 
     def reload(self):
-        self._reset()
         self._store.load_routes()
 
     def is_active(self):
