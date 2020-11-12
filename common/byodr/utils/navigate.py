@@ -111,11 +111,17 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         self.all_images = []
         self.image_index_to_point = {}
         self.point_to_instructions = {}
+        self._check_exists()
+
+    def _check_exists(self):
+        directory = self.directory
+        self._exists = directory is not None and os.path.exists(directory) and os.path.isdir(directory)
 
     def load_routes(self):
-        # Each route is a sub-directory of the base folder.
-        self.routes = [d for d in os.listdir(self.directory) if not d.startswith('.')]
-        logger.info("Directory '{}' contains the following routes {}.".format(self.directory, self.routes))
+        if self._exists:
+            # Each route is a sub-directory of the base folder.
+            self.routes = [d for d in os.listdir(self.directory) if not d.startswith('.')]
+            logger.info("Directory '{}' contains the following routes {}.".format(self.directory, self.routes))
 
     def _reset(self):
         self.selected_route = None
@@ -146,7 +152,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
     def open(self, route_name=None):
         # Reopening the selected route constitutes a reload of the disk state.
         self._reset()
-        if route_name in self.routes:
+        if self._exists and route_name in self.routes:
             try:
                 # Load the route navigation points.
                 np_dirs = sorted([d for d in os.listdir(os.path.join(self.directory, route_name)) if not d.startswith('.')])
