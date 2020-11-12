@@ -201,7 +201,6 @@ class TFRunner(Configurable):
                     penalty=float(_total_penalty),
                     internal=[float(0)],
                     navigation_image=int(-1 if _nav_id is None else _nav_id),
-                    navigation_point=str('' if _nav_id is None else self._store.get_image_navigation_point(_nav_id)),
                     navigation_distance=float(1 if _nav_distance is None else _nav_distance)
                     )
 
