@@ -84,7 +84,7 @@ services:
     volumes:
       - volume_byodr_config:/config:ro
   vehicle:
-    cpuset: "2"
+    cpuset: "0,1"
     build:
       context: .
       dockerfile: vehicles/rover/rover_vehicle.dockerfile
@@ -144,7 +144,7 @@ services:
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:rw
   inference:
-    cpuset: "3"
+    cpuset: "2,3"
     build:
       context: .
       dockerfile: inference/Dockerfile.jp
