@@ -106,10 +106,8 @@ class NavigatorController {
                 this.schedule_navigation_image_update();
             }
             if (backend_active) {
-                // Before a match show the candidate distance.
-                const column_id = image_id < 0 ? 1 : 0;
                 this.el_point.text(message.nav_point);
-                this.el_debug_match_distance.text(message.nav_distance[column_id].toFixed(3));
+                this.el_debug_match_distance.text(message.nav_distance.toFixed(3));
             }
         }
     }

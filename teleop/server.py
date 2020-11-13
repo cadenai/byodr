@@ -135,8 +135,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
             pilot_match_point = '' if pilot is None else pilot.get('navigation_match_point', '')
             pilot_match_sim = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
-            pilot_candidate_sim = 1 if pilot is None else pilot.get('navigation_candidate_distance', 1)
-            assert None not in (pilot_match_image, pilot_match_sim, pilot_candidate_sim)
+            assert None not in (pilot_match_image, pilot_match_sim)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -159,7 +158,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'nav_active': pilot_navigation_active,
                 'nav_image': pilot_match_image,
                 'nav_point': pilot_match_point,
-                'nav_distance': [pilot_match_sim, pilot_candidate_sim],
+                'nav_distance': pilot_match_sim,
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))

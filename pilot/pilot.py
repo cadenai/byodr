@@ -3,6 +3,7 @@ import multiprocessing
 import threading
 import traceback
 from abc import ABCMeta, abstractmethod
+from collections import deque, Counter
 
 import cachetools
 import numpy as np
@@ -70,7 +71,6 @@ class Blob(AttrDict):
         self.navigation_match_image = kwargs.get('navigation_match_image', -1)
         self.navigation_match_distance = kwargs.get('navigation_match_distance', 1)
         self.navigation_match_point = kwargs.get('navigation_match_point')
-        self.navigation_candidate_distance = kwargs.get('navigation_candidate_distance', 1)
         if self.forced_steering is None:
             self.forced_steering = abs(self.steering) > 0
         if self.forced_throttle is None:
@@ -433,20 +433,43 @@ def _translate_navigation_direction(direction):
     return 'general.fallback'
 
 
+class MatchMass(object):
+    def __init__(self, bleeder=1, window=10):
+        self._bleeder = bleeder
+        self._window = window
+        self._m = {}
+
+    def clear(self):
+        self._m.clear()
+
+    def hit(self, key, value, item):
+        if key not in self._m:
+            self._m[key] = (deque(maxlen=self._window), deque(maxlen=self._window))
+        for k, v in self._m.items():
+            v[0].append(value if k == key else self._bleeder)
+            v[1].append(item if k == key else None)
+
+    def get_smallest(self):
+        if len(self._m) < 1:
+            return [None] * 3
+        v, k = sorted((np.mean(holders[0]), key) for (key, holders) in self._m.items())[0]
+        return k, v, Counter(filter(lambda x: x is not None, self._m[k][1])).most_common()[0][0]
+
+
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
-        self._recognition_threshold = 0.
-        self._filter_alpha = 0.100
-        # To become the match the candidate has to win first.
-        self._match = None  # Tuple of (image_id, navigation_point, filter)
-        self._candidate = None  # Pair of (image_id, filter)
+        self._recognition_threshold = 0
+        self._mass = MatchMass()
+        self._match_image = None
+        self._match_point = None
+        self._match_distance = None
 
     def _reset(self):
-        self._match = None
-        self._candidate = None
+        self._mass.clear()
 
-    def initialize(self, threshold=0.):
+    def initialize(self, window, threshold):
+        self._mass = MatchMass(window=window)
         self._recognition_threshold = threshold
         self.reload()
 
@@ -460,16 +483,13 @@ class Navigator(object):
         return self._store.get_selected_route()
 
     def get_match_image_id(self):
-        return None if self._match is None else self._match[0]
+        return self._match_image
 
     def get_match_point(self):
-        return None if self._match is None else self._match[1]
+        return self._match_point
 
     def get_match_distance(self):
-        return None if self._match is None else self._match[-1].get()
-
-    def get_candidate_distance(self):
-        return None if self._candidate is None else self._candidate[-1].get()
+        return self._match_distance
 
     def command(self, action, route=None, check=False):
         if action == 'start' or (action == 'toggle' and not self.is_active()):
@@ -482,23 +502,18 @@ class Navigator(object):
 
     def update(self, c_inference):
         if self.is_active():
-            # Calculate if the candidate has defeated the current match.
             c_image = c_inference.get('navigation_image')
             c_distance = c_inference.get('navigation_distance', 2.)
-            # Restart the candidate until it stabilizes.
-            if self._candidate is None or self._candidate[0] != c_image:
-                # New candidates start at a high value against false positives.
-                self._candidate = c_image, LowPassFilter(initial_value=1., alpha=self._filter_alpha)
-            # Replace the match once the threshold has been reached.
-            c_distance = self._candidate[1].update(c_distance)
-            if c_distance < self._recognition_threshold:
-                navigation_point = self._store.get_image_navigation_point(c_image)
-                if self.get_match_point() != navigation_point:
-                    self._match = c_image, navigation_point, LowPassFilter(initial_value=c_distance, alpha=self._filter_alpha)
-                    return self._store.get_instructions(navigation_point)
-            # Update the information we have on the match.
-            if self._match is not None and c_image == self.get_match_image_id():
-                self._match[-1].update(c_distance)
+            try:
+                self._mass.hit(self._store.get_image_navigation_point(c_image), c_distance, c_image)
+                match_point, match_distance, match_image = self._mass.get_smallest()
+                self._match_image = match_image
+                self._match_distance = match_distance
+                if match_distance < self._recognition_threshold and match_point != self._match_point:
+                    self._match_point = match_point
+                    return self._store.get_instructions(match_point)
+            except LookupError:
+                pass
         # No new match.
         return None
 
@@ -528,10 +543,11 @@ class DriverManager(Configurable):
         _errors = []
         _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
         _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
+        _clock_hz = parse_option('clock.hz', int, 10, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
-        self._navigator.initialize(threshold=_navigation_recognition_threshold)
+        self._navigator.initialize(window=_clock_hz, threshold=_navigation_recognition_threshold)
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None
@@ -631,7 +647,6 @@ class DriverManager(Configurable):
             _nav_point = self._navigator.get_match_point() if _nav_active else None
             _nav_image = self._navigator.get_match_image_id() if _nav_active else None
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
-            _nav_candidate_distance = self._navigator.get_candidate_distance() if _nav_active else None
             blob = Blob(driver=self._driver_ctl,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
@@ -640,7 +655,6 @@ class DriverManager(Configurable):
                         navigation_match_image=_nav_image,
                         navigation_match_distance=_nav_match_distance,
                         navigation_match_point=_nav_point,
-                        navigation_candidate_distance=_nav_candidate_distance,
                         **teleop)
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering

@@ -117,12 +117,6 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         directory = self.directory
         self._exists = directory is not None and os.path.exists(directory) and os.path.isdir(directory)
 
-    def load_routes(self):
-        if self._exists:
-            # Each route is a sub-directory of the base folder.
-            self.routes = [d for d in os.listdir(self.directory) if not d.startswith('.')]
-            logger.info("Directory '{}' contains the following routes {}.".format(self.directory, self.routes))
-
     def _reset(self):
         self.selected_route = None
         self.points = []
@@ -130,6 +124,15 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         self.image_index_to_point = {}
         self.point_to_instructions = {}
         self.quit_event.clear()
+
+    def load_routes(self):
+        self._check_exists()
+        if self._exists:
+            # Each route is a sub-directory of the base folder.
+            self.routes = [d for d in os.listdir(self.directory) if not d.startswith('.')]
+            logger.info("Directory '{}' contains the following routes {}.".format(self.directory, self.routes))
+        else:
+            self._reset()
 
     @staticmethod
     def _get_command(fname):
