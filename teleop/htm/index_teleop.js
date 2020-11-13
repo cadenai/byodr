@@ -265,7 +265,7 @@ log_controller.start_socket = function() {
             //
             var command = JSON.parse(evt.data);
             view.notify_server_message_listeners(command);
-            el_pilot_steering.text(command.ste.toFixed(3));
+            el_pilot_steering.text(Math.abs(command.ste).toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
             el_inference_penalty.text(command.debug1.toFixed(2));
             el_inference_obstacle.text(command.debug2.toFixed(2));
