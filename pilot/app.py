@@ -28,6 +28,7 @@ class PilotApplication(Application):
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
         cfg = dict(parser.items('pilot'))
         cfg.update(dict(parser.items('navigation')))
+        cfg.update(dict(parser.items('teleop')))
         return cfg
 
     def get_process_frequency(self):

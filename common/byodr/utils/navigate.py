@@ -8,24 +8,6 @@ from abc import ABCMeta, abstractmethod
 logger = logging.getLogger(__name__)
 
 
-class NavigationCommand(object):
-    DEFAULT, LEFT, AHEAD, RIGHT = (0, 1, 2, 3)
-
-    def __init__(self, sleep=None, direction=None, speed=None):
-        self._sleep = sleep
-        self._direction = direction
-        self._speed = speed
-
-    def get_sleep(self):
-        return self._sleep
-
-    def get_direction(self):
-        return self._direction
-
-    def get_speed(self):
-        return self._speed
-
-
 def _translate_navigation_direction(value):
     if value is not None:
         value = value.lower()
@@ -41,16 +23,69 @@ def _translate_navigation_direction(value):
     return None
 
 
+class NavigationCommand(object):
+    DEFAULT, LEFT, AHEAD, RIGHT = (0, 1, 2, 3)
+
+    def __init__(self, sleep=None, direction=None, speed=None):
+        self._time = None
+        self._sleep = sleep
+        self._direction = direction
+        self._speed = speed
+
+    def get_time(self):
+        return self._time
+
+    def set_time(self, value):
+        self._time = value
+        return self
+
+    def get_sleep(self):
+        return self._sleep
+
+    def get_direction(self):
+        return self._direction
+
+    def get_speed(self):
+        return self._speed
+
+
+class NavigationInstructions(object):
+    def __init__(self, version=1, commands=None):
+        self._version = version
+        commands = commands or []
+        if not isinstance(commands, tuple) and not isinstance(commands, list):
+            commands = [commands]
+        self._commands = commands
+
+    def get_commands(self):
+        return self._commands
+
+
 def _parse_navigation_instructions(m):
-    # version = m.get('version')
+    """
+    {
+        "version": 1,
+        "pilot": {"direction": "ahead" }
+    }
+
+    {
+        "version": 1,
+        "pilot": [{"speed": 0}, {"sleep": 30, "direction": "left", "speed": 1}]
+    }
+    """
+
+    version = m.get('version', 1)
+    commands = []
     pilot = m.get('pilot')
-    if pilot is None:
-        return NavigationCommand()
-    return NavigationCommand(
-        sleep=None if pilot.get('sleep') is None else float(pilot.get('sleep')),
-        direction=_translate_navigation_direction(pilot.get('direction')),
-        speed=None if pilot.get('speed') is None else float(pilot.get('speed'))
-    )
+    if pilot is not None:
+        nodes = pilot if isinstance(pilot, list) else [pilot]
+        for node in nodes:
+            commands.append(NavigationCommand(
+                sleep=None if node.get('sleep') is None else float(node.get('sleep')),
+                direction=_translate_navigation_direction(node.get('direction')),
+                speed=None if node.get('speed') is None else float(node.get('speed'))
+            ))
+    return NavigationInstructions(version, commands)
 
 
 class AbstractRouteDataSource(object):
@@ -173,9 +208,9 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                         logger.info("Skipping point '{}' as there are no images for it.".format(point_name))
                         continue
                     if self.load_instructions:
-                        command = self._get_command(os.path.join(np_dir, 'command.json'))
-                        command = command if command else self._get_command(os.path.join(np_dir, point_name + '.json'))
-                        self.point_to_instructions[point_name] = _parse_navigation_instructions(command)
+                        contents = self._get_command(os.path.join(np_dir, 'command.json'))
+                        contents = contents if contents else self._get_command(os.path.join(np_dir, point_name + '.json'))
+                        self.point_to_instructions[point_name] = _parse_navigation_instructions(contents)
                     # Collect images by navigation point.
                     for im_file in im_files:
                         self.all_images.append(self.fn_load_image(im_file))

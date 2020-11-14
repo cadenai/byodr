@@ -465,9 +465,6 @@ class Navigator(object):
         self._match_point = None
         self._match_distance = None
 
-    def _reset(self):
-        self._mass.clear()
-
     def initialize(self, window, threshold):
         self._mass = MatchMass(window=window)
         self._recognition_threshold = threshold
@@ -475,6 +472,12 @@ class Navigator(object):
 
     def reload(self):
         self._store.load_routes()
+
+    def close(self):
+        self._mass.clear()
+        self._match_image = None
+        self._match_point = None
+        self._match_distance = None
 
     def is_active(self):
         return len(self._store) > 0
@@ -495,7 +498,7 @@ class Navigator(object):
         if action == 'start' or (action == 'toggle' and not self.is_active()):
             self._store.open(route)
         elif action in ('close', 'toggle'):
-            self._store.close()
+            self.close()
         if check:
             threading.Thread(target=self.reload).start()
         logger.info("Selected route '{}' is active {}.".format(self._store.get_selected_route(), self.is_active()))
@@ -522,6 +525,8 @@ class DriverManager(Configurable):
     def __init__(self, route_store):
         super(DriverManager, self).__init__()
         self._navigator = Navigator(route_store)
+        self._navigation_queue = deque(maxlen=10)
+        self._navigation_command_speed_scale = 1e5
         self._principal_steer_scale = 0
         self._cruise_speed_step = 0
         self._steering_stabilizer = None
@@ -544,10 +549,11 @@ class DriverManager(Configurable):
         _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
         _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
         _clock_hz = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        self._navigation_command_speed_scale = parse_option('display.speed.scale', float, 1e5, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
-        self._navigator.initialize(window=_clock_hz, threshold=_navigation_recognition_threshold)
+        self._navigator.initialize(window=int(_clock_hz / 2), threshold=_navigation_recognition_threshold)
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None
@@ -583,12 +589,23 @@ class DriverManager(Configurable):
             self._lock.release()
 
     def process_navigation(self, c_inference):
-        navigation_instruction = self._navigator.update(c_inference)
-        if self.get_driver_ctl() == 'driver_mode.inference.dnn' and navigation_instruction is not None:
-            if navigation_instruction.get_direction() is not None:
-                self._set_direction(_translate_navigation_direction(navigation_instruction.get_direction()))
-            if navigation_instruction.get_speed() is not None:
-                self.set_cruise_speed(navigation_instruction.get_speed())
+        # This runs at the pilot service process frequency.
+        try:
+            # Peek the first command in execution order.
+            command = self._navigation_queue[0]
+            if command.get_sleep() is None or timestamp() > command.get_time() + command.get_sleep() * 1e6:
+                # Execute the command now.
+                command = self._navigation_queue.popleft()
+                if command.get_direction() is not None:
+                    self._set_direction(_translate_navigation_direction(command.get_direction()))
+                if command.get_speed() is not None:
+                    self.set_cruise_speed(command.get_speed() / self._navigation_command_speed_scale)
+        except LookupError:
+            pass
+        # Fill the queue with the next instructions in order.
+        navigation_instructions = self._navigator.update(c_inference)
+        if navigation_instructions is not None:
+            self._navigation_queue.extend([c.set_time(timestamp()) for c in navigation_instructions.get_commands()])
 
     def increase_cruise_speed(self):
         with self._lock:
@@ -629,6 +646,7 @@ class DriverManager(Configurable):
                     if self._driver is not None:
                         threading.Thread(target=self._driver.deactivate).start()
                     self._driver_ctl = control
+                    self._navigation_queue.clear()
                     self._driver = self._get_driver(control=control)
                     threading.Thread(target=self._activate).start()
                     logger.info("Pilot switch control to '{}'.".format(control))
