@@ -561,12 +561,12 @@ class DriverManager(Configurable):
         _errors = []
         _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
         _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
-        _clock_hz = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        _navigator_window_size = parse_option('navigation.collection.window.size', int, 10, _errors, **kwargs)
         self._navigation_command_speed_scale = parse_option('display.speed.scale', float, 1e5, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
-        self._navigator.initialize(window=int(_clock_hz / 2), threshold=_navigation_recognition_threshold)
+        self._navigator.initialize(window=_navigator_window_size, threshold=_navigation_recognition_threshold)
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None

@@ -133,7 +133,6 @@ class TFRunner(Configurable):
         self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
         _brake_critic_scale_max = parse_option('driver.dnn.brake.critic.scale.max', float, 1e-6, _errors, **kwargs)
-        _corridor_scale_max = parse_option('driver.dnn.steer.corridor.scale.max', float, 1e-6, _errors, **kwargs)
         _corridor_equation_key = 'driver.dnn.steer.corridor.equation'
         _corridor_penalty_eq = parse_option(_corridor_equation_key, str, "e ** (critic + surprise)", _errors, **kwargs)
         try:
@@ -144,7 +143,7 @@ class TFRunner(Configurable):
             self._fn_corridor_penalty = lambda surprise, critic: 100
         self._fn_obstacle_norm = partial(self._norm_scale, min_=0, max_=_brake_scale_max)
         self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)
-        self._fn_corridor_norm = partial(self._norm_scale, min_=0, max_=_corridor_scale_max)
+        self._fn_corridor_norm = (lambda v: v)
         p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
         self._dagger = p_conv_dropout > 0
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
