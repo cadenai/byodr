@@ -7,7 +7,7 @@ class NavigatorController {
         this.el_image_height = null;
         this.el_route = null;
         this.el_point = null;
-        this.el_debug_distance = null;
+        this.el_debug_match_distance = null;
         this.el_route_select_prev = null;
         this.el_route_select_next = null;
         this.matched_image_id = null;
@@ -78,7 +78,6 @@ class NavigatorController {
         this.el_route = $('span#navigation_route_name');
         this.el_point = $('span#navigation_point_name');
         this.el_debug_match_distance = $('span#navigation_match_image_distance');
-        // this.el_debug_candidate_distance = $('span#navigation_candidate_image_distance');
         this.el_route_select_prev = $('span#navigation_route_sel_prev');
         this.el_route_select_next = $('span#navigation_route_sel_next');
         this.schedule_navigation_image_update();
@@ -96,7 +95,10 @@ class NavigatorController {
     }
     on_message(message) {
         if (this.active) {
-            const image_id = message.nav_image;
+            // Show the current navigation values when in debug.
+            const _debug = this.el_debug_match_distance.is_visible();
+            const column_id = _debug? 1 : 0;
+            const image_id = message.nav_image[column_id];
             const backend_active = message.nav_active;
             const is_image_change = image_id != this.matched_image_id;
             const is_backend_change = backend_active != this.backend_active;
@@ -107,7 +109,7 @@ class NavigatorController {
             }
             if (backend_active) {
                 this.el_point.text(message.nav_point);
-                this.el_debug_match_distance.text(message.nav_distance.toFixed(3));
+                this.el_debug_match_distance.text(message.nav_distance[column_id].toFixed(3));
             }
         }
     }

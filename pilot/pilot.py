@@ -461,8 +461,10 @@ class Navigator(object):
         self._store = route_store
         self._recognition_threshold = 0
         self._mass = MatchMass()
-        self._match_image = None
+        self._current_image = None
+        self._current_distance = None
         self._match_point = None
+        self._match_image = None
         self._match_distance = None
 
     def initialize(self, window, threshold):
@@ -474,9 +476,12 @@ class Navigator(object):
         self._store.load_routes()
 
     def close(self):
+        self._store.close()
         self._mass.clear()
-        self._match_image = None
+        self._current_image = None
+        self._current_distance = None
         self._match_point = None
+        self._match_image = None
         self._match_distance = None
 
     def is_active(self):
@@ -484,6 +489,12 @@ class Navigator(object):
 
     def get_navigation_route(self):
         return self._store.get_selected_route()
+
+    def get_current_image_id(self):
+        return self._current_image
+
+    def get_current_distance(self):
+        return self._current_distance
 
     def get_match_image_id(self):
         return self._match_image
@@ -509,12 +520,14 @@ class Navigator(object):
             c_distance = c_inference.get('navigation_distance', 2.)
             try:
                 self._mass.hit(self._store.get_image_navigation_point(c_image), c_distance, c_image)
-                match_point, match_distance, match_image = self._mass.get_smallest()
-                self._match_image = match_image
-                self._match_distance = match_distance
-                if match_distance < self._recognition_threshold and match_point != self._match_point:
-                    self._match_point = match_point
-                    return self._store.get_instructions(match_point)
+                _point, _distance, _image = self._mass.get_smallest()
+                self._current_distance = _distance
+                self._current_image = _image
+                if _distance < self._recognition_threshold and _point != self._match_point:
+                    self._match_image = _image
+                    self._match_distance = _distance
+                    self._match_point = _point
+                    return self._store.get_instructions(_point)
             except LookupError:
                 pass
         # No new match.
@@ -662,17 +675,21 @@ class DriverManager(Configurable):
             # If downstream processes need the teleop time then use an extra attribute.
             _nav_active = self._navigator.is_active()
             _nav_route = self._navigator.get_navigation_route() if _nav_active else None
-            _nav_point = self._navigator.get_match_point() if _nav_active else None
-            _nav_image = self._navigator.get_match_image_id() if _nav_active else None
+            _nav_current_image = self._navigator.get_current_image_id() if _nav_active else None
+            _nav_current_distance = self._navigator.get_current_distance() if _nav_active else None
+            _nav_match_image = self._navigator.get_match_image_id() if _nav_active else None
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
+            _nav_match_point = self._navigator.get_match_point() if _nav_active else None
             blob = Blob(driver=self._driver_ctl,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         navigation_active=_nav_active,
                         navigation_route=_nav_route,
-                        navigation_match_image=_nav_image,
+                        navigation_current_image=_nav_current_image,
+                        navigation_current_distance=_nav_current_distance,
+                        navigation_match_image=_nav_match_image,
                         navigation_match_distance=_nav_match_distance,
-                        navigation_match_point=_nav_point,
+                        navigation_match_point=_nav_match_point,
                         **teleop)
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering

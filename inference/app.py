@@ -8,6 +8,7 @@ from functools import partial
 
 import cv2
 import numpy as np
+# For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
 from scipy.cluster.vq import vq
 from scipy.spatial.distance import cosine
@@ -65,6 +66,7 @@ class TFRunner(Configurable):
         self._steering_scale_left = 1
         self._steering_scale_right = 1
         self._penalty_filter = None
+        self._debug_filter = None
         self._fn_obstacle_norm = None
         self._fn_brake_critic_norm = None
         self._fn_corridor_norm = None
@@ -127,9 +129,8 @@ class TFRunner(Configurable):
         _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0, _errors, **kwargs)
         _penalty_down_momentum = parse_option('driver.autopilot.filter.momentum.down', float, 0, _errors, **kwargs)
         _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 0, _errors, **kwargs)
-        self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum,
-                                               down=_penalty_down_momentum,
-                                               ceiling=_penalty_ceiling)
+        self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
+        self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
         _brake_critic_scale_max = parse_option('driver.dnn.brake.critic.scale.max', float, 1e-6, _errors, **kwargs)
         _corridor_scale_max = parse_option('driver.dnn.steer.corridor.scale.max', float, 1e-6, _errors, **kwargs)
@@ -192,7 +193,7 @@ class TFRunner(Configurable):
 
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action_out)),
-                    corridor=float(_corridor_penalty),
+                    corridor=float(self._debug_filter.calculate(_corridor_penalty)),
                     surprise_out=float(surprise_out),
                     critic_out=float(critic_out),
                     fallback=int(self._fallback),
