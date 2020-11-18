@@ -15,7 +15,7 @@ from scipy.spatial.distance import cosine
 
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
-from byodr.utils.navigate import FileSystemRouteDataSource
+from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from image import get_registered_function
 from inference import TFDriver, DynamicMomentum, maneuver_index
@@ -31,24 +31,32 @@ logger = logging.getLogger(__name__)
 class FeatureCluster(object):
 
     def __init__(self):
+        self._lock = threading.Lock()
         self._features = None
         self._code_book = None
 
     def reload(self, features):
-        self._features = features
-        self._code_book = np.array(features)
+        with self._lock:
+            self._features = features
+            self._code_book = np.array(features)
 
     def get_best_match(self, query):
         match_id, match_value = None, None
-        if self._code_book is not None:
-            query = np.reshape(np.array([query]), [1, -1])
-            match_id = vq(query, self._code_book)[0][0]
-            match_value = cosine(query, self._code_book[match_id])
+        _acquired = self._lock.acquire(False)
+        try:
+            if self._code_book is not None:
+                query = np.reshape(np.array([query]), [1, -1])
+                match_id = vq(query, self._code_book)[0][0]
+                match_value = cosine(query, self._code_book[match_id])
+        finally:
+            if _acquired:
+                self._lock.release()
         return match_id, match_value
 
     def release(self):
-        self._features = None
-        self._code_book = None
+        with self._lock:
+            self._features = None
+            self._code_book = None
 
     def quit(self):
         self.release()
@@ -60,6 +68,7 @@ class TFRunner(Configurable):
         self._model_directories = model_directories
         self._navigation_routes = navigation_routes
         self._cluster = FeatureCluster()
+        self._atomic_lock = threading.Lock()
         self._store = None
         self._gpu_id = 0
         self._process_frequency = 10
@@ -99,26 +108,23 @@ class TFRunner(Configurable):
                                     fallback=True,
                                     dagger=False)[-1]
 
-    def _navigation_active(self):
-        return len(self._store) > 0
-
-    def navigation_command(self, action, route, check=False):
-        if self._store is not None:
-            if action == 'start' or (action == 'toggle' and not self._navigation_active() > 0):
+    def _route_open(self, route):
+        with self._atomic_lock:
+            if route != self._store.get_selected_route():
                 self._store.open(route)
-                if self._navigation_active():
+                if len(self._store) > 0:
                     self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
-            elif action in ('close', 'toggle'):
+
+    def check_state(self, route=None):
+        # This runs at the service process frequency.
+        if self._store is not None:
+            if route is None:
                 self._store.close()
                 self._cluster.release()
-            if check:
+            elif route not in self._store.list_routes():
                 threading.Thread(target=self._store.load_routes).start()
-            logger.info("The route '{}' is active {}.".format(self._store.get_selected_route(), self._navigation_active()))
-
-    def start_route(self, route):
-        self._store.open(route_name=route)
-        if self._navigation_active():
-            self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
+            elif route != self._store.get_selected_route():
+                threading.Thread(target=self._route_open, args=(route,)).start()
 
     def internal_start(self, **kwargs):
         _errors = []
@@ -148,9 +154,9 @@ class TFRunner(Configurable):
         self._dagger = p_conv_dropout > 0
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        self._store = FileSystemRouteDataSource(directory=self._navigation_routes,
-                                                fn_load_image=(lambda fname: self._fn_alex_image(cv2.imread(fname))),
-                                                load_instructions=False)
+        self._store = ReloadableDataSource(FileSystemRouteDataSource(directory=self._navigation_routes,
+                                                                     fn_load_image=(lambda fname: self._fn_alex_image(cv2.imread(fname))),
+                                                                     load_instructions=False))
         self._store.load_routes()
         self._driver = TFDriver(model_directories=self._model_directories, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
         self._driver.activate()
@@ -246,6 +252,8 @@ class InferenceApplication(Application):
 
     def step(self):
         blob = self.pilot()
+        if blob is not None:
+            self._runner.check_state(route=blob.get('navigation_route'))
         image = self.camera.capture()[-1]
         if image is not None:
             instruction = 'intersection.ahead' if blob is None else blob.get('instruction')
@@ -256,11 +264,6 @@ class InferenceApplication(Application):
         if chat is not None:
             if chat.get('command') == 'restart':
                 self.setup()
-            elif 'navigator' in chat:
-                navigation_command = chat.get('navigator')
-                self._runner.navigation_command(action=navigation_command.get('action'),
-                                                route=navigation_command.get('route'),
-                                                check=navigation_command.get('system') == 'reload')
 
 
 def main():

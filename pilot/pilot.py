@@ -505,14 +505,14 @@ class Navigator(object):
     def get_match_distance(self):
         return self._match_distance
 
-    def command(self, action, route=None, check=False):
-        if action == 'start' or (action == 'toggle' and not self.is_active()):
-            self._store.open(route)
-        elif action in ('close', 'toggle'):
+    def check_state(self, route=None):
+        # This runs at the service process frequency.
+        if route is None:
             self.close()
-        if check:
+        elif route not in self._store.list_routes():
             threading.Thread(target=self.reload).start()
-        logger.info("Selected route '{}' is active {}.".format(self._store.get_selected_route(), self.is_active()))
+        elif route != self._store.get_selected_route():
+            threading.Thread(target=self._store.open, args=(route,)).start()
 
     def update(self, c_inference):
         if self.is_active():
@@ -548,9 +548,6 @@ class DriverManager(Configurable):
         self._lock = multiprocessing.RLock()
         self._driver = None
         self._driver_ctl = None
-
-    def navigation_command(self, action, route=None, check=False):
-        self._navigator.command(action, route, check)
 
     def internal_quit(self, restarting=False):
         for driver in self._driver_cache.values():
@@ -601,8 +598,11 @@ class DriverManager(Configurable):
         finally:
             self._lock.release()
 
-    def process_navigation(self, c_inference):
-        # This runs at the pilot service process frequency.
+    def process_navigation(self, c_teleop, c_inference):
+        # This runs at the service process frequency.
+        # Leave the state as is on empty teleop state.
+        if c_teleop is not None:
+            self._navigator.check_state(**c_teleop.get('navigator'))
         try:
             # Peek the first command in execution order.
             command = self._navigation_queue[0]
@@ -616,6 +616,7 @@ class DriverManager(Configurable):
         except LookupError:
             pass
         # Fill the queue with the next instructions in order.
+        c_inference = {} if c_inference is None else c_inference
         navigation_instructions = self._navigator.update(c_inference)
         if navigation_instructions is not None:
             self._navigation_queue.extend([c.set_time(timestamp()) for c in navigation_instructions.get_commands()])
@@ -715,9 +716,6 @@ class CommandProcessor(Configurable):
     def get_frequency(self):
         return self._process_frequency
 
-    def navigation_command(self, action, route=None, check=False):
-        self._driver.navigation_command(action, route, check)
-
     def internal_quit(self, restarting=False):
         if not restarting:
             self._driver.quit()
@@ -743,8 +741,7 @@ class CommandProcessor(Configurable):
                 self._cache[key] = 1
 
     def _process(self, c_teleop, c_ros, c_inference):
-        c_inference = {} if c_inference is None else c_inference
-        self._driver.process_navigation(c_inference)
+        self._driver.process_navigation(c_teleop, c_inference)
 
         # Continue with teleop instructions which take precedence over a route.
         c_ros = {} if c_ros is None else c_ros

@@ -6,7 +6,7 @@ from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
-from byodr.utils.navigate import FileSystemRouteDataSource
+from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from pilot import CommandProcessor
 
 
@@ -55,11 +55,6 @@ class PilotApplication(Application):
         if chat is not None:
             if chat.get('command') == 'restart':
                 self.setup()
-            elif 'navigator' in chat:
-                navigation_command = chat.get('navigator')
-                self._processor.navigation_command(action=navigation_command.get('action'),
-                                                   route=navigation_command.get('route'),
-                                                   check=navigation_command.get('system') == 'reload')
 
 
 def main():
@@ -68,7 +63,7 @@ def main():
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    route_store = FileSystemRouteDataSource(directory=args.routes, load_instructions=True)
+    route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes, load_instructions=True))
     application = PilotApplication(processor=CommandProcessor(route_store), config_dir=args.config)
     quit_event = application.quit_event
     logger = application.logger

@@ -16,7 +16,7 @@ from tornado import web, ioloop
 from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
-from byodr.utils.navigate import FileSystemRouteDataSource
+from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
     JSONMethodDumpRequestHandler, NavImageHandler, JSONRequestHandler
 
@@ -84,58 +84,16 @@ def _load_nav_image(fname):
     return image
 
 
-class Navigator(object):
-    def __init__(self, route_store):
-        self._store = route_store
-        self._lock = threading.Lock()
-        self._active = False
-
-    def is_active(self):
-        with self._lock:
-            return self._active
-
-    def reload(self):
-        with self._lock:
-            self._store.load_routes()
-
-    def open_route(self, name):
-        with self._lock:
-            self._store.open(name)
-            self._active = len(self._store) > 0
-        logger.info("Opened route '{}' is active {}.".format(self._store.get_selected_route(), self._active))
-
-    def close(self):
-        with self._lock:
-            self._store.close()
-            self._active = False
-        logger.info("Navigator is closed.")
-
-    def get_navigation_image(self, image_id):
-        image_id = -1 if image_id is None else image_id
-        with self._lock:
-            images = self._store.list_all_images()
-            return images[image_id] if len(images) > image_id >= 0 else None
-
-    def list_routes(self):
-        with self._lock:
-            return self._store.list_routes()
-
-
 class NavigationHandler(JSONRequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._navigator = kwargs.get('navigator')
-        self.fn_publish = kwargs.get('fn_publish')
-
-    def _reload(self):
-        self.fn_publish(dict(time=timestamp(), navigator={'system': 'reload'}))
-        self._navigator.reload()
+        self._store = kwargs.get('route_store')
 
     def get(self):
         action = self.get_query_argument('action')
         if action == 'list':
-            threading.Thread(target=self._reload).start()
-            self.write(json.dumps(self._navigator.list_routes()))
+            self.write(json.dumps(self._store.list_routes()))
+            threading.Thread(target=self._store.load_routes).start()
         else:
             self.write(json.dumps({}))
 
@@ -143,12 +101,11 @@ class NavigationHandler(JSONRequestHandler):
         data = json.loads(self.request.body)
         action = data.get('action')
         selected_route = data.get('route')
-        _active = self._navigator.is_active()
+        _active = len(self._store) > 0
         if action == 'start' or (action == 'toggle' and not _active):
-            threading.Thread(target=self._navigator.open_route, args=(selected_route,)).start()
+            threading.Thread(target=self._store.open, args=(selected_route,)).start()
         elif action in ('close', 'toggle'):
-            self._navigator.close()
-        self.fn_publish(dict(time=timestamp(), navigator={'action': action, 'route': selected_route}))
+            self._store.close()
         self.write(json.dumps(dict(message='ok')))
 
 
@@ -159,9 +116,10 @@ def main():
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    route_store = FileSystemRouteDataSource(directory=args.routes, fn_load_image=_load_nav_image, load_instructions=False)
-    navigator = Navigator(route_store)
-    navigator.reload()
+    route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes,
+                                                                 fn_load_image=_load_nav_image,
+                                                                 load_instructions=False))
+    route_store.load_routes()
 
     application = TeleopApplication(event=quit_event, config_dir=args.config)
     application.setup()
@@ -199,12 +157,15 @@ def main():
         return zm_client.call(dict(request='system/service/capabilities'))
 
     def get_navigation_image(image_id):
-        return navigator.get_navigation_image(image_id)
+        return route_store.get_image(image_id)
+
+    def teleop_publish(cmd):
+        cmd['navigator'] = dict(route=route_store.get_selected_route())
+        publisher.publish(cmd)
 
     try:
         web_app = web.Application([
-            (r"/ws/ctl", ControlServerSocket,
-             dict(fn_control=(lambda x: publisher.publish(x)))),
+            (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
              dict(fn_speed_scale=(lambda: application.get_display_speed_scale()),
                   fn_state=(lambda: (collector.get(0),
@@ -218,7 +179,7 @@ def main():
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
-            (r"/api/navigation/routes", NavigationHandler, dict(navigator=navigator, fn_publish=(lambda x: chatter.publish(x)))),
+            (r"/api/navigation/routes", NavigationHandler, dict(route_store=route_store)),
             (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.45.1', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
