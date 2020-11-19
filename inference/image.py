@@ -15,7 +15,7 @@ def hwc_to_chw(img):
     return None if img is None else img.transpose((2, 0, 1))
 
 
-def hwc_alexnet(image, resize_wh=None, ):
+def hwc_alexnet(image, resize_wh=None):
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
     image = cv2.resize(image, (227, 227))
     image = image.astype(np.uint8)
