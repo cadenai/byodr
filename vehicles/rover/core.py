@@ -218,7 +218,7 @@ class GstSource(Configurable):
             )
             _url = "rtspsrc " \
                    "location={url} " \
-                   "latency=0 drop-on-latency=true ! queue ! " \
+                   "latency=0 drop-on-latency=true do-retransmission=false ! queue ! " \
                    "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
                    "videorate ! video/x-raw,framerate={framerate}/1 ! " \
                    "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \

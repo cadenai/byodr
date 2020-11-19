@@ -17,7 +17,7 @@ class GstRawSource(object):
         Gst.init(None)
         if 'sink' in command:
             raise AssertionError("Command cannot contain a sink yet, must be added here.")
-        self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=2 drop=true"
+        self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
         self.closed = True
         self._callback_time = None
         self.video_pipe = None
