@@ -204,7 +204,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
     def on_message(self, message):
         try:
             request = json.loads(message)
-            quality = request.get('quality', 90)
+            quality = int(request.get('quality', 90))
             camera = request.get('camera', 'front').strip().lower()
             display = request.get('display', 'HVGA').strip().upper()
             img = self._capture_front() if camera == 'front' else self._capture_rear()
@@ -233,7 +233,7 @@ class NavImageHandler(web.RequestHandler):
     def data_received(self, chunk):
         pass
 
-    # noinspection PyUnresolvedReferences
+    # noinspection PyUnresolvedReferences,PyDeprecation
     @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
