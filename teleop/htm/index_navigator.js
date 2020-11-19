@@ -16,6 +16,7 @@ class NavigatorController {
         this.active = false;
         this.backend_active = false;
         this.in_mouse_over = false;
+        this.in_debug = false;
     }
     get_selected_route() {
         return this.selected_route;
@@ -133,24 +134,23 @@ navigator_controller.mouse_out = function() {
 }
 navigator_controller.update_visibility = function () {
     if (navigator_controller.routes.length < 1) {
-        $('div#navigation_debug_container').invisible();
         $('div#navigation_image_container').invisible();
         $('div#navigation_route_container').invisible();
+        $('div#navigation_debug_container').invisible();
     } else {
-        // The debug container is invisible until requested.
         $('div#navigation_image_container').visible();
         $('div#navigation_route_container').visible();
+        if (navigator_controller.in_debug) {
+            $('div#navigation_debug_container').visible();
+        } else {
+            $('div#navigation_debug_container').invisible();
+        }
     }
 }
 
 page_utils.add_toggle_debug_values_listener(function(collapse) {
-    if (navigator_controller.routes.length > 0) {
-        if (collapse) {
-            $("div#navigation_debug_container").invisible();
-        } else {
-            $("div#navigation_debug_container").visible();
-        }
-    }
+    navigator_controller.in_debug = !collapse;
+    navigator_controller.update_visibility();
 });
 
 document.addEventListener("DOMContentLoaded", function() {

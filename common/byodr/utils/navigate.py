@@ -266,7 +266,8 @@ class ReloadableDataSource(AbstractRouteDataSource):
         self._delegate = delegate
         self._lock = threading.Lock()
         # Cache the most recent selected route.
-        self._latest_route = None
+        self._last_listed_routes = []
+        self._last_selected_route = None
 
     def _do_safe(self, fn):
         _acquired = self._lock.acquire(False)
@@ -284,14 +285,21 @@ class ReloadableDataSource(AbstractRouteDataSource):
             self._delegate.load_routes()
 
     def list_routes(self):
-        return self._do_safe(lambda acquired: self._delegate.list_routes() if acquired else [])
+        _acquired = self._lock.acquire(False)
+        try:
+            if _acquired:
+                self._last_listed_routes = self._delegate.list_routes()
+            return self._last_listed_routes
+        finally:
+            if _acquired:
+                self._lock.release()
 
     def get_selected_route(self):
         _acquired = self._lock.acquire(False)
         try:
             if _acquired:
-                self._latest_route = self._delegate.get_selected_route()
-            return self._latest_route
+                self._last_selected_route = self._delegate.get_selected_route()
+            return self._last_selected_route
         finally:
             if _acquired:
                 self._lock.release()

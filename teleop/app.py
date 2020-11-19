@@ -180,7 +180,7 @@ def main():
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
             (r"/api/navigation/routes", NavigationHandler, dict(route_store=route_store)),
-            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.45.1', permanent=False)),
+            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.45.1b', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
         port = args.port
