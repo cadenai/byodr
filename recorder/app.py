@@ -156,7 +156,9 @@ class EventHandler(threading.Thread):
             try:
                 event = self._tracker.pop()
                 if event is not None:
+                    # The resize operation can be considered costly - also do not transfer excessive bytes until the end of the line.
                     if event.image.shape != (self._im_height, self._im_width, 3):
+                        logger.warning("Image size must be finalized as soon as possible.")
                         event.image = cv2.resize(event.image, (self._im_width, self._im_height))
                     self._recorder.do_record(event)
                 # Allow other threads access to cpu.

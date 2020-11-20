@@ -150,7 +150,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         self.fn_load_image = fn_load_image
         self.load_instructions = load_instructions
         self.quit_event = multiprocessing.Event()
-        self._load_timestamp = timestamp()
+        self._load_timestamp = 0
         self.routes = []
         self.selected_route = None
         # Route specific data follows.

@@ -14,7 +14,8 @@ from byodr.utils.option import parse_option
 logger = logging.getLogger(__name__)
 
 # CAMERA_SHAPE = (600, 800, 3)
-CAMERA_SHAPE = (480, 640, 3)
+# CAMERA_SHAPE = (480, 640, 3)
+CAMERA_SHAPE = (240, 320, 3)
 
 
 class CarlaHandler(Configurable):

@@ -221,6 +221,7 @@ class InferenceApplication(Application):
         self.publisher = None
         self.camera = None
         self.ipc_server = None
+        self.teleop = None
         self.pilot = None
         self.ipc_chatter = None
 
@@ -251,12 +252,14 @@ class InferenceApplication(Application):
         self._runner.quit()
 
     def step(self):
-        blob = self.pilot()
-        if blob is not None:
-            self._runner.check_state(route=blob.get('navigation_route'))
+        # Leave the state as is on empty teleop state.
+        c_teleop = self.teleop()
+        if c_teleop is not None:
+            self._runner.check_state(**c_teleop.get('navigator'))
+        c_pilot = self.pilot()
         image = self.camera.capture()[-1]
         if image is not None:
-            instruction = 'intersection.ahead' if blob is None else blob.get('instruction')
+            instruction = 'intersection.ahead' if c_pilot is None else c_pilot.get('instruction')
             state = self._runner.forward(image=image, intention=instruction)
             state['_fps'] = self.get_actual_hz()
             self.publisher.publish(state)
@@ -280,15 +283,17 @@ def main():
                                        navigation_routes=args.routes)
     quit_event = application.quit_event
 
+    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
     ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(pilot, ipc_chatter), event=quit_event)
+    collector = CollectorThread(receivers=(teleop, pilot, ipc_chatter), event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
     application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/inference_c.sock', name='inference', event=quit_event)
-    application.pilot = lambda: collector.get(0)
-    application.ipc_chatter = lambda: collector.get(1)
+    application.teleop = lambda: collector.get(0)
+    application.pilot = lambda: collector.get(1)
+    application.ipc_chatter = lambda: collector.get(2)
     threads = [collector, application.camera, application.ipc_server]
     if quit_event.is_set():
         return 0

@@ -223,8 +223,7 @@ class GstSource(Configurable):
                    "videorate ! video/x-raw,framerate={framerate}/1 ! " \
                    "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
                 format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1], framerate=_decode_rate))
-            logger.info("Camera rtsp url = {}.".format(_rtsp_url))
-            logger.info("Image shape={}.".format(self._camera_shape))
+            logger.info("Camera stream url = {} image shape = {} decode rate = {}.".format(_rtsp_url, self._camera_shape, _decode_rate))
             self._source = GstRawSource(name=self._position, fn_callback=self._publish, command=_url)
         return _errors
 

@@ -125,7 +125,7 @@ def main():
     application.setup()
 
     camera_front = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
-    camera_rear = CameraThread(url='ipc:///byodr/camera_1.sock', topic=b'aav/camera/1', event=quit_event, receive_timeout_ms=100)
+    camera_rear = CameraThread(url='ipc:///byodr/camera_1.sock', topic=b'aav/camera/1', event=quit_event)
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
     vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
     inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
