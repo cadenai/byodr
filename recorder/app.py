@@ -88,7 +88,7 @@ class EventHandler(threading.Thread):
         self._publish_frequency = parse_option('publish.hz', int, 1, _errors, **kwargs)
         self._vehicle = parse_option('constant.vehicle.type', str, 'none', _errors, **kwargs)
         self._config = parse_option('constant.vehicle.config', str, 'none', _errors, **kwargs)
-        _im_height, _im_width = parse_option('image.persist.scale', str, '240x320', _errors, **kwargs).split('x')
+        _im_width, _im_height = parse_option('image.persist.scale', str, '320x240', _errors, **kwargs).split('x')
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
         self._active = False
