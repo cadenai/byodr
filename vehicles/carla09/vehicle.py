@@ -13,17 +13,13 @@ from byodr.utils.option import parse_option
 
 logger = logging.getLogger(__name__)
 
-# CAMERA_SHAPE = (600, 800, 3)
-# CAMERA_SHAPE = (480, 640, 3)
-CAMERA_SHAPE = (240, 320, 3)
-
 
 class CarlaHandler(Configurable):
 
     def __init__(self, fn_on_image):
         super(CarlaHandler, self).__init__()
         self._camera_callback = fn_on_image
-        self._image_shape = CAMERA_SHAPE
+        self._image_shape = (600, 800, 3)
         self._tm_port = 8000
         self._rand_weather_seconds = -1
         self._world = None
@@ -47,12 +43,16 @@ class CarlaHandler(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         _remote = parse_option('host.location', str, 'localhost', _errors, **kwargs)
+        _img_wh = parse_option('camera.image.shape', str, errors=_errors, **kwargs)
         carla_host, carla_port = _remote, 2000
         if ':' in carla_host:
             host, port = carla_host.split(':')
             carla_host, carla_port = host, int(port)
         carla_client = carla.Client(carla_host, carla_port)
         carla_client.set_timeout(2.)
+        _shape = [int(x) for x in _img_wh.split('x')]
+        _shape = (_shape[1], _shape[0], 3)
+        self._image_shape = _shape
         self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, -1, _errors, **kwargs)
         self._world = carla_client.get_world()
         self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
