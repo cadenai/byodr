@@ -37,16 +37,16 @@ class NavigatorController {
         }
         return false;
     }
-    set_routes(routes) {
+    set_routes(response) {
+        const routes = response.routes;
+        const selected = response.selected;
         this.routes = routes;
         if (routes.length == 0) {
             this.select_route(null);
-            this.el_route.text('No routes');
+        } else if (routes.indexOf(selected) != -1) {
+            this.select_route(selected);
         } else {
-            if (this.selected_route == undefined) {
-                this.selected_route = routes[0];
-            }
-            this.select_route(this.selected_route);
+            this.select_route(routes[0]);
         }
     }
     select_route(name) {
@@ -167,8 +167,8 @@ document.addEventListener("DOMContentLoaded", function() {
 
 function navigator_start_all() {
     navigator_controller.active = true;
-    $.get("/api/navigation/routes?action=list", function(data) {
-        navigator_controller.set_routes(data);
+    $.get("/api/navigation/routes?action=list", function(response) {
+        navigator_controller.set_routes(response);
         navigator_controller.update_visibility();
     });
 }

@@ -612,7 +612,7 @@ class DriverManager(Configurable):
                 if command.get_direction() is not None:
                     self._set_direction(_translate_navigation_direction(command.get_direction()))
                 if command.get_speed() is not None:
-                    self.set_cruise_speed(command.get_speed() / self._navigation_command_speed_scale)
+                    self.set_cruise_speed(command.get_speed(), scale=True)
         except LookupError:
             pass
         # Fill the queue with the next instructions in order.
@@ -633,8 +633,9 @@ class DriverManager(Configurable):
                 self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
                 logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
-    def set_cruise_speed(self, value):
+    def set_cruise_speed(self, value, scale=False):
         with self._lock:
+            value = value / self._navigation_command_speed_scale if scale else value
             self._pilot_state.cruise_speed = max(0., value)
             logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
@@ -748,7 +749,7 @@ class CommandProcessor(Configurable):
         if 'pilot.driver.set' in c_ros:
             self._cache_safe('ros switch driver', lambda: self._driver.switch_ctl(c_ros.get('pilot.driver.set')))
         if 'pilot.maximum.speed' in c_ros:
-            self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed')))
+            self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed'), scale=True))
 
         # Continue with teleop instructions which take precedence over the rest.
         c_teleop = {} if c_teleop is None else c_teleop

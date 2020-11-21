@@ -92,7 +92,10 @@ class NavigationHandler(JSONRequestHandler):
     def get(self):
         action = self.get_query_argument('action')
         if action == 'list':
-            self.write(json.dumps(self._store.list_routes()))
+            _routes = self._store.list_routes()
+            _selected = self._store.get_selected_route()
+            _response = {'routes': sorted(_routes), 'selected': _selected}
+            self.write(json.dumps(_response))
             threading.Thread(target=self._store.load_routes).start()
         else:
             self.write(json.dumps({}))
@@ -102,7 +105,7 @@ class NavigationHandler(JSONRequestHandler):
         action = data.get('action')
         selected_route = data.get('route')
         _active = len(self._store) > 0
-        if action == 'start' or (action == 'toggle' and not _active):
+        if action == 'start' or (action == 'toggle' and (not _active or self._store.get_selected_route() != selected_route)):
             threading.Thread(target=self._store.open, args=(selected_route,)).start()
         elif action in ('close', 'toggle'):
             self._store.close()
@@ -180,7 +183,7 @@ def main():
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
             (r"/api/navigation/routes", NavigationHandler, dict(route_store=route_store)),
-            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.45.1b', permanent=False)),
+            (r"/", web.RedirectHandler, dict(url='/index.htm?v=0.45.1c', permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
         port = args.port

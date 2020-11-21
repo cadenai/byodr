@@ -48,7 +48,7 @@ class JSONPublisher(object):
     def publish(self, data, topic=None):
         _topic = self._topic if topic is None else topic
         if data is not None:
-            data = dict((k, v) for k, v in data.iteritems() if v is not None)
+            data = dict((k, v) for k, v in data.items() if v is not None)
             send_string(self._publisher, '{}:{}'.format(_topic, json.dumps(data)), zmq.NOBLOCK)
 
 
