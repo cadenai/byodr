@@ -9,12 +9,14 @@ def test_create_and_setup(tmpdir):
     directory = str(tmpdir.realpath())
     ipc_server = CollectServer()
     pilot = QueueReceiver()
+    teleop = QueueReceiver()
     ipc_chatter = QueueReceiver()
 
     app = InferenceApplication(config_dir=directory)
     app.publisher = CollectPublisher()
     app.camera = QueueCamera()
     app.ipc_server = ipc_server
+    app.teleop = lambda: teleop.get_latest()
     app.pilot = lambda: pilot.get_latest()
     app.ipc_chatter = lambda: ipc_chatter.pop_latest()
 
