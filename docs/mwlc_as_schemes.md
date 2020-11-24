@@ -10,15 +10,15 @@ We had the robot design checked by an engineering organisation but it's at your 
 We use schemes as our basis. The other documentation is maintained after the schemes.  
 
 
-Scheme: 204000 Enclosure
-![](img/schemes/img204400.jpg)  
+###Scheme: 204000 Enclosure
+![](img/schemes/img204400v09.jpg)  
 
-Scheme: 206000 Power
-![](img/schemes/img206000P1.jpg)  
-   
-   
-![](img/schemes/img206000P2.jpg)
+###Scheme: 206000 Power
+##### Battery power
+![](img/schemes/img206000P1v018.jpg)  
+##### 12vdc power   
+![](img/schemes/img206000P2v018.jpg)
 
-  Scheme: 208000 Communication
+###Scheme: 208000 Communication
 
-![](img/schemes/img208000.jpg)
+![](img/schemes/img208000v07.jpg)
