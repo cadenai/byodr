@@ -10,9 +10,6 @@ from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer
 
 def test_create_and_setup(tmpdir):
     directory = str(tmpdir.realpath())
-    with open(os.path.join(directory, 'testing.ini'), 'wb') as f:
-        f.write("""[teleop]\ndisplay.speed.scale = 5""")
-
     publisher = CollectPublisher()
     ipc_server = CollectServer()
     teleop = QueueReceiver()

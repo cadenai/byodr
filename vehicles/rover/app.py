@@ -27,7 +27,7 @@ class Platform(Configurable):
         y_vel = self._velocity
         # The teleop command can be none sometimes on slow connections.
         if c_teleop:
-            y_vel = c_teleop.get('throttle', 0)
+            y_vel = c_teleop.get('throttle', 0) * 5.0  # Rough approximation to km/h.
             self._velocity = y_vel
         return dict(x_coordinate=self._gps_poller.get_latitude(),
                     y_coordinate=self._gps_poller.get_longitude(),

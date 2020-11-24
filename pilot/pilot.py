@@ -539,7 +539,6 @@ class DriverManager(Configurable):
         super(DriverManager, self).__init__()
         self._navigator = Navigator(route_store)
         self._navigation_queue = deque(maxlen=10)
-        self._navigation_command_speed_scale = 1e5
         self._principal_steer_scale = 0
         self._cruise_speed_step = 0
         self._steering_stabilizer = None
@@ -559,7 +558,6 @@ class DriverManager(Configurable):
         _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
         _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
         _navigator_window_size = parse_option('navigation.collection.window.size', int, 10, _errors, **kwargs)
-        self._navigation_command_speed_scale = parse_option('display.speed.scale', float, 1e5, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
@@ -612,7 +610,7 @@ class DriverManager(Configurable):
                 if command.get_direction() is not None:
                     self._set_direction(_translate_navigation_direction(command.get_direction()))
                 if command.get_speed() is not None:
-                    self.set_cruise_speed(command.get_speed(), scale=True)
+                    self.set_cruise_speed(command.get_speed())
         except LookupError:
             pass
         # Fill the queue with the next instructions in order.
@@ -633,9 +631,8 @@ class DriverManager(Configurable):
                 self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
                 logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
-    def set_cruise_speed(self, value, scale=False):
+    def set_cruise_speed(self, value):
         with self._lock:
-            value = value / self._navigation_command_speed_scale if scale else value
             self._pilot_state.cruise_speed = max(0., value)
             logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
 
@@ -749,7 +746,7 @@ class CommandProcessor(Configurable):
         if 'pilot.driver.set' in c_ros:
             self._cache_safe('ros switch driver', lambda: self._driver.switch_ctl(c_ros.get('pilot.driver.set')))
         if 'pilot.maximum.speed' in c_ros:
-            self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed'), scale=True))
+            self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed')))
 
         # Continue with teleop instructions which take precedence over the rest.
         c_teleop = {} if c_teleop is None else c_teleop

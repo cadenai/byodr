@@ -41,10 +41,8 @@ class TeleopApplication(Application):
     def __init__(self, event, config_dir=os.getcwd()):
         super(TeleopApplication, self).__init__(quit_event=event)
         self._config_dir = config_dir
-        self._display_speed_scale = 0
         self._user_config_file = os.path.join(self._config_dir, 'config.ini')
         self._config_hash = -1
-        self._lock = threading.Lock()
 
     def _check_user_config(self):
         _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
@@ -60,10 +58,6 @@ class TeleopApplication(Application):
     def get_user_config_file(self):
         return self._user_config_file
 
-    def get_display_speed_scale(self):
-        with self._lock:
-            return self._display_speed_scale
-
     def setup(self):
         if self.active():
             self._check_user_config()
@@ -71,10 +65,6 @@ class TeleopApplication(Application):
             _hash = hash_dict(**_config)
             if _hash != self._config_hash:
                 self._config_hash = _hash
-                _scale = float(_config.get('display.speed.scale'))
-                self.logger.info("Speed scale = {}.".format(_scale))
-                with self._lock:
-                    self._display_speed_scale = _scale
 
 
 def _load_nav_image(fname):
@@ -170,8 +160,7 @@ def main():
         web_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
-             dict(fn_speed_scale=(lambda: application.get_display_speed_scale()),
-                  fn_state=(lambda: (collector.get(0),
+             dict(fn_state=(lambda: (collector.get(0),
                                      collector.get(1),
                                      collector.get(2),
                                      collector.get(3))))),
