@@ -11,14 +11,14 @@ We use schemes as our basis. The other documentation is maintained after the sch
 
 
 ###Scheme: 204000 Enclosure
-![](img/schemes/img204400v09.jpg)  
+![](img/drawings/img204400v09.jpg)  
 
 ###Scheme: 206000 Power
 ##### Battery power
-![](img/schemes/img206000P1v018.jpg)  
+![](img/drawings/img206000P1v018.jpg)  
 ##### 12vdc power   
-![](img/schemes/img206000P2v018.jpg)
+![](img/drawings/img206000P2v018.jpg)
 
 ###Scheme: 208000 Communication
 
-![](img/schemes/img208000v07.jpg)
+![](img/drawings/img208000v07.jpg)
