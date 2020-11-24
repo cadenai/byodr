@@ -107,7 +107,8 @@ services:
     restart: always
     command: ["python", "app.py", "--routes", "/sessions/routes"]
     ports:
-      - "80:9100"
+      - "80:80"
+      - "443:443"
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
