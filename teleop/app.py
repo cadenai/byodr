@@ -6,14 +6,12 @@ import logging
 import multiprocessing
 import os
 import signal
-import ssl
 import threading
 from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
 from tornado import web, ioloop
-from tornado.httpserver import HTTPServer
 
 from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
@@ -104,17 +102,6 @@ class NavigationHandler(JSONRequestHandler):
         self.write(json.dumps(dict(message='ok')))
 
 
-class MainRedirectHandler(web.RedirectHandler):
-
-    def data_received(self, chunk):
-        pass
-
-    def redirect(self, url, permanent=False, status=None):
-        if self.request.protocol == 'http':
-            url = "https://%s" % self.request.full_url()[len("http://"):]
-        super(MainRedirectHandler, self).redirect(url, permanent, status)
-
-
 def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
@@ -170,9 +157,7 @@ def main():
 
     try:
         main_redirect_url = '/index.htm?v=0.45.1c'
-        redirect_application = web.Application([(r'/', MainRedirectHandler, dict(url=main_redirect_url, permanent=False))])
-        redirect_application.listen(80)
-        secure_app = web.Application([
+        main_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
              dict(fn_state=(lambda: (collector.get(0),
@@ -190,11 +175,8 @@ def main():
             (r"/", web.RedirectHandler, dict(url=main_redirect_url, permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
-        context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-        context.load_cert_chain("/app/ssl/certificate.pem", "/app/ssl/key.pem")
-        http_server = HTTPServer(secure_app, ssl_options=context)
-        http_server.listen(443)
-        logger.info("Web services started on ports 80, 443.")
+        main_app.listen(8080)
+        logger.info("Web services started on port 8080.")
         io_loop.start()
     except KeyboardInterrupt:
         quit_event.set()
