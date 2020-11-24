@@ -19,7 +19,7 @@ The robot has three modes to give an operator and/or traffic controller supervis
 > The robot is built with *publicly available parts exclusively* and can be assembled by anyone.
 
 ## Get Started
-* Get a robot. Use the parts list and  [assembly instructions](mwlc_kit.md) or place [an order](mwlc_order.md) if you prefer pre-assembly.
+* Get a robot. Use the [parts list](mwlc_kit.md) and the [assembly documentation](mwlc_assembly.md) or place [an order](mwlc_order.md) if you prefer pre-assembly.
 * Read about [startup and maintenance](startup_manual.md).
 * Setup the vpn. Have a look at our step-by-step [ZeroTier guide](zerotier_manual.md). 
 * Connect as your robot's [operator](operator_manual.md). Learn to use the controller and take the first spin.

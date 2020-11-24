@@ -6,6 +6,8 @@ nav:
     - Controller and Browser: operator_manual.md
     - Autopilot: autopilot_manual.md
     - Assembly kit: mwlc_kit.md
+    - Assembly schemes: mwlc_as_schemes.md
+    - Assembly documentation: mwlc_assembly.md
     - Order: mwlc_order.md
     - About: about.md
 theme: readthedocs

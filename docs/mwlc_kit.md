@@ -24,7 +24,7 @@ With the enclosure the ICT-equipment is as much as possible protected against du
  1   [Cable gland M25 Wiska ESKV-SET 25 ](https://www.wiska.com/en/30/pde/10066413/eskv-25.html)<br>
  1   [Enclosure 600 x 300 x 132 transparant cover](https://www.spelsberg.com/industrial-housing/combinable-with-knock-outs/74400401/)<br>
  1   [LAPP SKINTOP® DIX-M25 Multi-seal inset M25 Nitrile rubber Black](https://www.conrad.com/p/lapp-skintop-dix-m25-multi-seal-inset-m25-nitrile-rubber-black-1-pcs-527167)<br>
- 2   [Lock nut seperatable Cofix](https://www.fraenkische.com/en/product/cofix-gegenmutter)<br>
+ 2   [Locknut M20 seperatable Cofix](https://www.fraenkische.com/en/product/cofix-gegenmutter)<br>
  2   [QT 6 Cable grommets](https://www.icotek.com/en/product-catalogue/cable-entry-systems/cable-grommets/qt/)<br>
  2   [QVT 20, Split cable gland](https://www.icotek.com/en/product-catalogue/cable-glands/qvt/)<br>
  2   [Silica gel 10 gram](https://www.conrad.com/p/silica-gel-sachet-10-g-l-x-w-x-h-72-x-57-x-3-mm-transparent-silica-gel-10-pcs-2201308)<br>
@@ -50,8 +50,8 @@ For the body lots of bolts and nuts are used.<br>
  7   [Allen screw M5 X 6](https://www.boikon.com/webshop/fastenings/cylindrical-socket-screw-din-912-zp-m5-x-10/)<br>
  4   [Allen screws M2 12 mm](https://www.conrad.com/p/toolcraft-1061802-allen-screws-m2-12-mm-hex-socket-allen-din-912-stainless-steel-a2-100-pcs-1061802)<br>
  4   [Allen screws M2,5 10 mm](https://www.conrad.com/p/toolcraft-839939-allen-screws-m25-10-mm-slot-din-84-iso-1207-plastic-polyamide-10-pcs-839939)<br>
- 4   [Lock nut m3](https://www.conrad.com/p/toolcraft-812808-locknuts-m3-din-985-steel-zinc-plated-100-pcs-812808)<br>
- 4   [Locknut m2](https://www.conrad.com/p/toolcraft-223336-locknuts-m2-din-985-steel-zinc-plated-10-pcs-223336)<br>
+ 4   [Locknut M2](https://www.conrad.com/p/toolcraft-223336-locknuts-m2-din-985-steel-zinc-plated-10-pcs-223336)<br>
+ 4   [Locknut M3](https://www.conrad.com/p/toolcraft-812808-locknuts-m3-din-985-steel-zinc-plated-100-pcs-812808)<br>
 18   [Repair washer M5](https://www.boikon.com/webshop/fastenings/repair-washer-din-9021-zp-m5/)<br>
 37   [Sliding block 5 - M4](https://www.boikon.com/webshop/fastenings/sliding-block-5-m4/)<br>
 13   [Sliding block 5 - M5](https://www.boikon.com/webshop/fastenings/sliding-block-5-m5/)<br>
@@ -85,21 +85,21 @@ To activate en deactivate the equipment, lots of breakers are used.<br>
  1   [Fuse 15A](http://www.mta.it/en/automotive-fuses-catalogue)<br>
  1   [Fuse 1A](http://www.mta.it/en/automotive-fuses-catalogue)<br>
  1   [Fuse 20A](http://www.mta.it/en/automotive-fuses-catalogue)<br>
- 1   [fuse 5A](http://www.mta.it/en/automotive-fuses-catalogue)<br>
+ 1   [Fuse 5A](http://www.mta.it/en/automotive-fuses-catalogue)<br>
  2   [Relay 5Volt USB NO / NC](https://www.conrad.com/p/conrad-components-393905-relay-card-component-5-v-dc-393905)<br>
  4   [WAGO 2006-1681 Fuse terminal 7.50 mm](https://www.wago.com/us/rail-chassis-terminal-blocks/2-conductor-fuse-terminal-block-for-automotive-blade-style-fuses/p/2006-1681)<br>
 ###Power: Wires and ferrules
 To identify the different connection, different colors are used.<br>
- 2   [Ferrule 0,34mm2 roze, micro usb to Pi](https://www.vogtshop.ch/index.cfm?content=productData&Language=1&TreeID=D9CAD446-200B-4BED-A9E0-8983A8022FFC&ObjId=6F4D89D7-5D65-4A1A-8E62-43D50D553427&sId=BAB90BCD-E0B2-4BF3-B775-41EC38DB71FB)<br>
- 4   [Ferrule 0,5 mm2 * 8 orange](https://www.conrad.com/p/tru-components-1091293-ferrule-050-mm-partially-insulated-orange-100-pcs-1571000)<br>
- 4   [Ferrule 0,50mm2*8, white PoE, front cam](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
-14   [Ferrule 0,75 mm2*8 Donker Blauw(RUT, Nano)](https://www.vogtshop.ch/index.cfm?content=productData&Language=2&TreeID=FABA8DED-9F13-4A24-AE87-AA62FA29838B&ObjId=F9319843-0875-45B0-9D2C-E3C553AB971C&sId=029FAAF1-8DB7-415D-A8F1-A0B5FE3A07CA)<br>
- 4   [Ferrule 0,75mm2*8 grey (Pi)](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
- 2   [Ferrule 0.50 mm² twin Orange](https://www.conrad.com/p/conrad-components-1091317-twin-ferrule-050-mm-partially-insulated-orange-100-pcs-1091317)<br>
- 2   [Ferrule 10 mm2 * 12 (battery, ESC), non isolated](https://www.conrad.nl/p/tru-components-1091264-adereindhulzen-10-mm-x-12-mm-ongeisoleerd-metaal-100-stuks-1570994)<br>
- 2   [Ferrule 1mm2*8 Yellow (Pi+Switch)](https://www.vogtshop.ch/index.cfm?content=productData&Language=1&TreeID=66C89F38-3460-455D-858E-5A07CE30494C&ObjId=7D68ACA0-1E38-4B8C-8D16-5E461D337A89&sId=0BE48027-904B-4356-BFF1-2CCEF2FB516B)<br>
- 6   [Ferrule 2,5mm2 * 8 grey(12vdc)](https://catalog.weidmueller.com/catalog/Start.do?ObjectID=9021070000)<br>
- 8   [Ferrule 2,5mm2*8, blue(ESC) Phoenix Contact](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
+ 2   [Ferrule 0,34mm2 x 6 roze, micro usb to Pi](https://www.vogtshop.ch/index.cfm?content=productData&Language=1&TreeID=D9CAD446-200B-4BED-A9E0-8983A8022FFC&ObjId=6F4D89D7-5D65-4A1A-8E62-43D50D553427&sId=BAB90BCD-E0B2-4BF3-B775-41EC38DB71FB)<br>
+ 4   [Ferrule 0,50mm2 x 8 orange](https://www.conrad.com/p/tru-components-1091293-ferrule-050-mm-partially-insulated-orange-100-pcs-1571000)<br>
+ 4   [Ferrule 0,50mm2 x 8, white PoE, front cam](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
+14   [Ferrule 0,75mm2 x 8 Darkblue(RUT-distributie, Nano)](https://www.vogtshop.ch/index.cfm?content=productData&Language=2&TreeID=FABA8DED-9F13-4A24-AE87-AA62FA29838B&ObjId=F9319843-0875-45B0-9D2C-E3C553AB971C&sId=029FAAF1-8DB7-415D-A8F1-A0B5FE3A07CA)<br>
+ 4   [Ferrule 0,75mm2 x 8 grey (Pi)](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
+ 2   [Ferrule 0.50mm2 * 8 twin Orange](https://www.conrad.com/p/conrad-components-1091317-twin-ferrule-050-mm-partially-insulated-orange-100-pcs-1091317)<br>
+ 2   [Ferrule 10 mm2 x 12 (battery, ESC), non isolated](https://www.conrad.nl/p/tru-components-1091264-adereindhulzen-10-mm-x-12-mm-ongeisoleerd-metaal-100-stuks-1570994)<br>
+ 2   [Ferrule 1mm2 x 8 Yellow (Pi+Switch)](https://www.vogtshop.ch/index.cfm?content=productData&Language=1&TreeID=66C89F38-3460-455D-858E-5A07CE30494C&ObjId=7D68ACA0-1E38-4B8C-8D16-5E461D337A89&sId=0BE48027-904B-4356-BFF1-2CCEF2FB516B)<br>
+ 6   [Ferrule 2,5mm2 x 8 grey(12vdc)](https://catalog.weidmueller.com/catalog/Start.do?ObjectID=9021070000)<br>
+ 8   [Ferrule 2,5mm2 x 8, blue(ESC) Phoenix Contact](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
  0,2   [FLRY-B 0.75 mm², black green(Switch)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
  1   [FLRY-B 0.75 mm², black white(Switch)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
  1   [FLRY-B 0.75 mm², black yellow(RUT-distribution)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
@@ -107,15 +107,13 @@ To identify the different connection, different colors are used.<br>
  1   [FLRY-B 0.75 mm², red white(router, switch)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
  1,15 [FLRY-B 0.75 mm², red yellow(RUT-distribution)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
  2   [FLRY-B 0.75 mm², red(Pi)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
- 1   [FLRY-B 1.50 mm², black(phase out)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
+ 1   [FLRY-B 1.50 mm², black(fase out)](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
  1,2 [FLRY-B 2,50 mm², black](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
  2,3 [FLRY-B 2,50 mm², red](https://d1619fmrcx9c43.cloudfront.net/fileadmin/automotive_cables/publications/catalogues/single-core_automotive_cables.pdf?1460983564)<br>
- 4   [Low power plug 5.50 mm 2.10 mm, wired](https://www.conrad.com/p/tru-components-low-power-cable-low-power-plug-sony-xperia-550-mm-210-mm-100-m-1-pcs-1715033)<br>
- 1   [Power cable Raspberry Pi [1x USB-C plug - 1x Sony Xperia] 1.00 m Black](https://www.conrad.nl/p/tru-components-stroomkabel-raspberry-pi-1x-usb-c-stekker-1x-open-einde-100-m-zwart-2247651)<br>
-###Power: Other
-For protection we used some heatshrinks.<br>
  0,05   [Heatshrink medium](https://www.conrad.com/p/tru-components-1225494-heatshrink-wo-adhesive-white-127-mm-shrinkage21-sold-per-metre-1572508)<br>
  0,05   [Heatshrink small](https://www.conrad.com/p/tru-components-1225468-heatshrink-wo-adhesive-yellow-450-mm-shrinkage21-sold-per-metre-1571044)<br>
+ 4   [Low power plug 5.50 mm 2.10 mm, wired](https://www.conrad.com/p/tru-components-low-power-cable-low-power-plug-sony-xperia-550-mm-210-mm-100-m-1-pcs-1715033)<br>
+ 1   [Power cable Raspberry Pi [1x USB-C plug - 1x Sony Xperia] 1.00 m Black](https://www.conrad.nl/p/tru-components-stroomkabel-raspberry-pi-1x-usb-c-stekker-1x-open-einde-100-m-zwart-2247651)<br>
 ###ICT components
 A robot needs a lot of computer power.<br>
  1   [Connection set for Raspberry Pi Hat](https://wiki.seeedstudio.com/Grove_Base_Hat_for_Raspberry_Pi/)<br>
@@ -142,7 +140,6 @@ For the ethernet, different colors are used.<br>
  1   [Ethernet 50 cm Blue Lan](https://www.conrad.com/p/basetech-rj45-network-cable-patch-cable-cat-5e-uutp-050-m-blue-incl-detent-1717505)<br>
  1   [Ethernet 50 cm red Pi](https://www.conrad.com/p/basetech-rj45-network-cable-patch-cable-cat-5e-u-utp-25.00-cm-red-incl.-detent-1717510)<br>
  1   [Ethernet 50 cm white Wan](https://www.conrad.com/p/basetech-rj45-network-cable-patch-cable-cat-5e-uutp-050-m-white-incl-detent-1717520)<br>
-
 
 You can put this al together. The parts are obvious to use.
 If you have any question, don't hesitate to contact us at [www.mwlc.global/contact/](http://www.mwlc.global/contact/).  
