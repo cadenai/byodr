@@ -128,6 +128,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
+            speed_scale = 1. if pilot is None else float(pilot.get('speed_scale', 1))
             pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
             pilot_current_image = -1 if pilot is None else pilot.get('navigation_current_image', -1)
             pilot_current_sim = 1 if pilot is None else pilot.get('navigation_current_distance', 1)
@@ -148,11 +149,11 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),
                 'thr': 0 if pilot is None else pilot.get('throttle'),
-                'vel_y': 0 if vehicle is None else vehicle.get('velocity'),
+                'vel_y': 0 if vehicle is None else vehicle.get('velocity') * speed_scale,
                 'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
                 'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
-                'speed': 0 if pilot is None else pilot.get('desired_speed'),
-                'max_speed': 0 if pilot is None else pilot.get('cruise_speed'),
+                'speed': 0 if pilot is None else pilot.get('desired_speed') * speed_scale,
+                'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'nav_active': pilot_navigation_active,
                 'nav_point': pilot_match_point,

@@ -51,6 +51,7 @@ class Blob(AttrDict):
     def __init__(self, **kwargs):
         super(Blob, self).__init__(**kwargs)
         self.time = timestamp()
+        self.speed_scale = kwargs.get('speed_scale')
         self.cruise_speed = kwargs.get('cruise_speed')
         self.desired_speed = kwargs.get('desired_speed')
         self.driver = kwargs.get('driver')
@@ -540,6 +541,7 @@ class DriverManager(Configurable):
         self._navigator = Navigator(route_store)
         self._navigation_queue = deque(maxlen=10)
         self._principal_steer_scale = 0
+        self._speed_scale = 1
         self._cruise_speed_step = 0
         self._steering_stabilizer = None
         self._pilot_state = PilotState()
@@ -559,6 +561,7 @@ class DriverManager(Configurable):
         _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
         _navigator_window_size = parse_option('navigation.collection.window.size', int, 10, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
+        self._speed_scale = parse_option('driver.speed.norm.scale', float, 1, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
         self._navigator.initialize(window=_navigator_window_size, threshold=_navigation_recognition_threshold)
@@ -620,21 +623,19 @@ class DriverManager(Configurable):
             self._navigation_queue.extend([c.set_time(timestamp()) for c in navigation_instructions.get_commands()])
 
     def increase_cruise_speed(self):
-        with self._lock:
-            if self.get_driver_ctl() != 'driver_mode.teleop.direct':
-                self._pilot_state.cruise_speed += self._cruise_speed_step
-                logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
+        if self.get_driver_ctl() != 'driver_mode.teleop.direct':
+            self.set_cruise_speed(self._cruise_speed_step, relative=True)
 
     def decrease_cruise_speed(self):
-        with self._lock:
-            if self.get_driver_ctl() != 'driver_mode.teleop.direct':
-                self._pilot_state.cruise_speed = max(0., self._pilot_state.cruise_speed - self._cruise_speed_step)
-                logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
+        if self.get_driver_ctl() != 'driver_mode.teleop.direct':
+            self.set_cruise_speed(-self._cruise_speed_step, relative=True)
 
-    def set_cruise_speed(self, value):
+    def set_cruise_speed(self, value, relative=False):
         with self._lock:
-            self._pilot_state.cruise_speed = max(0., value)
-            logger.info("Cruise speed set to '{}'.".format(self._pilot_state.cruise_speed))
+            new_val = (value / self._speed_scale)
+            new_val = max(0., self._pilot_state.cruise_speed + new_val if relative else new_val)
+            self._pilot_state.cruise_speed = new_val
+            logger.info("Cruise speed set to '{}'.".format(new_val))
 
     def _set_direction(self, turn='general.fallback'):
         with self._lock:
@@ -651,7 +652,7 @@ class DriverManager(Configurable):
         # self.turn_instruction()
         if control is not None and control.lower() not in ('none', 'null', 'ignore', '0', 'false'):
             with self._lock:
-                # There is not feedback of this speed in teleoperation mode. Reset at driver changes.
+                # There is not feedback of this speed in teleop mode. Reset at driver changes.
                 self._pilot_state.cruise_speed = 0
                 # The switch must be immediate. Do not force wait on the previous driver to deactivate.
                 if control != self._driver_ctl:
@@ -680,6 +681,7 @@ class DriverManager(Configurable):
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
             _nav_match_point = self._navigator.get_match_point() if _nav_active else None
             blob = Blob(driver=self._driver_ctl,
+                        speed_scale=self._speed_scale,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         navigation_active=_nav_active,
