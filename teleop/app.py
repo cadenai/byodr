@@ -12,6 +12,7 @@ from ConfigParser import SafeConfigParser
 import cv2
 import numpy as np
 from tornado import web, ioloop
+from tornado.httpserver import HTTPServer
 
 from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
@@ -175,7 +176,9 @@ def main():
             (r"/", web.RedirectHandler, dict(url=main_redirect_url, permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
-        main_app.listen(8080)
+        http_server = HTTPServer(main_app, xheaders=True)
+        http_server.bind(8080)
+        http_server.start()
         logger.info("Web services started on port 8080.")
         io_loop.start()
     except KeyboardInterrupt:
