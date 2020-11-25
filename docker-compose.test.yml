@@ -4,6 +4,10 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
+  httpd:
+    image: rwgrim/docker-noop:latest
+    restart: 'no'
+    command: ["/bin/true"]
   ftpd:
     image: rwgrim/docker-noop:latest
     restart: 'no'

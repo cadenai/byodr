@@ -21,9 +21,6 @@ services:
       - volume_zerotier_config:/var/lib/zerotier-one:rw
   httpd:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: httpd/Dockerfile
     image: centipede2donald/byodr-ce:haproxy
     container_name: byodr_httpd
     restart: always
@@ -47,9 +44,6 @@ services:
       - volume_byodr_sessions:/home/ftpuser:rw
   rosnode:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: rosnode/Dockerfile
     image: centipede2donald/byodr-ce:rover_ros
     container_name: byodr_ros
     restart: always
@@ -60,9 +54,6 @@ services:
       - volume_byodr_config:/config:ro
   relay:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_relay.dockerfile
     image: centipede2donald/byodr-ce:rover_relay
     container_name: byodr_relay
     restart: always
@@ -72,9 +63,6 @@ services:
       - volume_byodr_config:/config:ro
   cam1:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_cam.dockerfile
     image: centipede2donald/byodr-ce:rover_cam1
     container_name: byodr_cam1
     restart: always
@@ -95,9 +83,6 @@ services:
       - volume_byodr_config:/config:ro
   vehicle:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_vehicle.dockerfile
     image: centipede2donald/byodr-ce:rover_vehicle
     container_name: byodr_vehicle
     restart: always
@@ -109,9 +94,6 @@ services:
       - volume_byodr_config:/config:rw
   teleop:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: teleop/Dockerfile
     image: centipede2donald/byodr-ce:teleop
     container_name: byodr_teleop
     restart: always
@@ -126,9 +108,6 @@ services:
       - volume_byodr_sessions:/sessions:ro
   pilot:
     cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: pilot/Dockerfile
     image: centipede2donald/byodr-ce:pilot
     container_name: byodr_pilot
     restart: always
@@ -141,9 +120,6 @@ services:
       - volume_byodr_sessions:/sessions:ro
   recorder:
     cpuset: "0,1,2"
-    build:
-      context: .
-      dockerfile: recorder/Dockerfile
     image: centipede2donald/byodr-ce:recorder
     container_name: byodr_recorder
     restart: always
@@ -155,9 +131,6 @@ services:
       - volume_byodr_sessions:/sessions:rw
   inference:
     cpuset: "2,3"
-    build:
-      context: .
-      dockerfile: inference/Dockerfile.jp
     image: centipede2donald/byodr-ce:inference-tegra
     container_name: byodr_inference
     restart: always
