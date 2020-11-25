@@ -108,6 +108,7 @@ class TFDriver(object):
         self.tf_surprise = None
         self.tf_brake = None
         self.tf_brake_critic = None
+        self.tf_features = None
         self.sess = None
         self.graph_def = None
         self._fallback_intention = maneuver_intention()
@@ -158,6 +159,7 @@ class TFDriver(object):
                 self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
                 self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
                 self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/critic:0')
+                self.tf_features = graph.get_tensor_by_name('m/output/posor/features:0')
 
     def deactivate(self):
         with self._lock:
@@ -172,9 +174,10 @@ class TFDriver(object):
                     self.tf_critic,
                     self.tf_surprise,
                     self.tf_brake,
-                    self.tf_brake_critic
+                    self.tf_brake_critic,
+                    self.tf_features
                     ]
-            _ret = (0, 1, 1, 1, 1)
+            _ret = (0, 1, 1, 1, 1, [0])
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
@@ -186,8 +189,8 @@ class TFDriver(object):
                     self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
-                    _action, _critic, _surprise, _brake, _brake_critic = self.sess.run(_ops, feed_dict=feeder)
-                    return _action, _critic, _surprise, max(0, _brake), _brake_critic
+                    _action, _critic, _surprise, _brake, _brake_critic, _features = self.sess.run(_ops, feed_dict=feeder)
+                    return _action, _critic, _surprise, max(0, _brake), _brake_critic, _features
                 except (StandardError, CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')

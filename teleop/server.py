@@ -10,6 +10,7 @@ from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
+import tornado
 from tornado import web, websocket
 
 from byodr.utils import timestamp
@@ -84,8 +85,6 @@ class MessageServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_state = kwargs.get('fn_state')
-        _fn_speed_scale = kwargs.get('fn_speed_scale')
-        self._speed_scale = _fn_speed_scale()
 
     def check_origin(self, origin):
         return True
@@ -129,7 +128,14 @@ class MessageServerSocket(websocket.WebSocketHandler):
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
-            _speed_scale = self._speed_scale
+            speed_scale = 1. if pilot is None else float(pilot.get('speed_scale', 1))
+            pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
+            pilot_current_image = -1 if pilot is None else pilot.get('navigation_current_image', -1)
+            pilot_current_sim = 1 if pilot is None else pilot.get('navigation_current_distance', 1)
+            pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
+            pilot_match_sim = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
+            pilot_match_point = '' if pilot is None else pilot.get('navigation_match_point', '')
+            assert None not in (pilot_match_image, pilot_current_sim)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -143,17 +149,16 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),
                 'thr': 0 if pilot is None else pilot.get('throttle'),
-                'rev': 0,
-                'vel_y': 0 if vehicle is None else vehicle.get('velocity') * _speed_scale,
+                'vel_y': 0 if vehicle is None else vehicle.get('velocity') * speed_scale,
                 'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
                 'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
-                'speed': 0 if pilot is None else pilot.get('desired_speed') * _speed_scale,
-                'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * _speed_scale,
+                'speed': 0 if pilot is None else pilot.get('desired_speed') * speed_scale,
+                'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
-                'route': None,
-                'route_np': None,
-                'route_np_sim': 0.,
-                'route_np_debug1': 0.,
+                'nav_active': pilot_navigation_active,
+                'nav_point': pilot_match_point,
+                'nav_image': [pilot_match_image, pilot_current_image],
+                'nav_distance': [pilot_match_sim, pilot_current_sim],
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))
@@ -197,7 +202,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
     def on_message(self, message):
         try:
             request = json.loads(message)
-            quality = request.get('quality', 90)
+            quality = int(request.get('quality', 90))
             camera = request.get('camera', 'front').strip().lower()
             display = request.get('display', 'HVGA').strip().upper()
             img = self._capture_front() if camera == 'front' else self._capture_rear()
@@ -213,6 +218,34 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
             logger.error("JSON message:---\n{}\n---".format(message))
+
+
+class NavImageHandler(web.RequestHandler):
+
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self._fn_get_image = kwargs.get('fn_get_image')
+        self._black_img = np.zeros(shape=(1, 1, 3), dtype=np.uint8)
+        self._jpeg_quality = 95
+
+    def data_received(self, chunk):
+        pass
+
+    # noinspection PyUnresolvedReferences,PyDeprecation
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def get(self):
+        try:
+            image_id = int(self.get_query_argument('im'))
+        except ValueError:
+            image_id = -1
+        image = self._fn_get_image(image_id)
+        image = self._black_img if image is None else image
+        chunk = jpeg_encode(image, quality=self._jpeg_quality)
+        self.set_header('Content-Type', 'image/jpeg')
+        self.set_header('Content-Length', len(chunk))
+        self.write(chunk.tobytes())
+        yield tornado.gen.Task(self.flush)
 
 
 class UserOptions(object):

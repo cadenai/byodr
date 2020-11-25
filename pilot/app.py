@@ -6,14 +6,15 @@ from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
+from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from pilot import CommandProcessor
 
 
 class PilotApplication(Application):
-    def __init__(self, processor=None, config_dir=os.getcwd()):
+    def __init__(self, processor, config_dir=os.getcwd()):
         super(PilotApplication, self).__init__()
         self._config_dir = config_dir
-        self._processor = CommandProcessor() if processor is None else processor
+        self._processor = processor
         self.publisher = None
         self.ipc_server = None
         self.ipc_chatter = None
@@ -25,7 +26,9 @@ class PilotApplication(Application):
     def _config(self):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        return dict(parser.items('pilot'))
+        cfg = dict(parser.items('pilot'))
+        cfg.update(dict(parser.items('navigation')))
+        return cfg
 
     def get_process_frequency(self):
         return self._processor.get_frequency()
@@ -48,16 +51,19 @@ class PilotApplication(Application):
         if action:
             self.publisher.publish(action)
         chat = self.ipc_chatter()
-        if chat and chat.get('command') == 'restart':
-            self.setup()
+        if chat is not None:
+            if chat.get('command') == 'restart':
+                self.setup()
 
 
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
+    parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    application = PilotApplication(config_dir=args.config)
+    route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes, load_instructions=True))
+    application = PilotApplication(processor=CommandProcessor(route_store), config_dir=args.config)
     quit_event = application.quit_event
     logger = application.logger
 
@@ -81,6 +87,8 @@ def main():
 
     [t.start() for t in threads]
     application.run()
+
+    route_store.quit()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

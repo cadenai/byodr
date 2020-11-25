@@ -47,7 +47,9 @@ class JSONPublisher(object):
 
     def publish(self, data, topic=None):
         _topic = self._topic if topic is None else topic
-        send_string(self._publisher, '{}:{}'.format(_topic, json.dumps(data)), zmq.NOBLOCK)
+        if data is not None:
+            data = dict((k, v) for k, v in data.items() if v is not None)
+            send_string(self._publisher, '{}:{}'.format(_topic, json.dumps(data)), zmq.NOBLOCK)
 
 
 class ImagePublisher(object):
@@ -154,7 +156,7 @@ class ReceiverThread(threading.Thread):
 
 
 class CameraThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', hwm=1, receive_timeout_ms=1):
+    def __init__(self, url, event, topic=b'', hwm=1, receive_timeout_ms=100):
         super(CameraThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.set_hwm(hwm)

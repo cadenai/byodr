@@ -13,16 +13,13 @@ from byodr.utils.option import parse_option
 
 logger = logging.getLogger(__name__)
 
-# CAMERA_SHAPE = (600, 800, 3)
-CAMERA_SHAPE = (480, 640, 3)
-
 
 class CarlaHandler(Configurable):
 
     def __init__(self, fn_on_image):
         super(CarlaHandler, self).__init__()
         self._camera_callback = fn_on_image
-        self._image_shape = CAMERA_SHAPE
+        self._image_shape = (600, 800, 3)
         self._tm_port = 8000
         self._rand_weather_seconds = -1
         self._world = None
@@ -34,9 +31,9 @@ class CarlaHandler(Configurable):
         self._actor_distance_traveled = 0.
         self._spawn_index = 1
         self._vehicle_tick = None
-        self._on_carla_autopilot = False
+        self._in_carla_autopilot = False
         self._change_weather_time = 0
-        self._on_reverse = False
+        self._in_reverse = False
 
     def internal_quit(self, restarting=False):
         if self._vehicle_tick:
@@ -46,16 +43,21 @@ class CarlaHandler(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         _remote = parse_option('host.location', str, 'localhost', _errors, **kwargs)
+        _img_wh = parse_option('camera.image.shape', str, errors=_errors, **kwargs)
         carla_host, carla_port = _remote, 2000
         if ':' in carla_host:
             host, port = carla_host.split(':')
             carla_host, carla_port = host, int(port)
         carla_client = carla.Client(carla_host, carla_port)
         carla_client.set_timeout(2.)
+        _shape = [int(x) for x in _img_wh.split('x')]
+        _shape = (_shape[1], _shape[0], 3)
+        self._image_shape = _shape
         self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, -1, _errors, **kwargs)
         self._world = carla_client.get_world()
         self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
         self._traffic_manager.global_percentage_speed_difference(65)
+        self._change_weather_time = time.time() + self._rand_weather_seconds
         self._vehicle_tick = self._world.on_tick(lambda x: self.tick(x))
         self.reset()
         return _errors
@@ -85,8 +87,8 @@ class CarlaHandler(Configurable):
 
     def reset(self, attempt=0):
         logger.info('Resetting ...')
-        self._on_carla_autopilot = False
-        self._on_reverse = False
+        self._in_carla_autopilot = False
+        self._in_reverse = False
         self._destroy()
         #
         blueprint_library = self._world.get_blueprint_library()
@@ -118,7 +120,7 @@ class CarlaHandler(Configurable):
         camera_rear.listen(lambda data: self._on_camera(data, camera=1))
         self._reset_agent_travel()
         self._traffic_manager.ignore_lights_percentage(self._actor, 100.)
-        self._set_random_weather()
+        self._set_weather('ClearNoon')
 
     def _on_camera(self, data, camera=0):
         img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
@@ -144,7 +146,7 @@ class CarlaHandler(Configurable):
 
     def _drive(self, steering, throttle):
         try:
-            _reverse = self._on_reverse
+            _reverse = self._in_reverse
             control = carla.VehicleControl()
             control.reverse = _reverse
             control.steer = steering
@@ -158,29 +160,32 @@ class CarlaHandler(Configurable):
         except Exception as e:
             logger.error("{}".format(e))
 
-    def _track_carla_autopilot(self, driver_mode):
+    def _track_autopilot(self, driver_mode):
+        if driver_mode in ('driver_mode.inference.dnn', 'driver_mode.automatic.backend'):
+            self._in_reverse = False
         _autopilot = driver_mode == 'driver_mode.automatic.backend'
-        if self._on_carla_autopilot != _autopilot:
-            self._on_carla_autopilot = _autopilot
+        if self._in_carla_autopilot != _autopilot:
+            self._in_carla_autopilot = _autopilot
             self._actor.set_autopilot(_autopilot, self._tm_port)
 
     def _track_reverse(self, command):
-        if self._on_reverse:
-            self._on_reverse = command.get('throttle') <= 0
+        if self._in_reverse:
+            self._in_reverse = command.get('throttle') <= 0
         else:
-            self._on_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.99  # and command.get('arrow_down', 0) == 1
+            self._in_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.99  # and command.get('arrow_down', 0) == 1
 
-    def _set_random_weather(self):
-        if self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
+    def _set_weather(self, preset=None):
+        if preset is None and self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
             self._change_weather_time = time.time() + self._rand_weather_seconds
             preset = np.random.choice([x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)])
-            logger.info("Setting the weather to preset '{}'.".format(preset))
+        if preset is not None:
+            logger.info("Setting the weather to '{}'.".format(preset))
             self._world.set_weather(getattr(carla.WeatherParameters, preset))
 
     def state(self):
         x, y = self._position()
         ap_active, ap_steering, ap_throttle = False, 0, 0
-        if self._actor is not None and self._actor.is_alive and self._on_carla_autopilot:
+        if self._actor is not None and self._actor.is_alive and self._in_carla_autopilot:
             ap_active = True
             ap_steering = self._actor.get_control().steer
             ap_throttle = self._actor.get_control().throttle
@@ -196,7 +201,7 @@ class CarlaHandler(Configurable):
     def tick(self, _):
         if self._actor is not None and self._actor.is_alive:
             with self._actor_lock:
-                self._set_random_weather()
+                self._set_weather()
                 location = self._actor.get_location()
                 if self._actor_last_location is not None:
                     _x, _y = self._actor_last_location
@@ -208,7 +213,7 @@ class CarlaHandler(Configurable):
 
     def drive(self, cmd):
         if cmd is not None and self._actor is not None:
-            self._track_carla_autopilot(cmd.get('driver'))
+            self._track_autopilot(cmd.get('driver'))
             self._track_reverse(cmd)
-            if not self._on_carla_autopilot:
+            if not self._in_carla_autopilot:
                 self._drive(steering=cmd.get('steering'), throttle=cmd.get('throttle'))

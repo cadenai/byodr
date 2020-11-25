@@ -40,6 +40,15 @@ var socket_utils = {
 
 var page_utils = {
     system_capabilities: {},
+    toggle_debug_values_listeners: [],
+
+    add_toggle_debug_values_listener: function(cb) {
+        this.toggle_debug_values_listeners.push(cb);
+    },
+
+    notify_toggle_debug_values_listeners: function(collapse) {
+        this.toggle_debug_values_listeners.forEach(function(cb) {cb(collapse);});
+    },
 
     get_stream_type: function() {
         var stream_type = window.localStorage.getItem('video.stream.type');
