@@ -2,6 +2,9 @@
 
 ## Summary
 
+### Certificate
+Download the certificate from web-server of the robot and set it to trusted on your computer.
+
 ### The Robot
 
 Turn the key to its vertical position with the white indicator pointing upwards.  
@@ -44,6 +47,65 @@ Please use the triggers carefully, the robot may be more powerful than you expec
 > Press `east` to go back to teleoperation mode
 
 ---
+
+## Certificates
+The W3C-community decide recently that Game-pads are only available within the secure-context(https)
+There are no official certificates for private IP-no as used within the ZeroTier VPN's.
+MWLC made self-signed certificates available via the webserver on the robot.
+To use the certificate you have:  
+- Get the certificate  
+- Install and trust it
+
+###Get the certificate
+Assure your Robot is available in the ZeroTier network.
+In th Mac-environment the following steps are taken:  
+Click the HTTPS-lock-icon before the URL.
+
+![](img/controller/cert_20lockiconclicked.jpg)
+
+Click the details-arrow behind 'Information not secure'.  
+
+![](img/controller/cert_25connectionnotsecureddetailsclicked.jpg)
+
+Click 'More information'.  
+
+![](img/controller/cert_30moreinformationclicked.jpg)  
+  
+    
+Click 'View certificate' and scroll down.  
+
+![](img/controller/cert_35viewcertificateclicked.jpg)  
+  
+   
+Click 'PEM (cert)' to download the file and save it to your disk and remember the location.  
+
+The certificate is now downloaded to your computer
+
+###Install and trust the certificate
+
+Go to the certificate and open it.  
+
+![](img/controller/cert_40downloadcertificateclicked.jpg)  
+  
+The mac will ask to add the certificate to the computer for further usage.
+Choose 'login' and click add.  
+It's installed.
+
+Go on with trusting it.  
+Go to your key-chain and double-click the certificate.
+
+![](img/controller/cert_50certificateopeninkeychain.jpg)  
+  
+  
+Open the 'Trust'-section.
+
+![](img/controller/cert_55trustopen.jpg)  
+  
+Choose 'Always trust'.  
+If requested, accept this with your password.  
+  
+  Go with Chrome to the robot and check is your controller works.
+
 
 ## Supported controllers
 Chrome has been tested with recent xbox controllers, both wired and wireless, and recent wireless ps4 controllers.  
