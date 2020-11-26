@@ -5,6 +5,8 @@ import signal
 import time
 import traceback
 from abc import ABCMeta, abstractmethod
+from cProfile import Profile
+from contextlib import contextmanager
 
 import numpy as np
 
@@ -21,6 +23,30 @@ def timestamp(value=None):
 
 def entropy(x, eps=1e-20):
     return abs(-np.sum(x * np.log(np.clip(x, eps, 1.))))
+
+
+class Profiler(Profile):
+    """
+    Custom Profile class with a __call__() context manager method to enable profiling.
+    Use:
+    profiler = Profiler()
+    with profiler():
+        <run_code>
+    profiler.dump_stats('prof.stats')
+    --
+    python -c "import pstats; p = pstats.Stats('prof.stats'); p.sort_stats('time').print_stats(50)"
+    python -c "import pstats; p = pstats.Stats('prof.stats'); p.sort_stats('cumulative').print_stats(50)"
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(Profile, self).__init__(*args, **kwargs)
+        self.disable()  # Profiling initially off.
+
+    @contextmanager
+    def __call__(self):
+        self.enable()
+        yield  # Execute code to be profiled.
+        self.disable()
 
 
 class Configurable(object):

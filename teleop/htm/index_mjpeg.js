@@ -256,6 +256,16 @@ teleop_screen.add_camera_selection_listener(function(current) {
     }
 });
 
+page_utils.add_toggle_debug_values_listener(function(collapse) {
+    if (collapse) {
+        $("p#p_rear_camera_framerate").invisible();
+        $("p#p_front_camera_framerate").invisible();
+    } else {
+        $("p#p_rear_camera_framerate").visible();
+        $("p#p_front_camera_framerate").visible();
+    }
+});
+
 function mjpeg_request_rear_camera_start() {
     // There might be a timing issue because the capabilities are requested from the backend.
     system_capabilities = page_utils.system_capabilities;

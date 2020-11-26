@@ -207,6 +207,17 @@ var log_controller = {
     command_turn: null,
     command_ctl: null,
     recorders: {551: 'driving', 594: 'interventions'},
+    server_message_listeners: [],
+
+    add_server_message_listener: function(cb) {
+        this.server_message_listeners.push(cb);
+    },
+
+    notify_server_message_listeners: function(message) {
+        this.server_message_listeners.forEach(function(cb) {
+            cb(message);
+        });
+    },
 
     str_recorder: function(mode, active) {
         mode = parseInt(mode);
@@ -253,7 +264,8 @@ log_controller.start_socket = function() {
             var el_autopilot_status = $('#autopilot_status');
             //
             var command = JSON.parse(evt.data);
-            el_pilot_steering.text(command.ste.toFixed(3));
+            view.notify_server_message_listeners(command);
+            el_pilot_steering.text(Math.abs(command.ste).toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
             el_inference_penalty.text(command.debug1.toFixed(2));
             el_inference_obstacle.text(command.debug2.toFixed(2));
@@ -276,16 +288,16 @@ log_controller.start_socket = function() {
                 view.command_turn = command.turn;
                 switch(command.turn) {
                     case "intersection.left":
-                        el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.40.0');
+                        el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.45.0');
                         break;
                     case "intersection.right":
-                        el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.40.0');
+                        el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.45.0');
                         break;
                     case "intersection.ahead":
-                        el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.40.0');
+                        el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.45.0');
                         break;
                     default:
-                        el_turn_arrow.attr('src', 'im_arrow_none.png?v=0.40.0');
+                        el_turn_arrow.attr('src', 'im_arrow_none.png?v=0.45.0');
                         break;
                 }
             }
@@ -296,11 +308,11 @@ log_controller.start_socket = function() {
             if (view.command_ctl != str_command_ctl) {
                 view.command_ctl = str_command_ctl;
                 if (can_continue && is_on_autopilot) {
-                    el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.40.0');
+                    el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.45.0');
                 } else if (can_continue) {
-                    el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.40.0');
+                    el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.45.0');
                 } else {
-                    el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.40.0');
+                    el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.45.0');
                 }
                 if (is_on_autopilot) {
                     el_alpha_speed_label.text('MAX');
@@ -326,6 +338,18 @@ log_controller.stop_socket = function() {
     }
     log_controller.socket = null;
 }
+
+page_utils.add_toggle_debug_values_listener(function(collapse) {
+    if (collapse) {
+        $("p#p_inference_penalty").invisible();
+        $("p#p_inference_obstacle").invisible();
+        $("p#p_inference_fps").invisible();
+    } else {
+        $("p#p_inference_penalty").visible();
+        $("p#p_inference_obstacle").visible();
+        $("p#p_inference_fps").visible();
+    }
+});
 
 function teleop_start_all() {
     if (gamepad_controller.socket == undefined) {

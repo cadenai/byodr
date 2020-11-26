@@ -107,7 +107,6 @@
           text-align: right;
         }
         div#debug_drive_values {
-          float: right;
           margin: 1px 0 1px 50px;
           cursor: zoom-in;
         }
@@ -167,6 +166,7 @@
             width: 50px;
             height: 50px;
         }
+
         div#preview_container {
             margin: 15px 0 5px 5px;
         }
@@ -178,8 +178,41 @@
         }
         div#preview_container img.active {
         }
+
+        div#navigation_route_container {
+            margin: 15px 20px 0 0;
+            font-family: "Lucida Console";
+            font-size: 15px;
+        }
+        div#navigation_route_container > p {
+          margin-block-start: 0;
+          margin-block-end: 0;
+          text-align: center;
+        }
+
+        div#navigation_image_container {
+            cursor: pointer;
+            margin: 15px 0 5px 5px;
+        }
+        div#navigation_image_container img {
+            width: 80px;
+            height: 45px;
+            border-radius: 3px;
+            border: 1px solid grey;
+        }
+        span#navigation_route_sel_prev {
+            cursor: pointer;
+        }
+        span#navigation_route_sel_next {
+            cursor: pointer;
+        }
+        div#navigation_debug_container {
+            margin: 20px 0 0 10px;
+        }
+
         div#viewport_container {
         }
+
         canvas#h264_front_camera_main_image {
             width: 1280px;
             height: 720px;
@@ -217,32 +250,37 @@
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
-    <script src="performance-polyfill.js?v=0.40.0"></script>
-	<script src="http-live-player.js?v=0.40.0"></script>
-	<script src="index_utils.js?v=0.40.0"></script>
-	<script src="index_gamepad.js?v=0.40.0"></script>
-	<script src="index_teleop.js?v=0.40.2"></script>
-	<script src="index_mjpeg.js?v=0.40.1"></script>
-	<script src="index_h264.js?v=0.40.0"></script>
+    <script src="performance-polyfill.js?v=0.45.0"></script>
+	<script src="http-live-player.js?v=0.45.0"></script>
+	<script src="index_utils.js?v=0.45.0"></script>
+	<script src="index_gamepad.js?v=0.45.0"></script>
+	<script src="index_navigator.js?v=0.45.1c"></script>
+	<script src="index_teleop.js?v=0.45.0"></script>
+	<script src="index_mjpeg.js?v=0.45.0"></script>
+	<script src="index_h264.js?v=0.45.0"></script>
 </head>
 <body>
 <div id="container" class="centered">
     <div id="column">
         <div id="message_box" class="message"></div>
         <div id="bar">
-            <div id="home_menu" class="left">
-                <a href="/user_options.htm?v=0.40.0"><img id="home_menu_icon" src='index-menu.png?v=0.40.0'/></a>
+            <div id="home_menu" class="left" title="Settings">
+                <a href="/user_options.htm?v=0.45.0"><img id="home_menu_icon" src='index-menu.png?v=0.45.0'/></a>
             </div>
             <div id="stream_links" class="left">
-                <a id="video_stream_h264" href="#" onclick="page_utils.set_stream_type('h264'); location.reload();">h264</a><br/>
-                <a id="video_stream_mjpeg" href="#" onclick="page_utils.set_stream_type('mjpeg'); location.reload();">mjpeg</a>
+                <a id="video_stream_h264" href="#"
+                   title="Display the main camera video-stream"
+                   onclick="page_utils.set_stream_type('h264'); location.reload();">h264</a><br/>
+                <a id="video_stream_mjpeg" href="#"
+                   title="Display the main camera motion jpeg stream (attempt manual latency control) "
+                   onclick="page_utils.set_stream_type('mjpeg'); location.reload();">mjpeg</a>
             </div>
             <div id="mjpeg_stream_controls" class="left">
                 <span id="mjpeg_quality_val">0</span>
-                <img id="caret_down" src='caret.png?v=0.40.0' onclick="mjpeg_caret_down();"/>
-                <img id="caret_up" src='caret.png?v=0.40.0' onclick="mjpeg_caret_up();"/>
+                <img id="caret_down" src='caret.png?v=0.45.0' title="Decrease motion jpeg quality" onclick="mjpeg_caret_down();"/>
+                <img id="caret_up" src='caret.png?v=0.45.0' title="Increase motion jpeg quality" onclick="mjpeg_caret_up();"/>
             </div>
-            <div id="preview_container" class="left">
+            <div id="preview_container" class="left" title="Toggle the rear camera display">
             </div>
             <div id="debug_video_values" class="left debug_values">
                 <p id="p_rear_camera_framerate" style="visibility: hidden;"><span id="rear_camera_framerate">0</span>&nbsp;rear&nbsp;</p>
@@ -261,7 +299,7 @@
                     <div id="beta_speed_label">km/h</div>
                 </div>
             </div>
-            <div class="debug_values" id="debug_drive_values">
+            <div id="debug_drive_values" class="right debug_values" title="Toggle debug values">
                 <p id="p_inference_fps" style="visibility: hidden;"><span id="inference_fps">0</span>&nbsp;fps</p>
                 <p id="p_inference_penalty" style="visibility: hidden;">
                     <span id="inference_surprise">0</span>&nbsp;<span id="inference_critic">0</span>
@@ -272,26 +310,36 @@
                 <p><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
+            <div id="navigation_debug_container" class="right debug_values" style="visibility: hidden;">
+                <p><span id="navigation_match_image_distance">1</span></p>
+            </div>
+            <div id="navigation_image_container" class="right"
+                 title="Start or pause the route"
+                 style="visibility: hidden;">
+                <img id="navigation_image"/>
+            </div>
+            <div id="navigation_route_container" class="right"
+                 title="Navigation points and their images will be displayed when matched"
+                 style="visibility: hidden;">
+                <p>
+                    <span id="navigation_route_sel_prev" title="Select the previous route, if any">&lt;</span>
+                    <span id="navigation_route_name"></span>
+                    <span id="navigation_route_sel_next" title="Select the next route, if any">&gt;</span>
+                </p>
+                <p><span id="navigation_point_name"></span></p>
+            </div>
         </div>
         <div id="viewport_container"></div>
     </div>
 </div>
 <script type="text/javascript">
 $("div#debug_drive_values").click(function() {
-    if ($("p#p_rear_camera_framerate").is_visible()) {
-        $("p#p_rear_camera_framerate").invisible();
-        $("p#p_front_camera_framerate").invisible();
-        $("p#p_inference_penalty").invisible();
-        $("p#p_inference_obstacle").invisible();
-        $("p#p_inference_fps").invisible();
-        $("div#debug_drive_values").removeClass('expanded');
+    const collapse = $(this).hasClass('expanded');
+    page_utils.notify_toggle_debug_values_listeners(collapse);
+    if (collapse) {
+        $(this).removeClass('expanded');
     } else {
-        $("p#p_rear_camera_framerate").visible();
-        $("p#p_front_camera_framerate").visible();
-        $("p#p_inference_penalty").visible();
-        $("p#p_inference_obstacle").visible();
-        $("p#p_inference_fps").visible();
-        $("div#debug_drive_values").addClass('expanded');
+        $(this).addClass('expanded');
     }
 });
 
@@ -309,11 +357,13 @@ function mjpeg_caret_down() {
     mjpeg_refresh_page_values();
 }
 function start_all_handlers() {
+    navigator_start_all();
     teleop_start_all();
     mjpeg_start_all();
     h264_start_all();
 }
 function stop_all_handlers() {
+    navigator_stop_all();
     teleop_stop_all();
     mjpeg_stop_all();
     h264_stop_all();

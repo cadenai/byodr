@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python-opencv \
     python-pip \
+    python-scipy \
     python-setuptools \
     python-zmq \
  && apt-get -y clean && rm -rf /var/lib/apt/lists/*
