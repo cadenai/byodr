@@ -1,42 +1,6 @@
 version: '2'
 services:
-  httpd:
-    build:
-      context: .
-      dockerfile: httpd/Dockerfile
-  rosnode:
-    build:
-      context: .
-      dockerfile: rosnode/Dockerfile
-  relay:
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_relay.dockerfile
-  cam1:
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_cam.dockerfile
   nodews:
     build:
       context: .
       dockerfile: teleop/nodews/Dockerfile
-  vehicle:
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_vehicle.dockerfile
-  teleop:
-    build:
-      context: .
-      dockerfile: teleop/Dockerfile
-  pilot:
-    build:
-      context: .
-      dockerfile: pilot/Dockerfile
-  recorder:
-    build:
-      context: .
-      dockerfile: recorder/Dockerfile
-  inference:
-    build:
-      context: .
-      dockerfile: inference/Dockerfile.jp
