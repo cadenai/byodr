@@ -32,12 +32,10 @@ class FeatureCluster(object):
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._features = None
         self._code_book = None
 
     def reload(self, features):
         with self._lock:
-            self._features = features
             self._code_book = np.array(features)
 
     def get_best_match(self, query):
@@ -55,7 +53,6 @@ class FeatureCluster(object):
 
     def release(self):
         with self._lock:
-            self._features = None
             self._code_book = None
 
     def quit(self):
