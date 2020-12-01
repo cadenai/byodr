@@ -26,10 +26,6 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
-  nodews:
-    image: rwgrim/docker-noop:latest
-    restart: 'no'
-    command: ["/bin/true"]
   raspi:
     build:
       context: .
