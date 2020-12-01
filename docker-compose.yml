@@ -8,7 +8,10 @@ volumes:
 services:
   zerotier:
     cpuset: "0,1"
-    image: bltavares/zerotier
+    build:
+      context: ./docker
+      dockerfile: zerotier.dockerfile
+    image: centipede2donald/byodr-ce:zerotier-160
     container_name: zerotier-one
     restart: always
     network_mode: host
@@ -17,6 +20,7 @@ services:
     cap_add:
       - SYS_ADMIN
       - NET_ADMIN
+      - CAP_SYS_RAWIO
     volumes:
       - volume_zerotier_config:/var/lib/zerotier-one:rw
   httpd:
@@ -36,7 +40,10 @@ services:
       - volume_byodr_config:/config:ro
   ftpd:
     cpuset: "0,1"
-    image: gists/pure-ftpd
+    build:
+      context: ./docker
+      dockerfile: pure-ftpd.dockerfile
+    image: centipede2donald/byodr-ce:pure-ftpd-10
     container_name: pure-ftpd
     restart: always
     ports:
