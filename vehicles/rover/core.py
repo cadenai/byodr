@@ -14,7 +14,7 @@ from requests.auth import HTTPDigestAuth
 
 from byodr.utils import Configurable
 from byodr.utils.option import parse_option
-from video import GstRawSource
+from byodr.utils.video import GstRawSource
 
 logger = logging.getLogger(__name__)
 

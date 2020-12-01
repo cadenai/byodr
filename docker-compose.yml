@@ -91,6 +91,9 @@ services:
       - volume_byodr_config:/config:ro
   nodews:
     cpuset: "0,1"
+    build:
+      context: .
+      dockerfile: teleop/nodews/Dockerfile
     image: centipede2donald/byodr-ce:nodews
     container_name: byodr_nodews
     restart: always
