@@ -14,7 +14,7 @@ The basis for the chassis is a standard RC-vehicle. We use the Kraton 8s.  The 
  4   [Springs small D13050](https://www.amatec.nl/nl/d13050.html)<br>
 ###Body: External skeleton
 The external skeleton is a component of the body.<br>The main components of the body:<br>  A. The external skeleton to mount the enclosure, camera's and antennas with the chassis.  <br>B. The enclosure that hold the ICT equipment  <br>C. The internal skeleton and materials for mounting the equipment<br>For the external skeleton we use 20 x 20 mm aluminum profiles with the appropriate connections.  <br>This profile has what's called a groove 5, but the brackets to make connections use bolts M4.  <br>Probably you can order this at you local hardware-store.<br>The aluminum profile is also used for the internal frame, but not mentioned any more in that list.<br>
- 5,32 [Aluminium Profile 20 x 20 groove 5](https://www.boikon.com/webshop/aluminium-profiles/alu-profile-20-x-20-groove-5/)<br>
+ 4,96 [Aluminium Profile 20 x 20 groove 5](https://www.boikon.com/webshop/aluminium-profiles/alu-profile-20-x-20-groove-5/)<br>
  2   [Bracket 150*150mm(camera mount)](https://www.shi.nl/nl/catalog/ijzerwaren/balk-ankerwerk/hoeken/starx/drempelhoek/4691180/groups/g+c+sg+bl+a+nr+view)<br>
 21   [Bracket 20 x 20, basic](https://www.boikon.com/webshop/fastenings/bracket-20-x-20-basic/)<br>
  3   [Cover bracket 20 x 20](https://www.boikon.com/webshop/fastenings/cover-bracket-20-x-20-basic/)<br>
@@ -27,6 +27,7 @@ With the enclosure the ICT-equipment is as much as possible protected against du
  2   [Locknut M20 seperatable Cofix](https://www.fraenkische.com/en/product/cofix-gegenmutter)<br>
  2   [QT 6 Cable grommets](https://www.icotek.com/en/product-catalogue/cable-entry-systems/cable-grommets/qt/)<br>
  2   [QVT 20, Split cable gland](https://www.icotek.com/en/product-catalogue/cable-glands/qvt/)<br>
+ 1   [Self-adhesive cable mount]()<br>
  2   [Silica gel 10 gram](https://www.conrad.com/p/silica-gel-sachet-10-g-l-x-w-x-h-72-x-57-x-3-mm-transparent-silica-gel-10-pcs-2201308)<br>
  1   [TRU COMPONENTS TC-MH14-5A203 Multi-seal inset M16 Rubber Black](https://www.conrad.com/p/tru-components-tc-mh14-5a203-multi-seal-inset-m16-rubber-black-1-pcs-1593553?searchTerm=1593553&searchType=suggest&searchSuggest=product)<br>
  1   [Wiska ESKV-RDE 20 Cable gland M20 Polyamide Grey-white (RAL 7035)](https://www.wiska.com/en/30/pde/10064986/eskv-rde-20.html)<br>
@@ -47,16 +48,15 @@ For the body lots of bolts and nuts are used.<br>
 37   [Allen screw M4 x 10](https://www.boikon.com/webshop/fastenings/cylindrical-socket-screw-din-912-zp-m4-x-10/)<br>
  2   [Allen screw M4 x 25](https://www.conrad.com/p/toolcraft-1068363-allen-screws-m4-25-mm-hex-socket-allen-din-7984-stainless-steel-a2-100-pcs-1068363)<br>
  4   [Allen screw M5 X 10](https://www.boikon.com/webshop/fastenings/cylindrical-socket-screw-din-912-zp-m5-x-10/)<br>
- 7   [Allen screw M5 X 6](https://www.boikon.com/webshop/fastenings/cylindrical-socket-screw-din-912-zp-m5-x-10/)<br>
- 4   [Allen screws M2 12 mm](https://www.conrad.com/p/toolcraft-1061802-allen-screws-m2-12-mm-hex-socket-allen-din-912-stainless-steel-a2-100-pcs-1061802)<br>
- 4   [Allen screws M2,5 10 mm](https://www.conrad.com/p/toolcraft-839939-allen-screws-m25-10-mm-slot-din-84-iso-1207-plastic-polyamide-10-pcs-839939)<br>
- 4   [Locknut M2](https://www.conrad.com/p/toolcraft-223336-locknuts-m2-din-985-steel-zinc-plated-10-pcs-223336)<br>
+ 6   [Allen screw M5 X 6](https://www.boikon.com/webshop/fastenings/cylindrical-socket-screw-din-912-zp-m5-x-10/)<br>
+ 8   [Allen screws M2,5 16 mm](https://www.conrad.com/p/toolcraft-1061812-allen-screws-m25-16-mm-hex-socket-allen-din-912-stainless-steel-a2-100-pcs-1061812)<br>
+ 4   [Locknut M2,5](https://www.conrad.com/p/toolcraft-221969-locknut-m25-din-985-steel-zinc-plated-10-pcs-221969)<br>
  4   [Locknut M3](https://www.conrad.com/p/toolcraft-812808-locknuts-m3-din-985-steel-zinc-plated-100-pcs-812808)<br>
-18   [Repair washer M5](https://www.boikon.com/webshop/fastenings/repair-washer-din-9021-zp-m5/)<br>
+13   [Repair washer M5](https://www.boikon.com/webshop/fastenings/repair-washer-din-9021-zp-m5/)<br>
 37   [Sliding block 5 - M4](https://www.boikon.com/webshop/fastenings/sliding-block-5-m4/)<br>
-13   [Sliding block 5 - M5](https://www.boikon.com/webshop/fastenings/sliding-block-5-m5/)<br>
+11   [Sliding block 5 - M5](https://www.boikon.com/webshop/fastenings/sliding-block-5-m5/)<br>
  2   [Threaded plate 5 - M4](https://www.boikon.com/webshop/fastenings/threaded-plate-5-m4/)<br>
- 3   [Tripod screw 1/4”](https://www.caruba.com)<br>
+ 2   [Tripod screw 1/4”](https://www.caruba.com)<br>
 37   [Washer M4](https://www.boikon.com/webshop/fastenings/washer-din-125-1a-zp-m4/)<br>
 ###Power: Sources and converters
 The main system uses a 7s batery-pack. The voltage differs and gets lower the more empty the battery is.<br>
