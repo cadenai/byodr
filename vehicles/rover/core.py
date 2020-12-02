@@ -117,6 +117,9 @@ class CameraPtzThread(threading.Thread):
                     self._perform(operation)
             except Queue.Empty:
                 pass
+            except IOError as e:
+                # E.g. a requests ConnectionError to the ip camera.
+                logger.warning("PTZ#run: {}".format(e))
 
 
 class PTZCamera(Configurable):

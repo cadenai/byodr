@@ -157,7 +157,7 @@ def main():
         publisher.publish(cmd)
 
     try:
-        main_redirect_url = '/index.htm?v=0.45.2'
+        main_redirect_url = '/index.htm?v=0.45.3'
         main_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,

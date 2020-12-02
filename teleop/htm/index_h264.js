@@ -35,7 +35,7 @@ if (page_utils.get_stream_type() == 'h264') {
             this.wsavc.connect(uri);
         },
         stop: function() {
-            if (this.socket != undefined) {
+            if (this.socket != undefined && this.wsavc != undefined) {
                 this.socket.attempt_reconnect = false;
                 this.wsavc.disconnect();
                 this.socket = null;
