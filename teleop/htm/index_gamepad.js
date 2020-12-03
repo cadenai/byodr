@@ -18,6 +18,10 @@ var NoneController = {
     arrow_right: 0,
     healthy: false,
 
+    reset: function() {
+        this.healthy = false;
+    },
+
     collapse: function(value, zone=0) {
         result = Math.abs(value) <= zone ? 0 : value > 0 ? value - zone : value + zone;
         // Scale back.
@@ -36,7 +40,7 @@ var NoneController = {
         if (this.healthy) {
             this.throttle = right_trigger > 0.01 ? -1 * right_trigger : left_trigger;
         } else {
-            this.throttle = false;
+            this.throttle = 0;
         }
     },
 
@@ -100,6 +104,10 @@ var PS4StandardController = extend(NoneController, {
 
 var gamepad_controller = {
     controller: Object.create(NoneController),
+
+    reset: function() {
+        this.controller.reset();
+    },
 
     create_gamepad: function(gamepad) {
         // 45e-28e-Xbox 360 Wired Controller / Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)
