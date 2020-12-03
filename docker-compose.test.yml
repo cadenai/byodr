@@ -4,6 +4,10 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
+  httpd:
+    image: rwgrim/docker-noop:latest
+    restart: 'no'
+    command: ["/bin/true"]
   ftpd:
     image: rwgrim/docker-noop:latest
     restart: 'no'
@@ -19,10 +23,6 @@ services:
       - ./common:/common
       - ./vehicles/rover:/app
   cam1:
-    image: rwgrim/docker-noop:latest
-    restart: 'no'
-    command: ["/bin/true"]
-  nodews:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]

@@ -28,13 +28,14 @@ if (page_utils.get_stream_type() == 'h264') {
             }
         },
         start: function(port) {
-            uri = "ws://" + document.location.hostname + ':' + port;
+            const ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
+            const uri = ws_protocol + document.location.hostname + ':' + port;
             this.socket = new CameraSocketResumer(uri, 100);
             this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", this.socket);
             this.wsavc.connect(uri);
         },
         stop: function() {
-            if (this.socket != undefined) {
+            if (this.socket != undefined && this.wsavc != undefined) {
                 this.socket.attempt_reconnect = false;
                 this.wsavc.disconnect();
                 this.socket = null;
@@ -53,7 +54,7 @@ if (page_utils.get_stream_type() == 'h264') {
 function h264_start_all() {
     if (page_utils.get_stream_type() == 'h264' && camera_controller != undefined && camera_controller.socket == undefined) {
         camera_controller.init(document.getElementById('viewport_container'));
-        camera_controller.start(9101);
+        camera_controller.start(9001);
     }
 }
 
