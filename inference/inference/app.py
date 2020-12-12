@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import argparse
 import glob
 import logging
@@ -17,13 +19,13 @@ from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
-from image import get_registered_function
-from inference import TFDriver, DynamicMomentum, maneuver_index
+from .image import get_registered_function
+from .inference import DynamicMomentum, TFDriver, maneuver_index
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
 else:
-    from ConfigParser import SafeConfigParser
+    from six.moves.configparser import SafeConfigParser
 
 logger = logging.getLogger(__name__)
 

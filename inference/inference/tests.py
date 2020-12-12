@@ -1,8 +1,16 @@
-import os
-from ConfigParser import SafeConfigParser
+from __future__ import absolute_import
 
-from app import InferenceApplication
+import os
+import sys
+from io import open
+
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer, QueueCamera
+from .app import InferenceApplication
+
+if sys.version_info > (3,):
+    from configparser import ConfigParser as SafeConfigParser
+else:
+    from six.moves.configparser import SafeConfigParser
 
 
 def test_create_and_setup(tmpdir):
