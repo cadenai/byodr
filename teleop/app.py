@@ -11,6 +11,8 @@ from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
+    JSONMethodDumpRequestHandler, NavImageHandler, JSONRequestHandler
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 
@@ -18,8 +20,6 @@ from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
-    JSONMethodDumpRequestHandler, NavImageHandler, JSONRequestHandler
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,8 @@ def main():
                                     'ipc:///byodr/inference_c.sock',
                                     'ipc:///byodr/vehicle_c.sock',
                                     'ipc:///byodr/relay_c.sock',
-                                    'ipc:///byodr/recorder_c.sock'])
+                                    'ipc:///byodr/recorder_c.sock',
+                                    'ipc:///byodr/camera_c.sock'])
 
     def on_options_save():
         chatter.publish(dict(time=timestamp(), command='restart'))

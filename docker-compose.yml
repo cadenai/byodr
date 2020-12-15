@@ -88,6 +88,7 @@ services:
     network_mode: host
     stop_signal: SIGKILL
     volumes:
+      - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
   vehicle:
     cpuset: "0,1"

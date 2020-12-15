@@ -13,8 +13,8 @@ from ConfigParser import SafeConfigParser
 from tornado import web, ioloop, websocket
 from tornado.httpserver import HTTPServer
 
-from byodr.utils import Application, hash_dict, Configurable
-from byodr.utils.ipc import JSONReceiver, CollectorThread
+from byodr.utils import Application, Configurable
+from byodr.utils.ipc import JSONReceiver, CollectorThread, LocalIPCServer
 from byodr.utils.option import parse_option
 from byodr.utils.video import GstRawSource
 
@@ -49,8 +49,8 @@ class GstSource(Configurable):
     def get_image_height(self):
         return self._im_height
 
-    def is_started(self):
-        return self._source is not None
+    def is_open(self):
+        return self._source is not None and self._source.is_open()
 
     def add_listener(self, listener):
         with self._lock:
@@ -144,7 +144,7 @@ class CameraApplication(Application):
         super(CameraApplication, self).__init__(quit_event=event, run_hz=2)
         self._config_dir = config_dir
         self._stream = GstSource()
-        self._config_hash = -1
+        self.ipc_server = None
         self.ipc_chatter = None
 
     def _config(self):
@@ -165,12 +165,11 @@ class CameraApplication(Application):
     def setup(self):
         if self.active():
             _config = self._config()
-            if not self._stream.is_started():
-                self._stream.start(**_config)
-            _hash = hash_dict(**_config)
-            if _hash != self._config_hash:
-                self._config_hash = _hash
+            if self._stream.is_open():
                 self._stream.restart(**_config)
+            else:
+                self._stream.start(**_config)
+            self.ipc_server.register_start(self._stream.get_errors())
 
     def step(self):
         self._stream.check()
@@ -189,8 +188,9 @@ def main():
 
     application = CameraApplication(event=quit_event, config_dir=args.config)
     application.ipc_chatter = lambda: collector.get(0)
+    application.ipc_server = LocalIPCServer(url='ipc:///byodr/camera_c.sock', name='camera_ws', event=quit_event)
 
-    threads = [collector, (threading.Thread(target=application.run))]
+    threads = [collector, (threading.Thread(target=application.run)), application.ipc_server]
     if quit_event.is_set():
         return 0
 
