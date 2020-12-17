@@ -20,7 +20,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TFDriver, maneuver_index
+from .inference import DynamicMomentum, TRTDriver, maneuver_index
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -157,7 +157,7 @@ class TFRunner(Configurable):
                                                                      fn_load_image=(lambda fname: self._fn_alex_image(cv2.imread(fname))),
                                                                      load_instructions=False))
         self._store.load_routes()
-        self._driver = TFDriver(model_directories=self._model_directories, gpu_id=self._gpu_id, p_conv_dropout=p_conv_dropout)
+        self._driver = TRTDriver(model_directories=self._model_directories, gpu_id=self._gpu_id)
         self._driver.activate()
         return _errors
 
@@ -170,16 +170,15 @@ class TFRunner(Configurable):
         return abs(max(0., v - min_) / (max_ - min_))
 
     def forward(self, image, intention):
-        _dave_img = self._fn_dave_image(image)
-        _alex_img = self._fn_alex_image(image)
+        _dave_img = self._fn_dave_image(image, dtype=np.float32) / 255.
+        _alex_img = self._fn_alex_image(image, dtype=np.float32) / 255.
         dagger = self._dagger
 
         action_out, critic_out, surprise_out, brake_out, brake_critic_out, features_out = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
-                                 fallback=self._fallback,
-                                 dagger=dagger)
+                                 fallback=self._fallback)
 
         critic = self._fn_corridor_norm(critic_out)
         surprise = self._fn_corridor_norm(surprise_out)

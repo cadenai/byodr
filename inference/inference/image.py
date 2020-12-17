@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 from functools import partial
 
 import cv2
@@ -16,14 +17,14 @@ def hwc_to_chw(img):
     return None if img is None else img.transpose((2, 0, 1))
 
 
-def hwc_alexnet(image, resize_wh=None):
+def hwc_alexnet(image, resize_wh=None, dtype=np.uint8):
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
     image = cv2.resize(image, (227, 227))
-    image = image.astype(np.uint8)
+    image = image.astype(dtype)
     return image
 
 
-def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, chw=True):
+def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, chw=True, dtype=np.uint8):
     # If resize is not the first operation, then resize the incoming image to the start of the data pipeline persistent images.
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
     top, right, bottom, left = crop
@@ -31,7 +32,7 @@ def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=T
     image = cv2.resize(image, (200, 66)) if dave else image
     image = hwc_bgr_to_yuv(image) if yuv else image
     image = hwc_to_chw(image) if chw else image
-    image = image.astype(np.uint8)
+    image = image.astype(dtype)
     return image
 
 
