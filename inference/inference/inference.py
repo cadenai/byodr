@@ -92,17 +92,32 @@ def maneuver_intention(turn='general.fallback', dtype=np.float32):
     return command
 
 
-class TFDriver(object):
-    def __init__(self, model_directories, gpu_id=0, p_conv_dropout=0):
+def get_frozen_graph(_file):
+    with tf.gfile.GFile(_file, "rb") as f:
+        graph_def = tf.GraphDef()
+        graph_def.ParseFromString(f.read())
+    return graph_def
+
+
+def image_standardization(img):
+    # Mimic the tensorflow operation.
+    # The op computes (x - mean) / adjusted_stddev, where mean is the average of all values in image,
+    # and adjusted_stddev = max(stddev, 1.0 / sqrt(image.NumElements())).
+    return (img - np.mean(img)) / max(np.std(img), (1. / np.sqrt(img.size)))
+
+
+def l2_normalize(features):
+    return features / np.sqrt(np.sum(features ** 2))
+
+
+class TRTDriver(object):
+    def __init__(self, model_directories, gpu_id=0):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
-        self.p_conv_dropout = p_conv_dropout
         _list = (isinstance(model_directories, tuple) or isinstance(model_directories, list))
         self.model_directories = model_directories if _list else [model_directories]
         self._lock = multiprocessing.Lock()
         self.input_dave = None
         self.input_alex = None
-        self.input_udr = None
-        self.input_pdr = None
         self.tf_maneuver_cmd = None
         self.tf_steering = None
         self.tf_critic = None
@@ -113,9 +128,6 @@ class TFDriver(object):
         self.sess = None
         self.graph_def = None
         self._fallback_intention = maneuver_intention()
-
-    def set_conv_dropout_probability(self, p):
-        self.p_conv_dropout = p
 
     def _create_session(self, graph, barrier):
         with graph.as_default():
@@ -131,28 +143,49 @@ class TFDriver(object):
     def activate(self):
         with self._lock:
             _start = time.time()
-            f_definition = _newest_file(self.model_directories, '*.optimized.pb')
-            if f_definition is None:
+            # Use the cached version of the most recent graph.
+            f_optimized = _newest_file(self.model_directories, '*.optimized.pb')
+            if f_optimized is None or not os.path.isfile(f_optimized):
                 logger.warning("Cannot load from a missing graph.")
                 return
+            # The tensor runtime engine graph is device specific - if necessary remove the compiled engine and rebuild on-device.
+            # The compile step may have previously been interrupted due to memory constraints resulting in an under optimized graph.
+            # Determine whether to rebuild by file size ratio.
+            f_runtime = os.path.splitext(os.path.splitext(f_optimized)[0])[0] + '.trt.pb'
+            f_optimized_size = float(os.stat(f_optimized).st_size)
+            f_runtime_size = float(os.stat(f_runtime).st_size) if os.path.isfile(f_runtime) else f_optimized_size
+            _size_ratio = f_runtime_size / f_optimized_size
+            if _size_ratio < 1.3:
+                trt_graph = trt.create_inference_graph(
+                    get_frozen_graph(f_optimized),
+                    ['output/steer/steering',
+                     'output/steer/critic',
+                     'output/steer/surprise',
+                     'output/speed/brake',
+                     'output/speed/critic',
+                     'output/posor/features'],
+                    max_batch_size=1,
+                    is_dynamic_op=False,
+                    precision_mode='FP32')
+                with open(f_runtime, 'wb') as output_file:
+                    output_file.write(trt_graph.SerializeToString())
+            # Proceed to load the engine.
             graph = tf.Graph()
             _threads = []
             _barrier = Barrier(parties=2)
             _threads.append(Thread(target=self._create_session, args=(graph, _barrier)))
-            _threads.append(Thread(target=self._load_graph_def, args=(f_definition, _barrier,)))
+            _threads.append(Thread(target=self._load_graph_def, args=(f_runtime, _barrier,)))
             for thr in _threads:
                 thr.start()
             for thr in _threads:
                 thr.join(timeout=30)
-            logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_definition, time.time() - _start))
+            logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
             with graph.as_default():
-                self.input_dave, self.input_alex, self.tf_maneuver_cmd, self.input_udr, self.input_pdr = _create_input_nodes()
+                self.input_dave, self.input_alex, self.tf_maneuver_cmd = _create_input_nodes()
                 _inputs = {
                     'input/dave_image': self.input_dave,
                     'input/alex_image': self.input_alex,
-                    'input/maneuver_command': self.tf_maneuver_cmd,
-                    'input/use_dropout': self.input_udr,
-                    'input/p_dropout': self.input_pdr
+                    'input/maneuver_command': self.tf_maneuver_cmd
                 }
                 tf.import_graph_def(self.graph_def, input_map=_inputs, name='m')
                 self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
@@ -168,7 +201,7 @@ class TFDriver(object):
                 self.sess.close()
                 self.sess = None
 
-    def forward(self, dave_image, alex_image, turn, fallback=False, dagger=False):
+    def forward(self, dave_image, alex_image, turn, fallback=False):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_steering,
@@ -182,131 +215,18 @@ class TFDriver(object):
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
+                # Copy the trainer behavior.
+                dave_image = image_standardization(dave_image / 255.)
+                alex_image = image_standardization(alex_image)  # Not scaled since squeeze-net was trained like that.
                 feeder = {
                     self.input_dave: [dave_image],
                     self.input_alex: [alex_image],
-                    self.input_udr: dagger,
-                    self.input_pdr: self.p_conv_dropout if dagger else 0,
                     self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
                     _action, _critic, _surprise, _brake, _brake_critic, _features = self.sess.run(_ops, feed_dict=feeder)
-                    return _action, _critic, _surprise, max(0, _brake), _brake_critic, _features
-                except (CancelledError, FailedPreconditionError) as e:
-                    if isinstance(e, FailedPreconditionError):
-                        logger.warning('FailedPreconditionError')
-                    else:
-                        logger.warning(e)
-                    return _ret
-
-
-def get_frozen_graph(_file):
-    with tf.gfile.GFile(_file, "rb") as f:
-        graph_def = tf.GraphDef()
-        graph_def.ParseFromString(f.read())
-    return graph_def
-
-
-class TRTDriver(object):
-    def __init__(self, model_directories, gpu_id=0):
-        os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
-        _list = (isinstance(model_directories, tuple) or isinstance(model_directories, list))
-        self.model_directories = model_directories if _list else [model_directories]
-        self._lock = multiprocessing.Lock()
-        self.input_dave = None
-        self.input_alex = None
-        self.tf_maneuver_cmd = None
-        self.tf_steering = None
-        self.tf_critic = None
-        self.tf_brake = None
-        self.tf_brake_critic = None
-        self.tf_features = None
-        self.sess = None
-        self.graph_def = None
-        self._fallback_intention = maneuver_intention()
-
-    def _create_session(self, graph, barrier):
-        with graph.as_default():
-            config = tf.ConfigProto()
-            config.gpu_options.allow_growth = True
-            self.sess = tf.Session(config=config, graph=graph)
-        barrier.wait()
-
-    def _load_graph_def(self, f_definition, barrier):
-        self.graph_def = _load_definition(f_definition)
-        barrier.wait()
-
-    def activate(self):
-        with self._lock:
-            _start = time.time()
-            # The tensor runtime engine graph is device specific - if this happens remove the compiled engine and rebuild.
-            f_tensor_runtime = _newest_file(self.model_directories, '*trt_fp32.pb')
-            if f_tensor_runtime is None:
-                f_optimized = _newest_file(self.model_directories, '*.optimized.pb')
-                if f_optimized is None:
-                    logger.warning("Cannot load from a missing graph.")
-                    return
-                trt_graph = trt.create_inference_graph(
-                    get_frozen_graph(f_optimized),
-                    ['output/posor/features', 'output/speed/brake', 'output/speed/critic', 'output/steer/critic', 'output/steer/steering'],
-                    max_batch_size=1,
-                    is_dynamic_op=False,
-                    precision_mode='FP32')
-                f_tensor_runtime = os.path.join(os.path.splitext(f_optimized)[0] + '_trt_fp32.pb')
-                with open(f_tensor_runtime, 'wb') as output_file:
-                    output_file.write(trt_graph.SerializeToString())
-            # Proceed to load the engine.
-            graph = tf.Graph()
-            _threads = []
-            _barrier = Barrier(parties=2)
-            _threads.append(Thread(target=self._create_session, args=(graph, _barrier)))
-            _threads.append(Thread(target=self._load_graph_def, args=(f_tensor_runtime, _barrier,)))
-            for thr in _threads:
-                thr.start()
-            for thr in _threads:
-                thr.join(timeout=30)
-            logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_tensor_runtime, time.time() - _start))
-            with graph.as_default():
-                self.input_dave, self.input_alex, self.tf_maneuver_cmd = _create_input_nodes()
-                _inputs = {
-                    'input/dave_image': self.input_dave,
-                    'input/alex_image': self.input_alex,
-                    'input/maneuver_command': self.tf_maneuver_cmd
-                }
-                tf.import_graph_def(self.graph_def, input_map=_inputs, name='m')
-                self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
-                self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
-                self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
-                self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/critic:0')
-                self.tf_features = graph.get_tensor_by_name('m/output/posor/features:0')
-
-    def deactivate(self):
-        with self._lock:
-            if self.sess is not None:
-                self.sess.close()
-                self.sess = None
-
-    def forward(self, dave_image, alex_image, turn, fallback=False):
-        with self._lock:
-            assert self.sess is not None, "There is no session - run activation prior to calling this method."
-            _ops = [self.tf_steering,
-                    self.tf_critic,
-                    self.tf_brake,
-                    self.tf_brake_critic,
-                    self.tf_features
-                    ]
-            _ret = (0, 1, 1, 1, [0])
-            if None in _ops:
-                return _ret
-            with self.sess.graph.as_default():
-                feeder = {
-                    self.input_dave: [dave_image],
-                    self.input_alex: [alex_image],
-                    self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
-                }
-                try:
-                    _action, _critic, _brake, _brake_critic, _features = self.sess.run(_ops, feed_dict=feeder)
-                    return _action[0][0], _critic[0][0], 0., max(0, _brake[0][0]), _brake_critic[0][0], _features[0]
+                    _features = l2_normalize(_features.flatten())
+                    return _action[0][0], _critic[0][0], _surprise[0][0], max(0, _brake[0][0]), _brake_critic[0][0], _features
                 except (CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')

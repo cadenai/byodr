@@ -82,7 +82,6 @@ class TFRunner(Configurable):
         self._fn_dave_image = None
         self._fn_alex_image = None
         self._driver = None
-        self._dagger = False
         self._fallback = False
 
     def get_gpu(self):
@@ -101,11 +100,10 @@ class TFRunner(Configurable):
                 self._cluster.quit()
 
     def _pull_image_features(self, image):
-        return self._driver.forward(dave_image=self._fn_dave_image(image),
-                                    alex_image=self._fn_alex_image(image),
+        return self._driver.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
+                                    alex_image=self._fn_alex_image(image, dtype=np.float32),
                                     turn=None,
-                                    fallback=True,
-                                    dagger=False)[-1]
+                                    fallback=True)[-1]
 
     def _route_open(self, route):
         with self._atomic_lock:
@@ -149,8 +147,6 @@ class TFRunner(Configurable):
         self._fn_obstacle_norm = partial(self._norm_scale, min_=0, max_=_brake_scale_max)
         self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)
         self._fn_corridor_norm = (lambda v: v)
-        p_conv_dropout = parse_option('driver.dnn.dagger.conv.dropout', float, 0, _errors, **kwargs)
-        self._dagger = p_conv_dropout > 0
         self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
         self._store = ReloadableDataSource(FileSystemRouteDataSource(directory=self._navigation_routes,
@@ -170,9 +166,8 @@ class TFRunner(Configurable):
         return abs(max(0., v - min_) / (max_ - min_))
 
     def forward(self, image, intention):
-        _dave_img = self._fn_dave_image(image, dtype=np.float32) / 255.
-        _alex_img = self._fn_alex_image(image, dtype=np.float32) / 255.
-        dagger = self._dagger
+        _dave_img = self._fn_dave_image(image, dtype=np.float32)
+        _alex_img = self._fn_alex_image(image, dtype=np.float32)
 
         action_out, critic_out, surprise_out, brake_out, brake_critic_out, features_out = \
             self._driver.forward(dave_image=_dave_img,
@@ -200,7 +195,7 @@ class TFRunner(Configurable):
                     surprise_out=float(surprise_out),
                     critic_out=float(critic_out),
                     fallback=int(self._fallback),
-                    dagger=int(dagger),
+                    dagger=int(0),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
                     internal=[float(0)],

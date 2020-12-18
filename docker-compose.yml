@@ -91,7 +91,7 @@ services:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
   vehicle:
-    cpuset: "0,1"
+    cpuset: "0,1,2"
     build:
       context: .
       dockerfile: vehicles/rover/rover_vehicle.dockerfile
@@ -151,7 +151,7 @@ services:
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:rw
   inference:
-    cpuset: "2,3"
+    cpuset: "3"
     build:
       context: .
       dockerfile: inference/tf115-cp36-jp42.dockerfile
@@ -165,4 +165,4 @@ services:
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
-      - volume_byodr_sessions:/sessions:ro
+      - volume_byodr_sessions:/sessions:rw
