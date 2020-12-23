@@ -124,7 +124,9 @@ class TRTDriver(object):
         self.tf_surprise = None
         self.tf_brake = None
         self.tf_brake_critic = None
-        self.tf_features = None
+        self.tf_features1 = None
+        self.tf_features2 = None
+        self.tf_coordinates = None
         self.sess = None
         self.graph_def = None
         self._fallback_intention = maneuver_intention()
@@ -163,7 +165,9 @@ class TRTDriver(object):
                      'output/steer/surprise',
                      'output/speed/brake',
                      'output/speed/critic',
-                     'output/posor/features'],
+                     'output/posor/features1',
+                     'output/posor/features2',
+                     'output/posor/coordinates'],
                     max_batch_size=1,
                     is_dynamic_op=False,
                     precision_mode='FP32')
@@ -193,7 +197,9 @@ class TRTDriver(object):
                 self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
                 self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
                 self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/critic:0')
-                self.tf_features = graph.get_tensor_by_name('m/output/posor/features:0')
+                self.tf_features1 = graph.get_tensor_by_name('m/output/posor/features1:0')
+                self.tf_features2 = graph.get_tensor_by_name('m/output/posor/features2:0')
+                self.tf_coordinates = graph.get_tensor_by_name('m/output/posor/coordinates:0')
 
     def deactivate(self):
         with self._lock:
@@ -209,9 +215,11 @@ class TRTDriver(object):
                     self.tf_surprise,
                     self.tf_brake,
                     self.tf_brake_critic,
-                    self.tf_features
+                    self.tf_features1,
+                    self.tf_features2,
+                    self.tf_coordinates
                     ]
-            _ret = (0, 1, 1, 1, 1, [0])
+            _ret = (0, 1, 1, 1, 1, [0], [0], [0])
             if None in _ops:
                 return _ret
             with self.sess.graph.as_default():
@@ -224,9 +232,11 @@ class TRTDriver(object):
                     self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
-                    _action, _critic, _surprise, _brake, _brake_critic, _features = self.sess.run(_ops, feed_dict=feeder)
-                    _features = l2_normalize(_features.flatten())
-                    return _action[0][0], _critic[0][0], _surprise[0][0], max(0, _brake[0][0]), _brake_critic[0][0], _features
+                    _action, _critic, _surprise, _brake, _br_critic, _fe1, _fe2, _coord = self.sess.run(_ops, feed_dict=feeder)
+                    _fe1 = l2_normalize(_fe1.flatten())
+                    _fe2 = l2_normalize(_fe2.flatten())
+                    _coord = _coord.flatten()
+                    return _action[0][0], _critic[0][0], _surprise[0][0], max(0, _brake[0][0]), _br_critic[0][0], _fe1, _fe2, _coord
                 except (CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')

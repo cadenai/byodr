@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import threading
+from collections import Counter
 from functools import partial
 
 import cv2
@@ -13,7 +14,6 @@ import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
 from scipy.cluster.vq import vq
-from scipy.spatial.distance import cosine
 
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
@@ -34,24 +34,26 @@ class FeatureCluster(object):
 
     def __init__(self):
         self._lock = threading.Lock()
+        self._eps = 1e-6
         self._code_book = None
 
     def reload(self, features):
         with self._lock:
             self._code_book = np.array(features)
 
-    def get_best_match(self, query):
-        match_id, match_value = None, None
+    def get_match(self, query):
+        m_values = None
         _acquired = self._lock.acquire(False)
         try:
-            if self._code_book is not None:
+            if _acquired and self._code_book is not None:
                 query = np.reshape(np.array([query]), [1, -1])
-                match_id = vq(query, self._code_book)[0][0]
-                match_value = cosine(query, self._code_book[match_id])
+                distortions = vq(self._code_book, query)[-1]
+                _mu, _std = np.mean(distortions), np.std(distortions)
+                m_values = np.clip((distortions - _std) / (self._eps + _mu), 0, 1)
         finally:
             if _acquired:
                 self._lock.release()
-        return match_id, match_value
+        return m_values
 
     def release(self):
         with self._lock:
@@ -66,7 +68,7 @@ class TFRunner(Configurable):
         super(TFRunner, self).__init__()
         self._model_directories = model_directories
         self._navigation_routes = navigation_routes
-        self._cluster = FeatureCluster()
+        self._clusters = [FeatureCluster(), FeatureCluster(), FeatureCluster()]
         self._atomic_lock = threading.Lock()
         self._store = None
         self._gpu_id = 0
@@ -96,28 +98,33 @@ class TFRunner(Configurable):
         if not restarting:
             if self._store is not None:
                 self._store.quit()
-            if self._cluster is not None:
-                self._cluster.quit()
+            for cluster in self._clusters:
+                cluster.quit()
 
     def _pull_image_features(self, image):
         return self._driver.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
                                     alex_image=self._fn_alex_image(image, dtype=np.float32),
                                     turn=None,
-                                    fallback=True)[-1]
+                                    fallback=True)[-3:]
 
     def _route_open(self, route):
         with self._atomic_lock:
             if route != self._store.get_selected_route():
                 self._store.open(route)
                 if len(self._store) > 0:
-                    self._cluster.reload([self._pull_image_features(im) for im in self._store.list_all_images()])
+                    vectors = [self._pull_image_features(im) for im in self._store.list_all_images()]
+                    _features1, _features2, _coordinates = zip(*vectors)
+                    self._clusters[0].reload(_features1)
+                    self._clusters[1].reload(_features2)
+                    self._clusters[2].reload(_coordinates)
 
     def check_state(self, route=None):
         # This runs at the service process frequency.
         if self._store is not None:
             if route is None:
                 self._store.close()
-                self._cluster.release()
+                for cluster in self._clusters:
+                    cluster.release()
             elif route not in self._store.list_routes():
                 threading.Thread(target=self._store.load_routes).start()
             elif route != self._store.get_selected_route():
@@ -169,7 +176,7 @@ class TFRunner(Configurable):
         _dave_img = self._fn_dave_image(image, dtype=np.float32)
         _alex_img = self._fn_alex_image(image, dtype=np.float32)
 
-        action_out, critic_out, surprise_out, brake_out, brake_critic_out, features_out = \
+        action_out, critic_out, surprise_out, brake_out, brake_critic_out, features1, features2, coordinates = \
             self._driver.forward(dave_image=_dave_img,
                                  alex_image=_alex_img,
                                  turn=intention,
@@ -187,7 +194,15 @@ class TFRunner(Configurable):
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
-        _nav_id, _nav_distance = self._cluster.get_best_match(features_out)
+        _nav_id, _nav_distance, _location = None, None, None
+        c_values = [self._clusters[i].get_match(v) for i, v in enumerate((features1, features2, coordinates))]
+        # False positives: Accept the location on majority rule.
+        if sum([0 if x is None else 1 for x in c_values]) == 3:
+            c_ids = [x.argmin() for x in c_values]
+            c_id, c_count = Counter(c_ids).most_common()[0]
+            if c_count >= 2:
+                _nav_id = c_id
+                _nav_distance = np.mean([x[c_id] for x in c_values]).item()
 
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action_out)),
