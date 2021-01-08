@@ -126,7 +126,7 @@ class TRTDriver(object):
         self.tf_brake_critic = None
         self.tf_features1 = None
         self.tf_features2 = None
-        self.tf_coordinates = None
+        self.tf_features3 = None
         self.sess = None
         self.graph_def = None
         self._fallback_intention = maneuver_intention()
@@ -199,7 +199,7 @@ class TRTDriver(object):
                 self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/critic:0')
                 self.tf_features1 = graph.get_tensor_by_name('m/output/posor/features1:0')
                 self.tf_features2 = graph.get_tensor_by_name('m/output/posor/features2:0')
-                self.tf_coordinates = graph.get_tensor_by_name('m/output/posor/coordinates:0')
+                self.tf_features3 = graph.get_tensor_by_name('m/output/posor/coordinates:0')
 
     def deactivate(self):
         with self._lock:
@@ -217,7 +217,7 @@ class TRTDriver(object):
                     self.tf_brake_critic,
                     self.tf_features1,
                     self.tf_features2,
-                    self.tf_coordinates
+                    self.tf_features3
                     ]
             _ret = (0, 1, 1, 1, 1, [0], [0], [0])
             if None in _ops:
@@ -232,11 +232,11 @@ class TRTDriver(object):
                     self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
                 }
                 try:
-                    _action, _critic, _surprise, _brake, _br_critic, _fe1, _fe2, _coord = self.sess.run(_ops, feed_dict=feeder)
+                    _action, _critic, _surprise, _brake, _br_critic, _fe1, _fe2, _fe3 = self.sess.run(_ops, feed_dict=feeder)
                     _fe1 = l2_normalize(_fe1.flatten())
                     _fe2 = l2_normalize(_fe2.flatten())
-                    _coord = _coord.flatten()
-                    return _action[0][0], _critic[0][0], _surprise[0][0], max(0, _brake[0][0]), _br_critic[0][0], _fe1, _fe2, _coord
+                    _fe3 = l2_normalize(_fe3.flatten())
+                    return _action[0][0], _critic[0][0], _surprise[0][0], max(0, _brake[0][0]), _br_critic[0][0], _fe1, _fe2, _fe3
                 except (CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
