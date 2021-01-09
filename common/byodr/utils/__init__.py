@@ -160,8 +160,10 @@ class Application(object):
                 # Report the actual clock frequency which includes the user specified wait time.
                 self._rt_queue.append(time.time() - _start)
         except Exception as e:
-            self.logger.error("{}".format(traceback.format_exc(e)))
+            # Quit first to be sure - the traceback may in some cases raise another exception.
             self.quit()
+            self.logger.error(e)
+            self.logger.error(traceback.format_exc(e))
         except KeyboardInterrupt:
             self.quit()
         finally:
