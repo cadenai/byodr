@@ -115,6 +115,10 @@ class AbstractRouteDataSource(object):
         raise NotImplementedError()
 
     @abstractmethod
+    def is_open(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def close(self):
         raise NotImplementedError()
 
@@ -244,6 +248,9 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
             except OSError as e:
                 logger.info(e)
 
+    def is_open(self):
+        return self.selected_route in self.routes
+
     def close(self):
         self._reset()
 
@@ -317,6 +324,9 @@ class ReloadableDataSource(AbstractRouteDataSource):
     def open(self, route_name=None):
         with self._lock:
             self._delegate.open(route_name)
+
+    def is_open(self):
+        return self._do_safe(lambda acquired: self._delegate.is_open() if acquired else False)
 
     def close(self):
         with self._lock:
