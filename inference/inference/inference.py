@@ -5,12 +5,11 @@ import logging
 import multiprocessing
 import os
 import time
-from threading import Thread, Semaphore
+from threading import Semaphore
 
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.tensorrt as trt
-from tensorflow.python.framework.errors_impl import CancelledError, FailedPreconditionError
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +48,12 @@ class Barrier(object):
 
 
 def _create_input_nodes():
-    placeholder = tf.placeholder
-    input_dave = placeholder(dtype=tf.float32, shape=[1, 3, 66, 200], name='input/dave_image')
-    input_alex = placeholder(dtype=tf.float32, shape=[1, 227, 227, 3], name='input/alex_image')
-    maneuver_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
-    return input_dave, input_alex, maneuver_command
+    input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 66, 200, 3], name='input/dave_image')
+    input_alex = tf.placeholder(dtype=tf.float32, shape=[1, 100, 200, 3], name='input/alex_image')
+    input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
+    # input_current_vector = tf.placeholder(dtype=tf.float32, shape=[1, 100], name='input/current_vector')
+    # input_next_vector = tf.placeholder(dtype=tf.float32, shape=[1, 100], name='input/next_vector')
+    return input_dave, input_alex, input_command
 
 
 def _newest_file(paths, pattern):
@@ -116,31 +116,20 @@ class TRTDriver(object):
         _list = (isinstance(model_directories, tuple) or isinstance(model_directories, list))
         self.model_directories = model_directories if _list else [model_directories]
         self._lock = multiprocessing.Lock()
+        # self._zero_vector = np.zeros(shape=(100,), dtype=np.float32)
+        # self._current_vector = self._zero_vector
         self.input_dave = None
         self.input_alex = None
-        self.tf_maneuver_cmd = None
+        self.input_command = None
         self.tf_steering = None
         self.tf_critic = None
         self.tf_surprise = None
-        self.tf_brake = None
-        self.tf_brake_critic = None
-        self.tf_features1 = None
-        self.tf_features2 = None
-        self.tf_features3 = None
+        # self.tf_brake = None
+        # self.tf_brake_critic = None
+        self.tf_features = None
+        self.tf_distance = None
         self.sess = None
         self.graph_def = None
-        self._fallback_intention = maneuver_intention()
-
-    def _create_session(self, graph, barrier):
-        with graph.as_default():
-            config = tf.ConfigProto()
-            config.gpu_options.allow_growth = True
-            self.sess = tf.Session(config=config, graph=graph)
-        barrier.wait()
-
-    def _load_graph_def(self, f_definition, barrier):
-        self.graph_def = _load_definition(f_definition)
-        barrier.wait()
 
     def activate(self):
         with self._lock:
@@ -150,6 +139,15 @@ class TRTDriver(object):
             if f_optimized is None or not os.path.isfile(f_optimized):
                 logger.warning("Cannot load from a missing graph.")
                 return
+
+            graph = tf.Graph()
+            with graph.as_default():
+                config = tf.ConfigProto()
+                # Grab the memory for the tensor-rt engine compilation.
+                # config.gpu_options.allow_growth = True
+                config.gpu_options.per_process_gpu_memory_fraction = 0.33
+                self.sess = tf.Session(config=config, graph=graph)
+
             # The tensor runtime engine graph is device specific - if necessary remove the compiled engine and rebuild on-device.
             # The compile step may have previously been interrupted due to memory constraints resulting in an under optimized graph.
             # Determine whether to rebuild by file size ratio.
@@ -163,43 +161,32 @@ class TRTDriver(object):
                     ['output/steer/steering',
                      'output/steer/critic',
                      'output/steer/surprise',
-                     'output/speed/brake',
-                     'output/speed/critic',
-                     'output/posor/features1',
-                     'output/posor/features2',
-                     'output/posor/coordinates'],
+                     'output/posor/features',
+                     'output/posor/distance'
+                     ],
                     max_batch_size=1,
                     is_dynamic_op=False,
-                    precision_mode='FP32')
+                    precision_mode='FP32',
+                    minimum_segment_size=10
+                )
                 with open(f_runtime, 'wb') as output_file:
                     output_file.write(trt_graph.SerializeToString())
-            # Proceed to load the engine.
-            graph = tf.Graph()
-            _threads = []
-            _barrier = Barrier(parties=2)
-            _threads.append(Thread(target=self._create_session, args=(graph, _barrier)))
-            _threads.append(Thread(target=self._load_graph_def, args=(f_runtime, _barrier,)))
-            for thr in _threads:
-                thr.start()
-            for thr in _threads:
-                thr.join(timeout=30)
+            self.graph_def = _load_definition(f_runtime)
             logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
             with graph.as_default():
-                self.input_dave, self.input_alex, self.tf_maneuver_cmd = _create_input_nodes()
+                _nodes = _create_input_nodes()
+                self.input_dave, self.input_alex, self.input_command = _nodes
                 _inputs = {
                     'input/dave_image': self.input_dave,
                     'input/alex_image': self.input_alex,
-                    'input/maneuver_command': self.tf_maneuver_cmd
+                    'input/maneuver_command': self.input_command
                 }
                 tf.import_graph_def(self.graph_def, input_map=_inputs, name='m')
                 self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
                 self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
                 self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
-                self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
-                self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/critic:0')
-                self.tf_features1 = graph.get_tensor_by_name('m/output/posor/features1:0')
-                self.tf_features2 = graph.get_tensor_by_name('m/output/posor/features2:0')
-                self.tf_features3 = graph.get_tensor_by_name('m/output/posor/coordinates:0')
+                self.tf_features = graph.get_tensor_by_name('m/output/posor/features:0')
+                self.tf_distance = graph.get_tensor_by_name('m/output/posor/distance:0')
 
     def deactivate(self):
         with self._lock:
@@ -207,39 +194,27 @@ class TRTDriver(object):
                 self.sess.close()
                 self.sess = None
 
-    def forward(self, dave_image, alex_image, turn, fallback=False):
+    def forward(self, dave_image, alex_image, maneuver_command=maneuver_intention()):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_steering,
                     self.tf_critic,
                     self.tf_surprise,
-                    self.tf_brake,
-                    self.tf_brake_critic,
-                    self.tf_features1,
-                    self.tf_features2,
-                    self.tf_features3
+                    self.tf_features,
+                    self.tf_distance
                     ]
-            _ret = (0, 1, 1, 1, 1, [0], [0], [0])
-            if None in _ops:
-                return _ret
             with self.sess.graph.as_default():
                 # Copy the trainer behavior.
                 dave_image = image_standardization(dave_image / 255.)
-                alex_image = image_standardization(alex_image)  # Not scaled since squeeze-net was trained like that.
-                feeder = {
+                alex_image = image_standardization(alex_image / 255.)
+                feed = {
                     self.input_dave: [dave_image],
                     self.input_alex: [alex_image],
-                    self.tf_maneuver_cmd: [self._fallback_intention if fallback else maneuver_intention(turn=turn)]
+                    self.input_command: [maneuver_command]
                 }
-                try:
-                    _action, _critic, _surprise, _brake, _br_critic, _fe1, _fe2, _fe3 = self.sess.run(_ops, feed_dict=feeder)
-                    _fe1 = l2_normalize(_fe1.flatten())
-                    _fe2 = l2_normalize(_fe2.flatten())
-                    _fe3 = l2_normalize(_fe3.flatten())
-                    return _action[0][0], _critic[0][0], _surprise[0][0], max(0, _brake[0][0]), _br_critic[0][0], _fe1, _fe2, _fe3
-                except (CancelledError, FailedPreconditionError) as e:
-                    if isinstance(e, FailedPreconditionError):
-                        logger.warning('FailedPreconditionError')
-                    else:
-                        logger.warning(e)
-                    return _ret
+                _out = map(lambda x: x.flatten(), self.sess.run(_ops, feed_dict=feed))
+                _action, _critic, _surprise, _features, _distance = _out
+                _brake = 0  # max(0, _brake[0][0])
+                _br_critic = 0
+                _features = l2_normalize(_features)
+                return _action, _critic, _surprise, _brake, _br_critic, _features, _distance
