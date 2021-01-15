@@ -434,42 +434,10 @@ def _translate_navigation_direction(direction):
     return 'general.fallback'
 
 
-def _collapse(x):
-    return 0.0 if abs(x) < 1e-9 else 1.0 if abs(x - 1) < 1e-9 else x
-
-
-v_collapse = np.vectorize(_collapse)
-
-
-def update_belief(belief, hit, alpha=.5):
-    return v_collapse(belief + alpha * (hit - belief))
-
-
-class MatchMass(object):
-    def __init__(self, scale, alpha=.5):
-        self._alpha = alpha
-        self._observations = np.zeros(shape=(scale,), dtype=np.float32)
-
-    def clear(self):
-        self._observations = np.zeros_like(self._observations)
-
-    def observe(self, index, value):
-        hit = np.zeros_like(self._observations)
-        hit[index] = value
-        self._observations = update_belief(self._observations, hit, alpha=self._alpha)
-
-    def get_belief(self):
-        _id = np.argmax(self._observations)
-        return _id, self._observations[_id]
-
-
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
         self._recognition_threshold = 0
-        self._lock = threading.Lock()
-        self._mass = None
-        self._mass_alpha = 0
         self._current_image = None
         self._current_distance = None
         self._match_point = None
@@ -477,7 +445,6 @@ class Navigator(object):
         self._match_distance = None
 
     def initialize(self, window, threshold):
-        self._mass_alpha = 1. / window if window > 0 else 1.
         self._recognition_threshold = threshold
         self.reload()
 
@@ -486,14 +453,9 @@ class Navigator(object):
 
     def _open_store(self, route):
         self._store.open(route)
-        with self._lock:
-            self._mass = MatchMass(scale=len(self._store), alpha=self._mass_alpha)
 
     def close(self):
         self._store.close()
-        with self._lock:
-            if self._mass is not None:
-                self._mass.clear()
         self._current_image = None
         self._current_distance = None
         self._match_point = None
@@ -536,18 +498,13 @@ class Navigator(object):
             self._current_image = c_inference.get('navigation_image')
             self._current_distance = c_inference.get('navigation_distance', 1.)
             try:
-                with self._lock:
-                    if self._mass is not None and self._current_image >= 0:
-                        _point_id = self._store.get_image_navigation_point_id(self._current_image)
-                        self._mass.observe(_point_id, (1 - self._current_distance))
-                        _point_id, _mass = self._mass.get_belief()
-                        if _point_id is not None and _mass > (1 - self._recognition_threshold):
-                            _point = self._store.list_navigation_points()[_point_id]
-                            if _point != self._match_point:
-                                self._match_image = self._current_image
-                                self._match_distance = self._current_distance
-                                self._match_point = _point
-                                return self._store.get_instructions(self._match_point)
+                if self._current_image >= 0 and self._current_distance < self._recognition_threshold:
+                    _point = self._store.get_image_navigation_point(self._current_image)
+                    if _point != self._match_point:
+                        self._match_image = self._current_image
+                        self._match_distance = self._current_distance
+                        self._match_point = _point
+                        return self._store.get_instructions(self._match_point)
             except LookupError:
                 pass
         # No new match.
