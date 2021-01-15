@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import threading
-from collections import Counter
 from functools import partial
 
 import cv2
@@ -20,7 +19,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_index
+from .inference import DynamicMomentum, TRTDriver, maneuver_intention
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -30,47 +29,99 @@ else:
 logger = logging.getLogger(__name__)
 
 
-class FeatureCluster(object):
+def _norm_scale(v, min_=0., max_=1.):
+    """Zero values below the minimum but let values larger than the maximum be scaled up. """
+    return abs(max(0., v - min_) / (max_ - min_))
 
-    def __init__(self):
+
+class Navigator(object):
+    def __init__(self, model_directories, routes_directory):
+        self._model_directories = model_directories
+        self._routes_directory = routes_directory
         self._lock = threading.Lock()
+        self._quit_event = threading.Event()
         self._eps = 1e-6
+        self._fn_dave_image = None
+        self._fn_alex_image = None
+        self._network = None
+        self._store = None
         self._code_book = None
+        self._distances = None
 
-    def reload(self, features):
+    def _pull_image_features(self, image):
+        return self._network.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
+                                     alex_image=self._fn_alex_image(image, dtype=np.float32))[-2:]
+
+    def _route_open(self, route):
+        # This may take a while.
+        if not self._quit_event.is_set():
+            with self._lock:
+                if route != self._store.get_selected_route():
+                    self._store.open(route)
+                    if len(self._store) > 0:
+                        vectors = [self._pull_image_features(im) for im in self._store.list_all_images()]
+                        _a, _b = zip(*vectors)
+                        self._code_book = np.array(_a)
+                        self._distances = _b
+
+    def _check_state(self, route=None):
+        if route is None:
+            self._store.close()
+        elif route not in self._store.list_routes():
+            threading.Thread(target=self._store.load_routes).start()
+        elif route != self._store.get_selected_route():
+            threading.Thread(target=self._route_open, args=(route,)).start()
+
+    def restart(self, fn_dave_image, fn_alex_image, gpu_id=0):
+        self._quit_event.clear()
         with self._lock:
-            self._code_book = np.array(features)
+            _load_image = (lambda fname: self._fn_alex_image(cv2.imread(fname)))
+            _store = FileSystemRouteDataSource(self._routes_directory, fn_load_image=_load_image, load_instructions=False)
+            self._fn_dave_image = fn_dave_image
+            self._fn_alex_image = fn_alex_image
+            self._store = ReloadableDataSource(_store)
+            self._network = TRTDriver(self._model_directories, gpu_id=gpu_id)
+            self._network.activate()
+            self._store.load_routes()
+            self._code_book = None
+            self._distances = None
 
-    def get_match(self, query):
-        m_values = None
+    def forward(self, image, intention, route=None):
+        # This runs at the service process frequency.
+        self._check_state(route)
+        _dave_img = self._fn_dave_image(image, dtype=np.float32)
+        _alex_img = self._fn_alex_image(image, dtype=np.float32)
+        _out = self._network.forward(dave_image=_dave_img, alex_image=_alex_img, maneuver_command=(maneuver_intention(intention)))
+        action_out, critic_out, surprise_out, brake_out, brake_critic_out, features_out, distance_out = _out
+        nav_id, nav_distance = None, None
         _acquired = self._lock.acquire(False)
         try:
-            if _acquired and self._code_book is not None:
-                query = np.reshape(np.array([query]), [1, -1])
+            if _acquired and self._store.is_open() and self._code_book is not None:
+                query = np.reshape(np.array([features_out]), [1, -1])
                 distortions = vq(self._code_book, query)[-1]
                 _mu, _std = np.mean(distortions), np.std(distortions)
-                m_values = np.clip((distortions - _std) / (self._eps + _mu), 0, 1)
+                _values = np.clip((distortions - _std) / (self._eps + _mu), 0, 1)
+                _masked = np.sign(np.sum(np.cross(distance_out, self._distances), axis=-1)) * _values
+                nav_id = np.argmin(np.where(_masked < 0, 1, _masked))
+                nav_distance = _values[nav_id]
         finally:
             if _acquired:
                 self._lock.release()
-        return m_values
-
-    def release(self):
-        with self._lock:
-            self._code_book = None
+        return action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_id, nav_distance
 
     def quit(self):
-        self.release()
+        # Store and network are thread-safe.
+        self._quit_event.set()
+        if self._store is not None:
+            self._store.quit()
+        if self._network is not None:
+            self._network.deactivate()
 
 
 class TFRunner(Configurable):
-    def __init__(self, model_directories, navigation_routes=None):
+    def __init__(self, model_directories, routes_directory=None):
         super(TFRunner, self).__init__()
-        self._model_directories = model_directories
-        self._navigation_routes = navigation_routes
-        self._clusters = [FeatureCluster(), FeatureCluster(), FeatureCluster()]
-        self._atomic_lock = threading.Lock()
-        self._store = None
+        self._navigator = Navigator(model_directories, routes_directory)
         self._gpu_id = 0
         self._process_frequency = 10
         self._steering_scale_left = 1
@@ -81,10 +132,6 @@ class TFRunner(Configurable):
         self._fn_brake_critic_norm = None
         self._fn_corridor_norm = None
         self._fn_corridor_penalty = None
-        self._fn_dave_image = None
-        self._fn_alex_image = None
-        self._driver = None
-        self._fallback = False
 
     def get_gpu(self):
         return self._gpu_id
@@ -93,42 +140,7 @@ class TFRunner(Configurable):
         return self._process_frequency
 
     def internal_quit(self, restarting=False):
-        if self._driver is not None:
-            self._driver.deactivate()
-        if not restarting:
-            if self._store is not None:
-                self._store.quit()
-            for cluster in self._clusters:
-                cluster.quit()
-
-    def _pull_image_features(self, image):
-        return self._driver.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
-                                    alex_image=self._fn_alex_image(image, dtype=np.float32),
-                                    turn=None,
-                                    fallback=True)[-3:]
-
-    def _route_open(self, route):
-        with self._atomic_lock:
-            if route != self._store.get_selected_route():
-                self._store.open(route)
-                if len(self._store) > 0:
-                    vectors = [self._pull_image_features(im) for im in self._store.list_all_images()]
-                    _features1, _features2, _coordinates = zip(*vectors)
-                    self._clusters[0].reload(_features1)
-                    self._clusters[1].reload(_features2)
-                    self._clusters[2].reload(_coordinates)
-
-    def check_state(self, route=None):
-        # This runs at the service process frequency.
-        if self._store is not None:
-            if route is None:
-                self._store.close()
-                for cluster in self._clusters:
-                    cluster.release()
-            elif route not in self._store.list_routes():
-                threading.Thread(target=self._store.load_routes).start()
-            elif route != self._store.get_selected_route():
-                threading.Thread(target=self._route_open, args=(route,)).start()
+        self._navigator.quit()
 
     def internal_start(self, **kwargs):
         _errors = []
@@ -151,71 +163,40 @@ class TFRunner(Configurable):
         except (TypeError, IndexError, ZeroDivisionError) as te:
             _errors.append(PropertyError(_corridor_equation_key, str(te)))
             self._fn_corridor_penalty = lambda surprise, critic: 100
-        self._fn_obstacle_norm = partial(self._norm_scale, min_=0, max_=_brake_scale_max)
-        self._fn_brake_critic_norm = partial(self._norm_scale, min_=0, max_=_brake_critic_scale_max)
+        self._fn_obstacle_norm = partial(_norm_scale, min_=0, max_=_brake_scale_max)
+        self._fn_brake_critic_norm = partial(_norm_scale, min_=0, max_=_brake_critic_scale_max)
         self._fn_corridor_norm = (lambda v: v)
-        self._fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
-        self._fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        self._store = ReloadableDataSource(FileSystemRouteDataSource(directory=self._navigation_routes,
-                                                                     fn_load_image=(lambda fname: self._fn_alex_image(cv2.imread(fname))),
-                                                                     load_instructions=False))
-        self._store.load_routes()
-        self._driver = TRTDriver(model_directories=self._model_directories, gpu_id=self._gpu_id)
-        self._driver.activate()
+        _fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
+        _fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
+        self._navigator.restart(fn_dave_image=_fn_dave_image, fn_alex_image=_fn_alex_image, gpu_id=self._gpu_id)
         return _errors
 
     def _dnn_steering(self, raw):
         return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
 
-    @staticmethod
-    def _norm_scale(v, min_=0., max_=1.):
-        """Zero values below the minimum but let values larger than the maximum be scaled up. """
-        return abs(max(0., v - min_) / (max_ - min_))
-
-    def forward(self, image, intention):
-        _dave_img = self._fn_dave_image(image, dtype=np.float32)
-        _alex_img = self._fn_alex_image(image, dtype=np.float32)
-
-        action_out, critic_out, surprise_out, brake_out, brake_critic_out, features1, features2, coordinates = \
-            self._driver.forward(dave_image=_dave_img,
-                                 alex_image=_alex_img,
-                                 turn=intention,
-                                 fallback=self._fallback)
+    def forward(self, image, intention, route=None):
+        _out = self._navigator.forward(image, intention, route)
+        action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_id, nav_distance = _out
 
         critic = self._fn_corridor_norm(critic_out)
         surprise = self._fn_corridor_norm(surprise_out)
         _corridor_penalty = max(0, self._fn_corridor_penalty(surprise=surprise, critic=critic))
 
-        # The decision points were made dependant on turn marked samples during training.
-        _intention_index = maneuver_index(intention)
-        self._fallback = _intention_index == 0
-
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
-
-        _nav_id, _nav_distance, _location = None, None, None
-        c_values = [self._clusters[i].get_match(v) for i, v in enumerate((features1, features2, coordinates))]
-        # False positives: Accept the location on majority rule.
-        if sum([0 if x is None else 1 for x in c_values]) == 3:
-            c_ids = [x.argmin() for x in c_values]
-            c_id, c_count = Counter(c_ids).most_common()[0]
-            if c_count >= 2:
-                _nav_id = c_id
-                _nav_distance = np.mean([x[c_id] for x in c_values]).item()
 
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action_out)),
                     corridor=float(self._debug_filter.calculate(_corridor_penalty)),
                     surprise_out=float(surprise_out),
                     critic_out=float(critic_out),
-                    fallback=int(self._fallback),
                     dagger=int(0),
                     obstacle=float(_obstacle_penalty),
                     penalty=float(_total_penalty),
                     internal=[float(0)],
-                    navigation_image=int(-1 if _nav_id is None else _nav_id),
-                    navigation_distance=float(1 if _nav_distance is None else _nav_distance)
+                    navigation_image=int(-1 if nav_id is None else nav_id),
+                    navigation_distance=float(1 if nav_distance is None else nav_distance)
                     )
 
 
@@ -225,7 +206,7 @@ class InferenceApplication(Application):
         self._config_dir = config_dir
         self._internal_models = internal_models
         self._user_models = user_models
-        self._runner = TFRunner([user_models, internal_models], navigation_routes=navigation_routes) if runner is None else runner
+        self._runner = TFRunner([user_models, internal_models], routes_directory=navigation_routes) if runner is None else runner
         self.publisher = None
         self.camera = None
         self.ipc_server = None
@@ -262,13 +243,12 @@ class InferenceApplication(Application):
     def step(self):
         # Leave the state as is on empty teleop state.
         c_teleop = self.teleop()
-        if c_teleop is not None:
-            self._runner.check_state(**c_teleop.get('navigator'))
         c_pilot = self.pilot()
         image = self.camera.capture()[-1]
         if image is not None:
             instruction = 'intersection.ahead' if c_pilot is None else c_pilot.get('instruction')
-            state = self._runner.forward(image=image, intention=instruction)
+            c_route = None if c_teleop is None else c_teleop.get('navigator').get('route')
+            state = self._runner.forward(image=image, intention=instruction, route=c_route)
             state['_fps'] = self.get_actual_hz()
             self.publisher.publish(state)
         chat = self.ipc_chatter()
