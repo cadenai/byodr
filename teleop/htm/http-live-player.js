@@ -4508,7 +4508,9 @@ var WSAvcPlayer = new Class({
   },
 
   disconnect : function() {
-    this.ws.close();
+    if (this.ws != undefined) {
+        this.ws.close();
+    }
   },
 
   playStream : function() {
