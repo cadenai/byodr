@@ -51,9 +51,8 @@ def _create_input_nodes():
     input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 66, 200, 3], name='input/dave_image')
     input_alex = tf.placeholder(dtype=tf.float32, shape=[1, 100, 200, 3], name='input/alex_image')
     input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
-    # input_current_vector = tf.placeholder(dtype=tf.float32, shape=[1, 100], name='input/current_vector')
-    # input_next_vector = tf.placeholder(dtype=tf.float32, shape=[1, 100], name='input/next_vector')
-    return input_dave, input_alex, input_command
+    input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 150], name='input/next_vector')
+    return input_dave, input_alex, input_command, input_destination
 
 
 def _newest_file(paths, pattern):
@@ -116,16 +115,17 @@ class TRTDriver(object):
         _list = (isinstance(model_directories, tuple) or isinstance(model_directories, list))
         self.model_directories = model_directories if _list else [model_directories]
         self._lock = multiprocessing.Lock()
-        # self._zero_vector = np.zeros(shape=(100,), dtype=np.float32)
-        # self._current_vector = self._zero_vector
+        self._zero_vector = np.zeros(shape=(150,), dtype=np.float32)
         self.input_dave = None
         self.input_alex = None
         self.input_command = None
+        self.input_destination = None
         self.tf_steering = None
         self.tf_critic = None
         self.tf_surprise = None
-        # self.tf_brake = None
-        # self.tf_brake_critic = None
+        self.tf_gumbel = None
+        self.tf_brake = None
+        self.tf_brake_critic = None
         self.tf_features = None
         self.tf_distance = None
         self.sess = None
@@ -161,6 +161,9 @@ class TRTDriver(object):
                     ['output/steer/steering',
                      'output/steer/critic',
                      'output/steer/surprise',
+                     'output/steer/gumbel',
+                     'output/speed/brake',
+                     'output/speed/brake_critic',
                      'output/posor/features',
                      'output/posor/distance'
                      ],
@@ -175,16 +178,20 @@ class TRTDriver(object):
             logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
             with graph.as_default():
                 _nodes = _create_input_nodes()
-                self.input_dave, self.input_alex, self.input_command = _nodes
+                self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
                 _inputs = {
                     'input/dave_image': self.input_dave,
                     'input/alex_image': self.input_alex,
-                    'input/maneuver_command': self.input_command
+                    'input/maneuver_command': self.input_command,
+                    'input/next_vector': self.input_destination
                 }
                 tf.import_graph_def(self.graph_def, input_map=_inputs, name='m')
                 self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
                 self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
                 self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
+                self.tf_gumbel = graph.get_tensor_by_name('m/output/steer/gumbel:0')
+                self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
+                self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/brake_critic:0')
                 self.tf_features = graph.get_tensor_by_name('m/output/posor/features:0')
                 self.tf_distance = graph.get_tensor_by_name('m/output/posor/distance:0')
 
@@ -194,15 +201,19 @@ class TRTDriver(object):
                 self.sess.close()
                 self.sess = None
 
-    def forward(self, dave_image, alex_image, maneuver_command=maneuver_intention()):
+    def forward(self, dave_image, alex_image, maneuver_command=maneuver_intention(), destination=None):
         with self._lock:
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_steering,
                     self.tf_critic,
                     self.tf_surprise,
+                    self.tf_gumbel,
+                    self.tf_brake,
+                    self.tf_brake_critic,
                     self.tf_features,
                     self.tf_distance
                     ]
+            destination = self._zero_vector if destination is None else destination
             with self.sess.graph.as_default():
                 # Copy the trainer behavior.
                 dave_image = image_standardization(dave_image / 255.)
@@ -210,11 +221,9 @@ class TRTDriver(object):
                 feed = {
                     self.input_dave: [dave_image],
                     self.input_alex: [alex_image],
-                    self.input_command: [maneuver_command]
+                    self.input_command: [maneuver_command],
+                    self.input_destination: [destination]
                 }
                 _out = map(lambda x: x.flatten(), self.sess.run(_ops, feed_dict=feed))
-                _action, _critic, _surprise, _features, _distance = _out
-                _brake = 0  # max(0, _brake[0][0])
-                _br_critic = 0
-                _features = l2_normalize(_features)
-                return _action, _critic, _surprise, _brake, _br_critic, _features, _distance
+                _action, _critic, _surprise, _gumbel, _brake, _br_critic, _features, _distance = _out
+                return _action, _critic, _surprise, _gumbel, _brake, _br_critic, l2_normalize(_features), _distance

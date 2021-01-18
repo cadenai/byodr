@@ -24,14 +24,21 @@ def hwc_alexnet(image, resize_wh=None, dtype=np.uint8):
     return image
 
 
-def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, chw=True, dtype=np.uint8):
+def hwc_squeeze(image, resize_wh=None, dtype=np.uint8):
+    image = image if resize_wh is None else cv2.resize(image, resize_wh)
+    image = cv2.resize(image, (200, 100))
+    image = image.astype(dtype)
+    return image
+
+
+def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, dtype=np.uint8):
     # If resize is not the first operation, then resize the incoming image to the start of the data pipeline persistent images.
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
     top, right, bottom, left = crop
     image = image[top:image.shape[0] - bottom, left:image.shape[1] - right]
     image = cv2.resize(image, (200, 66)) if dave else image
     image = hwc_bgr_to_yuv(image) if yuv else image
-    image = hwc_to_chw(image) if chw else image
+    # image = hwc_to_chw(image) if chw else image
     image = image.astype(dtype)
     return image
 
@@ -59,6 +66,7 @@ class Alternator(object):
 
 _registered_functions = {
     'alex__227_227': partial(hwc_alexnet, resize_wh=(320, 240)),
+    'alex__200_100': partial(hwc_squeeze, resize_wh=(320, 240)),
     'dave__320_240__200_66__0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(0, 0, 0, 0)),
     'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0)),
     'dave__exr1': partial(_exr_dave_img),

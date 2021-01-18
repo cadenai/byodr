@@ -437,15 +437,13 @@ def _translate_navigation_direction(direction):
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
-        self._recognition_threshold = 0
-        self._current_image = None
+        self._current_image_id = None
         self._current_distance = None
         self._match_point = None
         self._match_image = None
         self._match_distance = None
 
-    def initialize(self, window, threshold):
-        self._recognition_threshold = threshold
+    def initialize(self):
         self.reload()
 
     def reload(self):
@@ -456,7 +454,7 @@ class Navigator(object):
 
     def close(self):
         self._store.close()
-        self._current_image = None
+        self._current_image_id = None
         self._current_distance = None
         self._match_point = None
         self._match_image = None
@@ -469,7 +467,7 @@ class Navigator(object):
         return self._store.get_selected_route()
 
     def get_current_image_id(self):
-        return self._current_image
+        return self._current_image_id
 
     def get_current_distance(self):
         return self._current_distance
@@ -495,13 +493,14 @@ class Navigator(object):
     def update(self, c_inference):
         # This runs at the service process frequency.
         if self.is_active():
-            self._current_image = c_inference.get('navigation_image')
+            _point_id = c_inference.get('navigation_point')
+            self._current_image_id = c_inference.get('navigation_image')
             self._current_distance = c_inference.get('navigation_distance', 1.)
             try:
-                if self._current_image >= 0 and self._current_distance < self._recognition_threshold:
-                    _point = self._store.get_image_navigation_point(self._current_image)
+                if _point_id >= 0:
+                    _point = self._store.list_navigation_points()[_point_id]
                     if _point != self._match_point:
-                        self._match_image = self._current_image
+                        self._match_image = self._current_image_id
                         self._match_distance = self._current_distance
                         self._match_point = _point
                         return self._store.get_instructions(self._match_point)
@@ -534,13 +533,11 @@ class DriverManager(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
-        _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
-        _navigator_window_size = parse_option('navigation.collection.window.size', int, 10, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._speed_scale = parse_option('driver.speed.norm.scale', float, 1, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
-        self._navigator.initialize(window=_navigator_window_size, threshold=_navigation_recognition_threshold)
+        self._navigator.initialize()
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None

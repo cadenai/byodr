@@ -6,11 +6,11 @@ import logging
 import os
 import time
 import traceback
-from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
 import tornado
+from ConfigParser import SafeConfigParser
 from tornado import web, websocket
 
 from byodr.utils import timestamp
@@ -143,7 +143,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'debug3': 0 if inference is None else inference.get('penalty'),
                 'debug4': 0 if inference is None else inference.get('surprise_out'),
                 'debug5': 0 if inference is None else inference.get('critic_out'),
-                'debug6': 0 if inference is None else inference.get('fallback'),
+                'debug6': 0,
                 'debug7': 0 if inference is None else inference.get('_fps'),
                 'rec_act': False if recorder is None else recorder.get('active'),
                 'rec_mod': self._translate_recorder(recorder),
