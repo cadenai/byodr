@@ -437,8 +437,6 @@ def _translate_navigation_direction(direction):
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
-        self._current_image_id = None
-        self._current_distance = None
         self._match_point = None
         self._match_image = None
         self._match_distance = None
@@ -454,8 +452,6 @@ class Navigator(object):
 
     def close(self):
         self._store.close()
-        self._current_image_id = None
-        self._current_distance = None
         self._match_point = None
         self._match_image = None
         self._match_distance = None
@@ -465,12 +461,6 @@ class Navigator(object):
 
     def get_navigation_route(self):
         return self._store.get_selected_route()
-
-    def get_current_image_id(self):
-        return self._current_image_id
-
-    def get_current_distance(self):
-        return self._current_distance
 
     def get_match_image_id(self):
         return self._match_image
@@ -494,15 +484,15 @@ class Navigator(object):
         # This runs at the service process frequency.
         if self.is_active():
             _point_id = c_inference.get('navigation_point')
-            self._current_image_id = c_inference.get('navigation_image')
-            self._current_distance = c_inference.get('navigation_distance', 1.)
+            _image_id = c_inference.get('navigation_image')
+            _distance = c_inference.get('navigation_distance', 1.)
             try:
                 if _point_id >= 0:
                     _point = self._store.list_navigation_points()[_point_id]
                     if _point != self._match_point:
-                        self._match_image = self._current_image_id
-                        self._match_distance = self._current_distance
                         self._match_point = _point
+                        self._match_image = _image_id
+                        self._match_distance = _distance
                         return self._store.get_instructions(self._match_point)
             except LookupError:
                 pass
@@ -648,8 +638,6 @@ class DriverManager(Configurable):
             # If downstream processes need the teleop time then use an extra attribute.
             _nav_active = self._navigator.is_active()
             _nav_route = self._navigator.get_navigation_route() if _nav_active else None
-            _nav_current_image = self._navigator.get_current_image_id() if _nav_active else None
-            _nav_current_distance = self._navigator.get_current_distance() if _nav_active else None
             _nav_match_image = self._navigator.get_match_image_id() if _nav_active else None
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
             _nav_match_point = self._navigator.get_match_point() if _nav_active else None
@@ -659,8 +647,6 @@ class DriverManager(Configurable):
                         instruction=self._pilot_state.instruction,
                         navigation_active=_nav_active,
                         navigation_route=_nav_route,
-                        navigation_current_image=_nav_current_image,
-                        navigation_current_distance=_nav_current_distance,
                         navigation_match_image=_nav_match_image,
                         navigation_match_distance=_nav_match_distance,
                         navigation_match_point=_nav_match_point,

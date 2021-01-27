@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import collections
 import logging
 import multiprocessing
@@ -11,6 +12,7 @@ from contextlib import contextmanager
 import numpy as np
 
 from byodr.utils.option import hash_dict
+import six
 
 
 def timestamp(value=None):
@@ -49,9 +51,7 @@ class Profiler(Profile):
         self.disable()
 
 
-class Configurable(object):
-    __metaclass__ = ABCMeta
-
+class Configurable(six.with_metaclass(ABCMeta, object)):
     def __init__(self):
         self._lock = multiprocessing.Lock()
         self._errors = []

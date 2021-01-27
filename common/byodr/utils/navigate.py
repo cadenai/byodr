@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import glob
 import json
 import logging
@@ -230,7 +231,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                         self.points.append(point_name)
                         np_dir = os.path.join(self.directory, route_name, point_name)
                         _pattern = np_dir + os.path.sep
-                        im_files = [f for f_ in [glob.glob(_pattern + e) for e in ('*.jpg', '*.jpeg')] for f in f_]
+                        im_files = sorted([f for f_ in [glob.glob(_pattern + e) for e in ('*.jpg', '*.jpeg')] for f in f_])
                         if len(im_files) < 1:
                             logger.info("Skipping point '{}' as there are no images for it.".format(point_name))
                             continue

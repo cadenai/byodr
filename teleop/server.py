@@ -130,12 +130,12 @@ class MessageServerSocket(websocket.WebSocketHandler):
             recorder = None if state is None else state[3]
             speed_scale = 1. if pilot is None else float(pilot.get('speed_scale', 1))
             pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
-            pilot_current_image = -1 if pilot is None else pilot.get('navigation_current_image', -1)
-            pilot_current_sim = 1 if pilot is None else pilot.get('navigation_current_distance', 1)
             pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
             pilot_match_sim = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
             pilot_match_point = '' if pilot is None else pilot.get('navigation_match_point', '')
-            assert None not in (pilot_match_image, pilot_current_sim)
+            inference_current_image = -1 if inference is None else inference.get('navigation_image', -1)
+            inference_current_sim = 1 if inference is None else inference.get('navigation_distance', 1)
+            inference_command = 0 if inference is None else inference.get('navigation_command', 0)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -157,8 +157,9 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'nav_active': pilot_navigation_active,
                 'nav_point': pilot_match_point,
-                'nav_image': [pilot_match_image, pilot_current_image],
-                'nav_distance': [pilot_match_sim, pilot_current_sim],
+                'nav_image': [pilot_match_image, inference_current_image],
+                'nav_distance': [pilot_match_sim, inference_current_sim],
+                'nav_command': inference_command,
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))

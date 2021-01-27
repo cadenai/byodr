@@ -5,6 +5,7 @@ import logging
 import multiprocessing
 import os
 import time
+from io import open
 from threading import Semaphore
 
 import numpy as np
@@ -105,10 +106,6 @@ def image_standardization(img):
     return (img - np.mean(img)) / max(np.std(img), (1. / np.sqrt(img.size)))
 
 
-def l2_normalize(features):
-    return features / np.sqrt(np.sum(features ** 2))
-
-
 class TRTDriver(object):
     def __init__(self, model_directories, gpu_id=0):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
@@ -127,7 +124,7 @@ class TRTDriver(object):
         self.tf_brake = None
         self.tf_brake_critic = None
         self.tf_features = None
-        self.tf_distance = None
+        self.tf_euclid = None
         self.sess = None
         self.graph_def = None
 
@@ -135,7 +132,7 @@ class TRTDriver(object):
         with self._lock:
             _start = time.time()
             # Use the cached version of the most recent graph.
-            f_optimized = _newest_file(self.model_directories, '*.optimized.pb')
+            f_optimized = _newest_file(self.model_directories, 'runtime*.optimized.pb')
             if f_optimized is None or not os.path.isfile(f_optimized):
                 logger.warning("Cannot load from a missing graph.")
                 return
@@ -165,7 +162,7 @@ class TRTDriver(object):
                      'output/speed/brake',
                      'output/speed/brake_critic',
                      'output/posor/features',
-                     'output/posor/distance'
+                     'output/posor/euclid'
                      ],
                     max_batch_size=1,
                     is_dynamic_op=False,
@@ -193,7 +190,7 @@ class TRTDriver(object):
                 self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
                 self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/brake_critic:0')
                 self.tf_features = graph.get_tensor_by_name('m/output/posor/features:0')
-                self.tf_distance = graph.get_tensor_by_name('m/output/posor/distance:0')
+                self.tf_euclid = graph.get_tensor_by_name('m/output/posor/euclid:0')
 
     def deactivate(self):
         with self._lock:
@@ -211,7 +208,7 @@ class TRTDriver(object):
                     self.tf_brake,
                     self.tf_brake_critic,
                     self.tf_features,
-                    self.tf_distance
+                    self.tf_euclid
                     ]
             destination = self._zero_vector if destination is None else destination
             with self.sess.graph.as_default():
@@ -224,6 +221,6 @@ class TRTDriver(object):
                     self.input_command: [maneuver_command],
                     self.input_destination: [destination]
                 }
-                _out = map(lambda x: x.flatten(), self.sess.run(_ops, feed_dict=feed))
-                _action, _critic, _surprise, _gumbel, _brake, _br_critic, _features, _distance = _out
-                return _action, _critic, _surprise, _gumbel, _brake, _br_critic, l2_normalize(_features), _distance
+                _out = [x.flatten() for x in self.sess.run(_ops, feed_dict=feed)]
+                _action, _critic, _surprise, _gumbel, _brake, _br_critic, _features, _euclid = _out
+                return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _features, _euclid

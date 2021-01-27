@@ -12,14 +12,14 @@ import cv2
 import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
-from scipy.cluster.vq import vq
+from six.moves import range
 
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_intention
+from .inference import DynamicMomentum, TRTDriver, maneuver_intention, maneuver_index
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -29,9 +29,70 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def _norm_scale(v, min_=0., max_=1.):
-    """Zero values below the minimum but let values larger than the maximum be scaled up. """
-    return abs(max(0., v - min_) / (max_ - min_))
+def l2_normalize(features):
+    return features / np.sqrt(np.sum(features ** 2))
+
+
+class RouteMemory(object):
+    def __init__(self):
+        self._num_points = 0
+        self._eps = 1e-6
+        self._threshold = 0.100
+        # Image id index to closest observed distance.
+        self._memory = None
+        self._next_point = None
+        # Image id index to navigation point id.
+        self._code_points = None
+        # Image id index to features.
+        self._destinations = None
+        self._coordinates = None
+        self._code_book = None
+
+    def _memory_reset(self, num=None):
+        num = len(self._memory) if num is None else num
+        self._memory = np.ones(shape=(num,), dtype=np.float32)
+
+    def reset(self, n_points=0, code_points=None, destinations=None, coordinates=None):
+        self._num_points = n_points
+        self._code_points = None if code_points is None else np.array(code_points)
+        self._destinations = None if destinations is None else np.array(destinations)
+        self._coordinates = None if coordinates is None else np.array([l2_normalize(v) for v in coordinates])
+        self._code_book = None
+        if destinations is not None and coordinates is not None:
+            self._code_book = np.array([l2_normalize(v) for v in (np.concatenate([destinations, coordinates], axis=-1))])
+        self._memory_reset(0 if code_points is None else len(code_points))
+        self._next_point = None
+
+    def is_open(self):
+        return self._destinations is not None
+
+    def match(self, features, location):
+        _query = np.reshape(l2_normalize(np.concatenate([features, location], axis=-1)), [1, -1])
+        _distortions = 1. - np.dot(self._code_book, _query.T).flatten()
+        _image = _distortions.argmin()
+
+        # Select the navigation point with outlier detection and update the memory.
+        mask = np.logical_and(_distortions / (np.mean(_distortions) + self._eps) < np.std(_distortions), _distortions < self._memory)
+        _points = set(self._code_points[mask])
+
+        _match = None
+        _destination = None
+        # Select the next destination at each iteration because the next navigation point may have more than one image.
+        if len(_points) == 1:
+            _image = np.where(mask, _distortions, 999).argmin()
+            _match = next(iter(_points))
+            _prev_point = (_match - 1) % self._num_points
+            self._memory_reset()
+            self._memory[np.logical_or(self._code_points == _match, self._code_points == _prev_point)] = 0
+            self._next_point = (_match + 1) % self._num_points
+        elif self._next_point is not None:
+            mask = self._code_points == self._next_point
+            if any(mask):
+                _image = np.where(mask, _distortions, 999).argmin()
+                _destination = self._destinations[_image]
+
+        _distances = 1. - np.dot(self._coordinates, np.reshape(l2_normalize(location), [1, -1]).T).flatten()
+        return _match, _image, _distances[_image], _destination
 
 
 class Navigator(object):
@@ -40,15 +101,13 @@ class Navigator(object):
         self._routes_directory = routes_directory
         self._lock = threading.Lock()
         self._quit_event = threading.Event()
-        self._eps = 1e-6
+        self._memory = RouteMemory()
         self._fn_dave_image = None
         self._fn_alex_image = None
+        self._gumbel = None
+        self._destination = None
         self._network = None
         self._store = None
-        self._nav_point_id = None
-        self._code_points = None  # The index is the image id and the value is the navigation point id.
-        self._code_book = None
-        self._distances = None
 
     def _pull_image_features(self, image):
         return self._network.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
@@ -59,19 +118,20 @@ class Navigator(object):
         if not self._quit_event.is_set():
             with self._lock:
                 if route != self._store.get_selected_route():
-                    self._nav_point_id = None
+                    self._memory.reset()
+                    self._gumbel = None
+                    self._destination = None
                     self._store.open(route)
-                    if len(self._store) > 0:
+                    num_points = len(self._store)
+                    if num_points > 0:
                         _images = self._store.list_all_images()
-                        _points, _features, _distances = [], [], []
+                        _codes, _destinations, _coordinates = [], [], []
                         for im_id in range(len(_images)):
+                            _codes.append(self._store.get_image_navigation_point_id(im_id))
                             _a, _b = self._pull_image_features(_images[im_id])
-                            _points.append(self._store.get_image_navigation_point_id(im_id))
-                            _features.append(_a)
-                            _distances.append(_b)
-                        self._code_points = np.array(_points)
-                        self._code_book = np.array(_features)
-                        self._distances = np.reshape(np.array(_distances), [-1, 8, 3])
+                            _destinations.append(_a)
+                            _coordinates.append(_b)
+                        self._memory.reset(num_points, _codes, _destinations, _coordinates)
 
     def _check_state(self, route=None):
         if route is None:
@@ -86,57 +146,44 @@ class Navigator(object):
         with self._lock:
             _load_image = (lambda fname: self._fn_alex_image(cv2.imread(fname)))
             _store = FileSystemRouteDataSource(self._routes_directory, fn_load_image=_load_image, load_instructions=False)
+            self._store = ReloadableDataSource(_store)
             self._fn_dave_image = fn_dave_image
             self._fn_alex_image = fn_alex_image
-            self._store = ReloadableDataSource(_store)
             self._network = TRTDriver(self._model_directories, gpu_id=gpu_id)
             self._network.activate()
             self._store.load_routes()
-            self._nav_point_id = None
-            self._code_points = None
-            self._code_book = None
-            self._distances = None
+            self._memory.reset()
+            self._gumbel = None
+            self._destination = None
 
     def forward(self, image, intention, route=None):
         # This runs at the service process frequency.
         self._check_state(route)
         _dave_img = self._fn_dave_image(image, dtype=np.float32)
         _alex_img = self._fn_alex_image(image, dtype=np.float32)
+        _gumbel = self._gumbel
+        _destination = self._destination
+        _cmd_index = maneuver_index(intention)
+        _command = maneuver_intention(intention) if (_cmd_index > 0 or _gumbel is None) else _gumbel
         _out = self._network.forward(dave_image=_dave_img,
                                      alex_image=_alex_img,
-                                     maneuver_command=(maneuver_intention(intention)))
-        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, features_out, distance_out = _out
-        nav_point_id, nav_image_id, nav_distance = None, None, None
+                                     maneuver_command=_command,
+                                     destination=_destination)
+        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, features_out, euclid_out = _out
+
+        nav_point_id, nav_image_id, nav_distance, _destination = None, None, None, None
         _acquired = self._lock.acquire(False)
         try:
-            if _acquired and self._store.is_open() and self._code_book is not None:
-                nav_point_id = self._nav_point_id
-                distortions = vq(self._code_book, np.reshape(np.array([features_out]), [1, -1]))[-1]
-                # Bring the expected navigation images closer.
-                scaled = np.clip((distortions - np.std(distortions)) / (self._eps + np.mean(distortions)), 0, 1)
-                # Determine the next navigation point based on the scaled distance in case we missed one.
-                nav_image_id = np.argmin(scaled)
-                nav_distance = scaled[nav_image_id]
-                if nav_distance < 0.100:
-                    nav_point_id = self._code_points[nav_image_id]
-                    self._nav_point_id = nav_point_id
-                # Navigate on the expected images and discard past navigation images.
-                if nav_point_id is not None:
-                    _cp = self._code_points
-                    next_point_id = (nav_point_id + 1) % len(self._store)
-                    _cross = np.reshape(np.cross(np.reshape(distance_out, [8, 3]), self._distances, axis=-1), [-1, 24])
-                    signs = np.sign(np.sum(_cross, axis=-1))
-                    mask = np.logical_and(signs > 0, np.logical_or(_cp == nav_point_id, _cp == next_point_id))
-                    if any(mask):
-                        expected = np.where(mask, scaled, 1)
-                        nav_image_id = np.argmin(expected)
-                        nav_distance = expected[nav_image_id]
-                    else:
-                        nav_image_id, nav_distance = None, None
+            if _acquired and self._store.is_open() and self._memory.is_open():
+                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(features_out, euclid_out)
         finally:
             if _acquired:
                 self._lock.release()
-        return action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance
+
+        self._gumbel = None if _destination is None else gumbel_out
+        self._destination = _destination
+
+        return action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, _command
 
     def quit(self):
         # Store and network are thread-safe.
@@ -145,6 +192,11 @@ class Navigator(object):
             self._store.quit()
         if self._network is not None:
             self._network.deactivate()
+
+
+def _norm_scale(v, min_=0., max_=1.):
+    """Zero values below the minimum but let values larger than the maximum be scaled up. """
+    return abs(max(0., v - min_) / (max_ - min_))
 
 
 class TFRunner(Configurable):
@@ -205,7 +257,7 @@ class TFRunner(Configurable):
 
     def forward(self, image, intention, route=None):
         _out = self._navigator.forward(image, intention, route)
-        action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance = _out
+        action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, _command = _out
 
         critic = self._fn_corridor_norm(critic_out)
         surprise = self._fn_corridor_norm(surprise_out)
@@ -214,6 +266,9 @@ class TFRunner(Configurable):
         # Penalties to decrease desired speed.
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
+
+        _navigation_command = int(np.argmax(_command))
+        _navigation_command = float(_navigation_command - 1) + _command[_navigation_command]
 
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action_out)),
@@ -226,7 +281,8 @@ class TFRunner(Configurable):
                     internal=[float(0)],
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),
-                    navigation_distance=float(1 if nav_distance is None else nav_distance)
+                    navigation_distance=float(1 if nav_distance is None else nav_distance),
+                    navigation_command=_navigation_command
                     )
 
 
