@@ -135,18 +135,23 @@ class RouteMemory(object):
 
 
 class Navigator(object):
-    def __init__(self, model_directories, routes_directory):
-        self._model_directories = model_directories
+    def __init__(self, user_directory, internal_directory, routes_directory, gpu_id=0):
+        self._model_directories = [user_directory, internal_directory]
         self._routes_directory = routes_directory
         self._lock = threading.Lock()
         self._quit_event = threading.Event()
         self._memory = RouteMemory()
+        self._network = None
         self._fn_dave_image = None
         self._fn_alex_image = None
         self._gumbel = None
         self._destination = None
-        self._network = None
         self._store = None
+
+    def _create_network(self, gpu_id=0):
+        cache_directory, internal_directory = self._model_directories
+        network = TRTDriver(cache_directory, internal_directory, gpu_id=gpu_id)
+        return network
 
     def _pull_image_features(self, image):
         return self._network.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
@@ -188,7 +193,9 @@ class Navigator(object):
             self._store = ReloadableDataSource(_store)
             self._fn_dave_image = fn_dave_image
             self._fn_alex_image = fn_alex_image
-            self._network = TRTDriver(self._model_directories, gpu_id=gpu_id)
+            if self._network is not None:
+                self._network.deactivate()
+            self._network = self._create_network(gpu_id)
             self._network.activate()
             self._store.load_routes()
             self._memory.reset()
@@ -239,10 +246,10 @@ def _norm_scale(v, min_=0., max_=1.):
 
 
 class TFRunner(Configurable):
-    def __init__(self, model_directories, routes_directory=None):
+    def __init__(self, user_directory, internal_directory, routes_directory=None, config=None):
         super(TFRunner, self).__init__()
-        self._navigator = Navigator(model_directories, routes_directory)
-        self._gpu_id = 0
+        self._gpu_id = 0 if config is None else parse_option('gpu.id', int, 0, [], **config)
+        self._navigator = Navigator(user_directory, internal_directory, routes_directory, gpu_id=self._gpu_id)
         self._process_frequency = 10
         self._steering_scale_left = 1
         self._steering_scale_right = 1
@@ -331,7 +338,9 @@ class InferenceApplication(Application):
         self._config_dir = config_dir
         self._internal_models = internal_models
         self._user_models = user_models
-        self._runner = TFRunner([user_models, internal_models], routes_directory=navigation_routes) if runner is None else runner
+        if user_models is not None and not os.path.exists(user_models):
+            os.makedirs(user_models, mode=0o755)
+        self._runner = TFRunner(user_models, internal_models, navigation_routes, config=self._config()) if runner is None else runner
         self.publisher = None
         self.camera = None
         self.ipc_server = None

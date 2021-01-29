@@ -107,10 +107,10 @@ def image_standardization(img):
 
 
 class TRTDriver(object):
-    def __init__(self, model_directories, gpu_id=0):
+    def __init__(self, cache_directory, internal_directory, gpu_id=0):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
-        _list = (isinstance(model_directories, tuple) or isinstance(model_directories, list))
-        self.model_directories = model_directories if _list else [model_directories]
+        self._gpu_id = gpu_id
+        self.model_directories = [cache_directory, internal_directory]
         self._lock = multiprocessing.Lock()
         self._zero_vector = np.zeros(shape=(150,), dtype=np.float32)
         self.input_dave = None
@@ -127,48 +127,56 @@ class TRTDriver(object):
         self.tf_euclid = None
         self.sess = None
 
+    def _compile(self):
+        # Find the most recent optimized graph to compile.
+        f_optimized = _newest_file(self.model_directories, 'runtime*.optimized.pb')
+        if f_optimized is None or not os.path.isfile(f_optimized):
+            logger.warning("Missing optimized graph.")
+            return
+
+        # The tensor runtime engine graph is device specific - if necessary remove the compiled engine and rebuild on-device.
+        # The compile step may have previously been interrupted due to memory constraints resulting in an under optimized graph.
+        # Use the cache directory to store the compiled graphs.
+        # The compilation is gpu specific.
+        # The engine plan file is generated on an incompatible device, expecting compute x.x got compute y.y, please rebuild.)
+        file_name, dir_name = '{}_{}'.format(self._gpu_id, os.path.basename(f_optimized)), self.model_directories[0]
+        f_runtime = os.path.join(dir_name, os.path.splitext(os.path.splitext(file_name)[0])[0] + '.trt.pb')
+        f_optimized_size = float(os.stat(f_optimized).st_size)
+        f_runtime_size = float(os.stat(f_runtime).st_size) if os.path.isfile(f_runtime) else f_optimized_size
+        # Determine whether to rebuild by file size ratio.
+        _size_ratio = f_runtime_size / f_optimized_size
+        if _size_ratio < 2.5:
+            trt_graph = trt.create_inference_graph(
+                get_frozen_graph(f_optimized),
+                ['output/steer/steering',
+                 'output/steer/critic',
+                 'output/steer/surprise',
+                 'output/steer/gumbel',
+                 'output/speed/brake',
+                 'output/speed/brake_critic',
+                 'output/posor/features',
+                 'output/posor/euclid'
+                 ],
+                max_batch_size=1,
+                is_dynamic_op=False,
+                precision_mode='FP32',
+                minimum_segment_size=10
+            )
+            with open(f_runtime, 'wb') as output_file:
+                output_file.write(trt_graph.SerializeToString())
+        return f_runtime
+
     def activate(self):
         with self._lock:
             _start = time.time()
-            # Use the cached version of the most recent graph.
-            f_optimized = _newest_file(self.model_directories, 'runtime*.optimized.pb')
-            if f_optimized is None or not os.path.isfile(f_optimized):
-                logger.warning("Cannot load from a missing graph.")
-                return
-
-            # The tensor runtime engine graph is device specific - if necessary remove the compiled engine and rebuild on-device.
-            # The compile step may have previously been interrupted due to memory constraints resulting in an under optimized graph.
-            # Determine whether to rebuild by file size ratio.
-            f_runtime = os.path.splitext(os.path.splitext(f_optimized)[0])[0] + '.trt.pb'
-            f_optimized_size = float(os.stat(f_optimized).st_size)
-            f_runtime_size = float(os.stat(f_runtime).st_size) if os.path.isfile(f_runtime) else f_optimized_size
-            _size_ratio = f_runtime_size / f_optimized_size
-            if _size_ratio < 1.3:
-                trt_graph = trt.create_inference_graph(
-                    get_frozen_graph(f_optimized),
-                    ['output/steer/steering',
-                     'output/steer/critic',
-                     'output/steer/surprise',
-                     'output/steer/gumbel',
-                     'output/speed/brake',
-                     'output/speed/brake_critic',
-                     'output/posor/features',
-                     'output/posor/euclid'
-                     ],
-                    max_batch_size=1,
-                    is_dynamic_op=False,
-                    precision_mode='FP32',
-                    minimum_segment_size=10
-                )
-                with open(f_runtime, 'wb') as output_file:
-                    output_file.write(trt_graph.SerializeToString())
-
             graph = tf.Graph()
             with graph.as_default():
                 config = tf.ConfigProto()
-                config.gpu_options.allow_growth = True
-                # config.gpu_options.per_process_gpu_memory_fraction = 0.20
+                # config.gpu_options.allow_growth = True
+                config.gpu_options.per_process_gpu_memory_fraction = 0.25
                 self.sess = tf.Session(config=config, graph=graph)
+                # Compile after session creation for tf memory management.
+                f_runtime = self._compile()
                 _nodes = _create_input_nodes()
                 self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
                 _inputs = {
@@ -219,4 +227,5 @@ class TRTDriver(object):
                 }
                 _out = [x.flatten() for x in self.sess.run(_ops, feed_dict=feed)]
                 _action, _critic, _surprise, _gumbel, _brake, _br_critic, _features, _euclid = _out
+                _gumbel = np.insert(_gumbel, 0, values=0, axis=0)
                 return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _features, _euclid
