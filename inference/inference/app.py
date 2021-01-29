@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import argparse
+import collections
 import glob
 import logging
 import os
@@ -12,6 +13,7 @@ import cv2
 import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
+from scipy.stats import median_absolute_deviation
 from six.moves import range
 
 from byodr.utils import timestamp, Configurable, Application
@@ -37,10 +39,9 @@ class RouteMemory(object):
     def __init__(self):
         self._num_points = 0
         self._eps = 1e-6
-        self._threshold = 0.100
-        # Image id index to closest observed distance.
-        self._memory = None
-        self._next_point = None
+        self._horizon = 100
+        self._linear = collections.deque(maxlen=self._horizon)
+        self._navigation_point = None
         # Image id index to navigation point id.
         self._code_points = None
         # Image id index to features.
@@ -48,20 +49,67 @@ class RouteMemory(object):
         self._coordinates = None
         self._code_book = None
 
-    def _memory_reset(self, num=None):
-        num = len(self._memory) if num is None else num
-        self._memory = np.ones(shape=(num,), dtype=np.float32)
+    def _reset(self):
+        self._navigation_point = None
+        self._code_book = None
+        self._linear.clear()
+
+    def _x_intercept(self):
+        n_lin = len(self._linear)
+        xi = -1000
+        if n_lin > self._horizon // 2:
+            # Match y = mx + c.
+            x = np.arange(n_lin, dtype=np.float32)
+            m, c = np.linalg.lstsq(np.vstack([x, np.ones(n_lin)]).T, np.array(self._linear, dtype=np.float32), rcond=None)[0]
+            # At which x is y zero.
+            xi = -c / m
+        return xi
+
+    def _match_intercept(self, distortions, distances):
+        _image = None
+        _match = None
+        _destination = None
+        _distance = 1.
+        xi = self._x_intercept()
+        if self._navigation_point is not None:
+            _next_point = (self._navigation_point + 1) % self._num_points
+            mask = self._code_points == _next_point
+            if len(distortions[mask]) > 0:
+                _image = np.where(mask, distortions, 999).argmin()
+                _destination = self._destinations[_image]
+                _distance = distances[_image]
+                # Enter the magic numbers.
+                if (0 < xi < 1.6 * self._horizon) or _distance < .100:
+                    _match = _next_point
+        self._linear.append(_distance)
+        return _match, _image, xi, _destination
+
+    def _match_outliers(self, distortions):
+        _mu, _std = np.mean(distortions) + self._eps, np.std(distortions)
+        q75, q25 = np.percentile(distortions, [75, 25])
+        iqr = q75 - q25
+
+        _match = None
+        _image = distortions.argmin()
+        mask1 = distortions / _mu < _std
+        mask2 = distortions < q25 - 1.5 * iqr
+        mask3 = distortions < median_absolute_deviation(distortions, axis=-1)
+        mask = np.where(mask1, 1, 0) + np.where(mask2, 1, 0) + np.where(mask3, 1, 0) > 2
+        points = set(self._code_points[mask])
+        if len(points) > 0:
+            _image = np.where(mask, distortions, 999).argmin()
+        if len(points) == 1:
+            _match = next(iter(points))
+        return _match, _image
 
     def reset(self, n_points=0, code_points=None, destinations=None, coordinates=None):
+        self._reset()
         self._num_points = n_points
         self._code_points = None if code_points is None else np.array(code_points)
         self._destinations = None if destinations is None else np.array(destinations)
         self._coordinates = None if coordinates is None else np.array([l2_normalize(v) for v in coordinates])
-        self._code_book = None
         if destinations is not None and coordinates is not None:
             self._code_book = np.array([l2_normalize(v) for v in (np.concatenate([destinations, coordinates], axis=-1))])
-        self._memory_reset(0 if code_points is None else len(code_points))
-        self._next_point = None
 
     def is_open(self):
         return self._destinations is not None
@@ -69,30 +117,21 @@ class RouteMemory(object):
     def match(self, features, location):
         _query = np.reshape(l2_normalize(np.concatenate([features, location], axis=-1)), [1, -1])
         _distortions = 1. - np.dot(self._code_book, _query.T).flatten()
-        _image = _distortions.argmin()
-
-        # Select the navigation point with outlier detection and update the memory.
-        mask = np.logical_and(_distortions / (np.mean(_distortions) + self._eps) < np.std(_distortions), _distortions < self._memory)
-        _points = set(self._code_points[mask])
-
-        _match = None
-        _destination = None
-        # Select the next destination at each iteration because the next navigation point may have more than one image.
-        if len(_points) == 1:
-            _image = np.where(mask, _distortions, 999).argmin()
-            _match = next(iter(_points))
-            _prev_point = (_match - 1) % self._num_points
-            self._memory_reset()
-            self._memory[np.logical_or(self._code_points == _match, self._code_points == _prev_point)] = 0
-            self._next_point = (_match + 1) % self._num_points
-        elif self._next_point is not None:
-            mask = self._code_points == self._next_point
-            if any(mask):
-                _image = np.where(mask, _distortions, 999).argmin()
-                _destination = self._destinations[_image]
-
         _distances = 1. - np.dot(self._coordinates, np.reshape(l2_normalize(location), [1, -1]).T).flatten()
-        return _match, _image, _distances[_image], _destination
+
+        _match1, _image1, x_intercept, _destination = self._match_intercept(_distortions, _distances)
+        _match2, _image2 = self._match_outliers(_distortions)
+
+        _match = _match2 if _match1 is None else _match1
+        _image = _image2 if (_match2 is not None or _image1 is None) else _image1
+        _distance = _distances[_image]
+
+        if _match is not None and self._navigation_point != _match:
+            self._navigation_point = _match
+            self._linear.clear()
+            logger.info("Match {} distance {:.2f} intercept {:.2f}".format(_match, _distance, x_intercept))
+
+        return _match, _image, _distance, _destination
 
 
 class Navigator(object):

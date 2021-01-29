@@ -126,7 +126,6 @@ class TRTDriver(object):
         self.tf_features = None
         self.tf_euclid = None
         self.sess = None
-        self.graph_def = None
 
     def activate(self):
         with self._lock:
@@ -136,14 +135,6 @@ class TRTDriver(object):
             if f_optimized is None or not os.path.isfile(f_optimized):
                 logger.warning("Cannot load from a missing graph.")
                 return
-
-            graph = tf.Graph()
-            with graph.as_default():
-                config = tf.ConfigProto()
-                # Grab the memory for the tensor-rt engine compilation.
-                # config.gpu_options.allow_growth = True
-                config.gpu_options.per_process_gpu_memory_fraction = 0.33
-                self.sess = tf.Session(config=config, graph=graph)
 
             # The tensor runtime engine graph is device specific - if necessary remove the compiled engine and rebuild on-device.
             # The compile step may have previously been interrupted due to memory constraints resulting in an under optimized graph.
@@ -171,9 +162,13 @@ class TRTDriver(object):
                 )
                 with open(f_runtime, 'wb') as output_file:
                     output_file.write(trt_graph.SerializeToString())
-            self.graph_def = _load_definition(f_runtime)
-            logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
+
+            graph = tf.Graph()
             with graph.as_default():
+                config = tf.ConfigProto()
+                config.gpu_options.allow_growth = True
+                # config.gpu_options.per_process_gpu_memory_fraction = 0.20
+                self.sess = tf.Session(config=config, graph=graph)
                 _nodes = _create_input_nodes()
                 self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
                 _inputs = {
@@ -182,7 +177,8 @@ class TRTDriver(object):
                     'input/maneuver_command': self.input_command,
                     'input/next_vector': self.input_destination
                 }
-                tf.import_graph_def(self.graph_def, input_map=_inputs, name='m')
+                tf.import_graph_def(_load_definition(f_runtime), input_map=_inputs, name='m')
+                logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
                 self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
                 self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
                 self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
