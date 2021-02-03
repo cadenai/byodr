@@ -13,6 +13,7 @@ import cv2
 import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
+from scipy.special import softmax
 from scipy.stats import median_absolute_deviation
 from six.moves import range
 
@@ -31,8 +32,8 @@ else:
 logger = logging.getLogger(__name__)
 
 
-def l2_normalize(features):
-    return features / np.sqrt(np.sum(features ** 2))
+# def l2_normalize(features):
+#     return features / np.sqrt(np.sum(features ** 2))
 
 
 class RouteMemory(object):
@@ -45,16 +46,21 @@ class RouteMemory(object):
         # Image id index to navigation point id.
         self._code_points = None
         # Image id index to features.
-        self._destinations = None
-        self._coordinates = None
         self._code_book = None
+        self._keys = None
+        self._values = None
+        self._evidence = None
 
     def _reset(self):
         self._navigation_point = None
         self._code_book = None
+        self._keys = None
+        self._values = None
         self._linear.clear()
+        self._evidence = None
 
-    def _x_intercept(self):
+    def _x_intercept(self, d):
+        self._linear.append(d)
         n_lin = len(self._linear)
         xi = -1000
         if n_lin > self._horizon // 2:
@@ -65,88 +71,104 @@ class RouteMemory(object):
             xi = -c / m
         return xi
 
-    def _match_intercept(self, distortions, distances):
-        _image = None
-        _match = None
-        _destination = None
-        _distance = 1.
-        xi = self._x_intercept()
-        if self._navigation_point is not None:
-            _next_point = (self._navigation_point + 1) % self._num_points
-            mask = self._code_points == _next_point
-            if len(distortions[mask]) > 0:
-                _image = np.where(mask, distortions, 999).argmin()
-                _destination = self._destinations[_image]
-                _distance = distances[_image]
-                # Enter the magic numbers.
-                if (0 < xi < 1.6 * self._horizon) or _distance < .100:
-                    _match = _next_point
-        self._linear.append(_distance)
-        return _match, _image, xi, _destination
-
-    def _match_outliers(self, distortions):
-        _mu, _std = np.mean(distortions) + self._eps, np.std(distortions)
-        q75, q25 = np.percentile(distortions, [75, 25])
+    def _outlier_stats(self, distances):
+        _mu, _std = np.mean(distances) + self._eps, np.std(distances)
+        q75, q25 = np.percentile(distances, [75, 25])
         iqr = q75 - q25
+        return _mu, _std, q25 - 1.5 * iqr, median_absolute_deviation(distances, axis=-1)
 
+    def _match_outliers(self, distances):
         _match = None
-        _image = distortions.argmin()
-        mask1 = distortions / _mu < _std
-        mask2 = distortions < q25 - 1.5 * iqr
-        mask3 = distortions < median_absolute_deviation(distortions, axis=-1)
+        _mu, _std, _lqr, _mad = self._outlier_stats(distances)
+        _image = distances.argmin()
+        mask1 = distances / _mu < _std
+        mask2 = distances < _lqr
+        mask3 = distances < _mad
         mask = np.where(mask1, 1, 0) + np.where(mask2, 1, 0) + np.where(mask3, 1, 0) > 2
         points = set(self._code_points[mask])
         if len(points) > 0:
-            _image = np.where(mask, distortions, 999).argmin()
+            _image = np.where(mask, distances, 999).argmin()
         if len(points) == 1:
             _match = next(iter(points))
         return _match, _image
 
-    def reset(self, n_points=0, code_points=None, destinations=None, coordinates=None):
+    def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
         self._reset()
         self._num_points = n_points
         self._code_points = None if code_points is None else np.array(code_points)
-        self._destinations = None if destinations is None else np.array(destinations)
-        self._coordinates = None if coordinates is None else np.array([l2_normalize(v) for v in coordinates])
-        if destinations is not None and coordinates is not None:
-            self._code_book = np.array([l2_normalize(v) for v in (np.concatenate([destinations, coordinates], axis=-1))])
+        self._code_book = None if coordinates is None else np.array(coordinates)
+        self._keys = None if keys is None else np.array(keys)
+        self._values = None if values is None else np.array(values)
+        self._evidence = None if n_points < 1 else np.zeros(n_points, dtype=np.float32)
 
     def is_open(self):
-        return self._destinations is not None
+        return self._code_book is not None
 
-    def match(self, features, location):
-        _query = np.reshape(l2_normalize(np.concatenate([features, location], axis=-1)), [1, -1])
-        _distortions = 1. - np.dot(self._code_book, _query.T).flatten()
-        _distances = 1. - np.dot(self._coordinates, np.reshape(l2_normalize(location), [1, -1]).T).flatten()
+    def match_d1(self, features, query):
+        _match = None
+        _distances = 1. - np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
+        _selections = softmax(np.matmul(query.reshape([1, -1]), self._keys.T)).flatten()
 
-        _match1, _image1, x_intercept, _destination = self._match_intercept(_distortions, _distances)
-        _match2, _image2 = self._match_outliers(_distortions)
+        # Gather and weigh evidence.
+        momentum = .90
 
-        _match = _match2 if _match1 is None else _match1
-        _image = _image2 if (_match2 is not None or _image1 is None) else _image1
-        _distance = _distances[_image]
+        # Outlier evidence.
+        _mu, _std, _lqr, _mad = self._outlier_stats(_distances)
+        self._evidence[self._code_points[_distances / _mu < _std]] += .1
+        self._evidence[self._code_points[_distances < _lqr]] += .1
+        self._evidence[self._code_points[_distances < _mad]] += .1
 
+        # Cap and momentum.
+        self._evidence *= momentum
+        self._evidence = np.clip(self._evidence, -1, .30)
+
+        # Evidence from the distance.
+        d_iid = _distances.argmin()
+        d_prob = (1 - _distances[d_iid])
+
+        # Evidence penalty from the selection.
+        s_prob = _selections[_selections.argmax()]
+        self._evidence[self._code_points[d_iid]] += d_prob * s_prob * 1.1
+
+        # Select the destination.
+        if self._navigation_point is None:
+            mask = np.ones(len(self._code_points), dtype=np.bool)
+        else:
+            mask = self._code_points == (self._navigation_point + 1) % self._num_points
+        s_iid = np.where(mask, _selections, 0).argmax()
+        _destination = self._values[s_iid]
+
+        # The point with highest evidence.
+        _p = self._evidence.argmax()
+        if self._evidence[_p] > .99:
+            _match = _p
+            self._evidence[_p] = -1
+
+        _image = s_iid
         if _match is not None and self._navigation_point != _match:
             self._navigation_point = _match
-            self._linear.clear()
-            logger.info("Match {} distance {:.2f} intercept {:.2f}".format(_match, _distance, x_intercept))
+            _image = d_iid
+            logger.info("Match {} distance {:.2f} soft {:.2f}".format(_match, d_prob, s_prob))
 
-        return _match, _image, _distance, _destination
+        return _match, _image, max(0, self._evidence[self._code_points[_image]]), _destination
+
+    def match(self, features, query):
+        return self.match_d1(features, query)
 
 
 class Navigator(object):
-    def __init__(self, user_directory, internal_directory, routes_directory, gpu_id=0):
+    def __init__(self, user_directory, internal_directory, routes_directory):
         self._model_directories = [user_directory, internal_directory]
         self._routes_directory = routes_directory
         self._lock = threading.Lock()
         self._quit_event = threading.Event()
         self._memory = RouteMemory()
         self._network = None
+        self._store = None
         self._fn_dave_image = None
         self._fn_alex_image = None
         self._gumbel = None
         self._destination = None
-        self._store = None
 
     def _create_network(self, gpu_id=0):
         cache_directory, internal_directory = self._model_directories
@@ -154,8 +176,8 @@ class Navigator(object):
         return network
 
     def _pull_image_features(self, image):
-        return self._network.forward(dave_image=self._fn_dave_image(image, dtype=np.float32),
-                                     alex_image=self._fn_alex_image(image, dtype=np.float32))[-2:]
+        return self._network.features(dave_image=self._fn_dave_image(image, dtype=np.float32),
+                                      alex_image=self._fn_alex_image(image, dtype=np.float32))
 
     def _route_open(self, route):
         # This may take a while.
@@ -169,13 +191,14 @@ class Navigator(object):
                     num_points = len(self._store)
                     if num_points > 0:
                         _images = self._store.list_all_images()
-                        _codes, _destinations, _coordinates = [], [], []
+                        _codes, _coordinates, _keys, _values = [], [], [], []
                         for im_id in range(len(_images)):
                             _codes.append(self._store.get_image_navigation_point_id(im_id))
-                            _a, _b = self._pull_image_features(_images[im_id])
-                            _destinations.append(_a)
-                            _coordinates.append(_b)
-                        self._memory.reset(num_points, _codes, _destinations, _coordinates)
+                            _c, _k, _v = self._pull_image_features(_images[im_id])
+                            _coordinates.append(_c)
+                            _keys.append(_k)
+                            _values.append(_v)
+                        self._memory.reset(num_points, _codes, _coordinates, _keys, _values)
 
     def _check_state(self, route=None):
         if route is None:
@@ -210,18 +233,19 @@ class Navigator(object):
         _gumbel = self._gumbel
         _destination = self._destination
         _cmd_index = maneuver_index(intention)
-        _command = maneuver_intention(intention) if (_cmd_index > 0 or _gumbel is None) else _gumbel
+        # _command = maneuver_intention(intention) if (_cmd_index > 0 or _gumbel is None) else _gumbel
+        _command = maneuver_intention(intention) if (_gumbel is None) else _gumbel
         _out = self._network.forward(dave_image=_dave_img,
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
                                      destination=_destination)
-        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, features_out, euclid_out = _out
+        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, coord_out, query_out = _out
 
         nav_point_id, nav_image_id, nav_distance, _destination = None, None, None, None
         _acquired = self._lock.acquire(False)
         try:
             if _acquired and self._store.is_open() and self._memory.is_open():
-                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(features_out, euclid_out)
+                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coord_out, query_out)
         finally:
             if _acquired:
                 self._lock.release()
@@ -246,10 +270,10 @@ def _norm_scale(v, min_=0., max_=1.):
 
 
 class TFRunner(Configurable):
-    def __init__(self, user_directory, internal_directory, routes_directory=None, config=None):
+    def __init__(self, user_directory, internal_directory, routes_directory=None):
         super(TFRunner, self).__init__()
-        self._gpu_id = 0 if config is None else parse_option('gpu.id', int, 0, [], **config)
-        self._navigator = Navigator(user_directory, internal_directory, routes_directory, gpu_id=self._gpu_id)
+        self._gpu_id = 0
+        self._navigator = Navigator(user_directory, internal_directory, routes_directory)
         self._process_frequency = 10
         self._steering_scale_left = 1
         self._steering_scale_right = 1
@@ -340,7 +364,7 @@ class InferenceApplication(Application):
         self._user_models = user_models
         if user_models is not None and not os.path.exists(user_models):
             os.makedirs(user_models, mode=0o755)
-        self._runner = TFRunner(user_models, internal_models, navigation_routes, config=self._config()) if runner is None else runner
+        self._runner = TFRunner(user_models, internal_models, navigation_routes) if runner is None else runner
         self.publisher = None
         self.camera = None
         self.ipc_server = None
