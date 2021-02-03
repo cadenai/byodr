@@ -437,6 +437,7 @@ def _translate_navigation_direction(direction):
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
+        self._open_lock = threading.Lock()
         self._match_point = None
         self._match_image = None
         self._match_distance = None
@@ -448,7 +449,14 @@ class Navigator(object):
         self._store.load_routes()
 
     def _open_store(self, route):
-        self._store.open(route)
+        # Even though store is thread safe prevent concurrent store open processes which are started by threads in this class.
+        _acquired = self._open_lock.acquire(False)
+        try:
+            if _acquired:
+                self._store.open(route)
+        finally:
+            if _acquired:
+                self._open_lock.release()
 
     def close(self):
         self._store.close()
@@ -601,12 +609,14 @@ class DriverManager(Configurable):
             logger.info("Cruise speed set to '{}'.".format(new_val))
 
     def _set_direction(self, turn='general.fallback'):
-        with self._lock:
-            self._pilot_state.instruction = turn
+        pass
+        # with self._lock:
+        #     self._pilot_state.instruction = turn
 
     def teleop_direction(self, turn='general.fallback'):
-        with self._lock:
-            self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
+        pass
+        # with self._lock:
+        #     self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
 
     def get_driver_ctl(self):
         return self._driver_ctl
