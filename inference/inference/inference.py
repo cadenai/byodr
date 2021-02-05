@@ -52,7 +52,6 @@ def _create_input_nodes():
     input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 66, 200, 3], name='input/dave_image')
     input_alex = tf.placeholder(dtype=tf.float32, shape=[1, 100, 200, 3], name='input/alex_image')
     input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
-    # input_source = tf.placeholder(dtype=tf.float32, shape=[1, 100], name='input/current_source')
     input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 150], name='input/current_destination')
     return input_dave, input_alex, input_command, input_destination
 

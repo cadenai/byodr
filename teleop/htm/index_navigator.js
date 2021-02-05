@@ -2,6 +2,7 @@ class NavigatorController {
     constructor() {
         const location = document.location;
         this.nav_path = location.protocol + "//" + location.hostname + ":" + location.port + "/ws/nav";
+        this.random_id = Math.random();  // For browser control of navigation image urls.
         this.el_image = null;
         this.el_image_width = null;
         this.el_image_height = null;
@@ -83,13 +84,14 @@ class NavigatorController {
         this.el_route_select_prev = $('span#navigation_route_sel_prev');
         this.el_route_select_next = $('span#navigation_route_sel_next');
         this.schedule_navigation_image_update();
+        this.el_point.text('');
     }
     schedule_navigation_image_update() {
         var image_src = this.backend_active? 'icon_pause.png?v=0.45.0' : 'icon_play.png?v=0.45.0';
-        const image_id = this.matched_image_id;
         if (this.backend_active && !this.in_mouse_over) {
-            // Randomize the url so the browser does not cache the image - it changes on the server at route switches.
-            image_src =  this.nav_path + '?im=' + image_id + '&n=' + Math.random();
+            const image_id = this.matched_image_id;
+            const route = this.selected_route;
+            image_src =  this.nav_path + '?im=' + image_id + '&r=' + route + '&n=' + this.random_id;
         }
         setTimeout(function() {
             navigator_controller.render_navigation_image(image_src);

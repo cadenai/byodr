@@ -14,7 +14,6 @@ import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
 from scipy.special import softmax
-from scipy.stats import median_absolute_deviation
 from six.moves import range
 
 from byodr.utils import timestamp, Configurable, Application
@@ -38,122 +37,106 @@ logger = logging.getLogger(__name__)
 
 class RouteMemory(object):
     def __init__(self):
+        self._horizon = 50
+        self._evidence = collections.deque(maxlen=self._horizon)
         self._num_points = 0
-        self._eps = 1e-6
-        self._horizon = 100
-        self._linear = collections.deque(maxlen=self._horizon)
+        self._num_codes = 0
         self._navigation_point = None
+        self._tracking = None
+        self._track_gradient = 0
         # Image id index to navigation point id.
         self._code_points = None
         # Image id index to features.
         self._code_book = None
-        self._keys = None
-        self._values = None
-        self._evidence = None
+        self._code_diagonal = None
+        self._destination_keys = None
+        self._destination_values = None
+
+    def _track_reset(self, image=None, gradient=0):
+        self._evidence.clear()
+        self._tracking = image
+        self._track_gradient = gradient
 
     def _reset(self):
+        self._track_reset()
         self._navigation_point = None
         self._code_book = None
-        self._keys = None
-        self._values = None
-        self._linear.clear()
-        self._evidence = None
+        self._code_diagonal = None
+        self._destination_keys = None
+        self._destination_values = None
 
-    def _x_intercept(self, d):
-        self._linear.append(d)
-        n_lin = len(self._linear)
-        xi = -1000
-        if n_lin > self._horizon // 2:
-            # Match y = mx + c.
-            x = np.arange(n_lin, dtype=np.float32)
-            m, c = np.linalg.lstsq(np.vstack([x, np.ones(n_lin)]).T, np.array(self._linear, dtype=np.float32), rcond=None)[0]
-            # At which x is y zero.
-            xi = -c / m
-        return xi
+    def _trailing_error(self, window=10):
+        return 1 if len(self._evidence) < 1 else np.mean(np.array(self._evidence)[-window:])
 
-    def _outlier_stats(self, distances):
-        _mu, _std = np.mean(distances) + self._eps, np.std(distances)
-        q75, q25 = np.percentile(distances, [75, 25])
-        iqr = q75 - q25
-        return _mu, _std, q25 - 1.5 * iqr, median_absolute_deviation(distances, axis=-1)
+    def _destination(self):
+        return None if self._tracking is None else self._destination_values[self._tracking]
 
-    def _match_outliers(self, distances):
-        _match = None
-        _mu, _std, _lqr, _mad = self._outlier_stats(distances)
-        _image = distances.argmin()
-        mask1 = distances / _mu < _std
-        mask2 = distances < _lqr
-        mask3 = distances < _mad
-        mask = np.where(mask1, 1, 0) + np.where(mask2, 1, 0) + np.where(mask3, 1, 0) > 2
-        points = set(self._code_points[mask])
-        if len(points) > 0:
-            _image = np.where(mask, distances, 999).argmin()
-        if len(points) == 1:
-            _match = next(iter(points))
-        return _match, _image
+    def _update_evidence(self, value):
+        _image = self._tracking
+        self._track_gradient = .9 * self._track_gradient + .1 * (value - (self._evidence[-1] if len(self._evidence) > 0 else 0))
+        self._evidence.append(value)
 
     def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
         self._reset()
         self._num_points = n_points
+        self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
         self._code_book = None if coordinates is None else np.array(coordinates)
-        self._keys = None if keys is None else np.array(keys)
-        self._values = None if values is None else np.array(values)
-        self._evidence = None if n_points < 1 else np.zeros(n_points, dtype=np.float32)
+        self._code_diagonal = None if self._code_book is None else np.diag(np.dot(self._code_book, self._code_book.T))
+        self._destination_keys = None if keys is None else np.array(keys)
+        self._destination_values = None if values is None else np.array(values)
 
     def is_open(self):
         return self._code_book is not None
 
-    def match_d1(self, features, query):
+    def match_h1(self, features, query):
+        _point = self._navigation_point
+        n_points = self._num_points
+        n_codes = self._num_codes
+        code_points = self._code_points
+        _probabilities = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
+        _errors = (np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten() - self._code_diagonal) ** 2
+
+        # Assume the next probable image.
+        if self._tracking is None:
+            mask = np.ones(n_codes, dtype=np.bool) if _point is None else code_points == (_point + 1) % n_points
+            self._track_reset(np.where(mask, _probabilities, -1).argmax())
+
+        # We could be tracking the wrong image.
+        has_evidence = len(self._evidence) > 20
+        _score = _errors + (1 - _probabilities) * _errors
+        _competitor = np.where(np.zeros(n_codes, dtype=np.bool) if _point is None else code_points == _point, 100, _score).argmin()
+        if has_evidence and _competitor != self._tracking and _probabilities[_competitor] > .90:
+            self._track_reset(_competitor)
+
+        # Skip further processing unless we are in proximity of something.
+        if _probabilities[_probabilities.argmax()] < .5:
+            _match = None
+            _image = self._tracking
+            _distance = self._trailing_error()
+            _destination = self._destination()
+            return _match, _image, _distance, _destination
+
+        # Update tracking with rate of change with momentum.
+        self._update_evidence(_errors[self._tracking])
+
+        has_evidence = len(self._evidence) > 20
+        _distance = self._trailing_error(window=20)
+        _destination = self._destination()
+
         _match = None
-        _distances = 1. - np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
-        _selections = softmax(np.matmul(query.reshape([1, -1]), self._keys.T)).flatten()
+        _image = self._tracking
 
-        # Gather and weigh evidence.
-        momentum = .90
-
-        # Outlier evidence.
-        _mu, _std, _lqr, _mad = self._outlier_stats(_distances)
-        self._evidence[self._code_points[_distances / _mu < _std]] += .1
-        self._evidence[self._code_points[_distances < _lqr]] += .1
-        self._evidence[self._code_points[_distances < _mad]] += .1
-
-        # Cap and momentum.
-        self._evidence *= momentum
-        self._evidence = np.clip(self._evidence, -1, .30)
-
-        # Evidence from the distance.
-        d_iid = _distances.argmin()
-        d_prob = (1 - _distances[d_iid])
-
-        # Evidence penalty from the selection.
-        s_prob = _selections[_selections.argmax()]
-        self._evidence[self._code_points[d_iid]] += d_prob * s_prob * 1.1
-
-        # Select the destination.
-        if self._navigation_point is None:
-            mask = np.ones(len(self._code_points), dtype=np.bool)
-        else:
-            mask = self._code_points == (self._navigation_point + 1) % self._num_points
-        s_iid = np.where(mask, _selections, 0).argmax()
-        _destination = self._values[s_iid]
-
-        # The point with highest evidence.
-        _p = self._evidence.argmax()
-        if self._evidence[_p] > .99:
-            _match = _p
-            self._evidence[_p] = -1
-
-        _image = s_iid
-        if _match is not None and self._navigation_point != _match:
+        if has_evidence and _distance > np.min(self._evidence) < .200 and self._track_gradient > 0:
+            _match = code_points[_image]
             self._navigation_point = _match
-            _image = d_iid
-            logger.info("Match {} distance {:.2f} soft {:.2f}".format(_match, d_prob, s_prob))
+            self._track_reset()
+            logger.info("Match {} probability {:.2f} error {:.2f}".format(_match, _probabilities[_image], _distance))
 
-        return _match, _image, max(0, self._evidence[self._code_points[_image]]), _destination
+        return _match, _image, _distance, _destination
 
     def match(self, features, query):
-        return self.match_d1(features, query)
+        return self.match_h1(features, query)
 
 
 class Navigator(object):
@@ -234,7 +217,7 @@ class Navigator(object):
         _destination = self._destination
         _cmd_index = maneuver_index(intention)
         # _command = maneuver_intention(intention) if (_cmd_index > 0 or _gumbel is None) else _gumbel
-        _command = maneuver_intention(intention) if (_gumbel is None) else _gumbel
+        _command = maneuver_intention() if (_gumbel is None) else _gumbel
         _out = self._network.forward(dave_image=_dave_img,
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
