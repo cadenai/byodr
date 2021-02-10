@@ -21,7 +21,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_intention, maneuver_index
+from .inference import DynamicMomentum, TRTDriver, maneuver_intention, maneuver_index, index_maneuver
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 class RouteMemory(object):
     def __init__(self):
+        self._recognition_threshold = 0
         self._horizon = 50
         self._evidence = collections.deque(maxlen=self._horizon)
         self._num_points = 0
@@ -75,6 +76,9 @@ class RouteMemory(object):
         _image = self._tracking
         self._track_gradient = .9 * self._track_gradient + .1 * (value - (self._evidence[-1] if len(self._evidence) > 0 else 0))
         self._evidence.append(value)
+
+    def set_threshold(self, value):
+        self._recognition_threshold = value
 
     def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
         self._reset()
@@ -127,7 +131,7 @@ class RouteMemory(object):
         _match = None
         _image = self._tracking
 
-        if has_evidence and _distance > np.min(self._evidence) < .200 and self._track_gradient > 0:
+        if has_evidence and _distance > np.min(self._evidence) < self._recognition_threshold and self._track_gradient > 0:
             _match = code_points[_image]
             self._navigation_point = _match
             self._track_reset()
@@ -191,7 +195,7 @@ class Navigator(object):
         elif route != self._store.get_selected_route():
             threading.Thread(target=self._route_open, args=(route,)).start()
 
-    def restart(self, fn_dave_image, fn_alex_image, gpu_id=0):
+    def restart(self, fn_dave_image, fn_alex_image, recognition_threshold=0, gpu_id=0):
         self._quit_event.clear()
         with self._lock:
             _load_image = (lambda fname: self._fn_alex_image(cv2.imread(fname)))
@@ -205,6 +209,7 @@ class Navigator(object):
             self._network.activate()
             self._store.load_routes()
             self._memory.reset()
+            self._memory.set_threshold(recognition_threshold)
             self._gumbel = None
             self._destination = None
 
@@ -216,7 +221,6 @@ class Navigator(object):
         _gumbel = self._gumbel
         _destination = self._destination
         _cmd_index = maneuver_index(intention)
-        # _command = maneuver_intention(intention) if (_cmd_index > 0 or _gumbel is None) else _gumbel
         _command = maneuver_intention() if (_gumbel is None) else _gumbel
         _out = self._network.forward(dave_image=_dave_img,
                                      alex_image=_alex_img,
@@ -302,7 +306,11 @@ class TFRunner(Configurable):
         self._fn_corridor_norm = (lambda v: v)
         _fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         _fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        self._navigator.restart(fn_dave_image=_fn_dave_image, fn_alex_image=_fn_alex_image, gpu_id=self._gpu_id)
+        _nrt = parse_option('navigator.point.recognition.threshold', float, 0, _errors, **kwargs)
+        self._navigator.restart(fn_dave_image=_fn_dave_image,
+                                fn_alex_image=_fn_alex_image,
+                                recognition_threshold=_nrt,
+                                gpu_id=self._gpu_id)
         return _errors
 
     def _dnn_steering(self, raw):
@@ -320,8 +328,7 @@ class TFRunner(Configurable):
         _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
-        _navigation_command = int(np.argmax(_command))
-        _navigation_command = float(_navigation_command - 1) + _command[_navigation_command]
+        _command_index = int(np.argmax(_command))
 
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action_out)),
@@ -335,7 +342,8 @@ class TFRunner(Configurable):
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),
                     navigation_distance=float(1 if nav_distance is None else nav_distance),
-                    navigation_command=_navigation_command
+                    navigation_command=float(_command_index - 1) + _command[_command_index],
+                    navigation_instruction=index_maneuver(_command_index)
                     )
 
 

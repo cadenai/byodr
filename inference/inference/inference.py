@@ -86,6 +86,11 @@ def maneuver_index(turn='general.fallback'):
     return _options[turn]
 
 
+def index_maneuver(index=0):
+    _options = {0: 'general.fallback', 1: 'intersection.left', 2: 'intersection.ahead', 3: 'intersection.right'}
+    return _options[index]
+
+
 def maneuver_intention(turn='general.fallback', dtype=np.float32):
     command = np.zeros(4, dtype=dtype)
     command[maneuver_index(turn=turn)] = 1
