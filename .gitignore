@@ -109,3 +109,4 @@ data_root
 
 # Google protocol buffers
 *.pb
+/.balena/

@@ -139,6 +139,10 @@ class AbstractRouteDataSource(object):
         raise NotImplementedError()
 
     @abstractmethod
+    def get_image_navigation_point_id(self, idx):
+        raise NotImplementedError()
+
+    @abstractmethod
     def get_instructions(self, point):
         raise NotImplementedError()
 
@@ -157,6 +161,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         self.points = []
         self.all_images = []
         self.image_index_to_point = {}
+        self.image_index_to_point_id = {}
         self.point_to_instructions = {}
         self._check_exists()
 
@@ -169,6 +174,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
         self.points = []
         self.all_images = []
         self.image_index_to_point = {}
+        self.image_index_to_point_id = {}
         self.point_to_instructions = {}
         self.quit_event.clear()
 
@@ -214,7 +220,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                     logger.info("{} -> {}".format(route_name, np_dirs))
                     # Take the existing sort-order.
                     image_index = 0
-                    for point_name in np_dirs:
+                    for point_id, point_name in enumerate(np_dirs):
                         if self.quit_event.is_set():
                             break
                         self.points.append(point_name)
@@ -232,6 +238,7 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                         for im_file in im_files:
                             self.all_images.append(self.fn_load_image(im_file))
                             self.image_index_to_point[image_index] = point_name
+                            self.image_index_to_point_id[image_index] = point_id
                             image_index += 1
                     self.selected_route = route_name
             except OSError as e:
@@ -256,6 +263,9 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
 
     def get_image_navigation_point(self, idx):
         return self.image_index_to_point[idx]
+
+    def get_image_navigation_point_id(self, idx):
+        return self.image_index_to_point_id[idx]
 
     def get_instructions(self, point):
         return self.point_to_instructions.get(point)
@@ -327,6 +337,9 @@ class ReloadableDataSource(AbstractRouteDataSource):
 
     def get_image_navigation_point(self, idx):
         return self._do_safe(lambda acquired: self._delegate.get_image_navigation_point(idx) if acquired else None)
+
+    def get_image_navigation_point_id(self, idx):
+        return self._do_safe(lambda acquired: self._delegate.get_image_navigation_point_id(idx) if acquired else None)
 
     def get_instructions(self, point):
         return self._do_safe(lambda acquired: self._delegate.get_instructions(point) if acquired else None)

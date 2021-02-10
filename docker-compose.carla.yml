@@ -11,10 +11,6 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
-  nodews:
-    image: rwgrim/docker-noop:latest
-    restart: 'no'
-    command: ["/bin/true"]
   rosnode:
     restart: 'no'
     volumes:
@@ -47,7 +43,7 @@ services:
   inference:
     build:
       context: .
-      dockerfile: inference/Dockerfile.x86
+      dockerfile: inference/tf115-cp36-x86.dockerfile
     image: centipede2donald/byodr-ce:inference-carla
     restart: 'no'
     environment:

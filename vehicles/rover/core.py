@@ -14,7 +14,7 @@ from requests.auth import HTTPDigestAuth
 
 from byodr.utils import Configurable
 from byodr.utils.option import parse_option
-from video import GstRawSource
+from byodr.utils.video import GstRawSource
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +117,9 @@ class CameraPtzThread(threading.Thread):
                     self._perform(operation)
             except Queue.Empty:
                 pass
+            except IOError as e:
+                # E.g. a requests ConnectionError to the ip camera.
+                logger.warning("PTZ#run: {}".format(e))
 
 
 class PTZCamera(Configurable):

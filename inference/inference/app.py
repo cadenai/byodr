@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import argparse
 import glob
 import logging
@@ -17,13 +19,13 @@ from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
-from image import get_registered_function
-from inference import TFDriver, DynamicMomentum, maneuver_index
+from .image import get_registered_function
+from .inference import DynamicMomentum, TFDriver, maneuver_index
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
 else:
-    from ConfigParser import SafeConfigParser
+    from six.moves.configparser import SafeConfigParser
 
 logger = logging.getLogger(__name__)
 
@@ -32,12 +34,10 @@ class FeatureCluster(object):
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._features = None
         self._code_book = None
 
     def reload(self, features):
         with self._lock:
-            self._features = features
             self._code_book = np.array(features)
 
     def get_best_match(self, query):
@@ -55,7 +55,6 @@ class FeatureCluster(object):
 
     def release(self):
         with self._lock:
-            self._features = None
             self._code_book = None
 
     def quit(self):

@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import glob
 import logging
 import multiprocessing
@@ -66,7 +68,7 @@ def _newest_file(paths, pattern):
     else:
         path = paths
         files = [] if path is None else glob.glob(os.path.join(os.path.expanduser(path), pattern))
-        match = max(files, key=os.path.getctime) if len(files) > 0 else None
+        match = max(files, key=os.path.getmtime) if len(files) > 0 else None
         logger.info("Located file '{}'.".format(match))
         return match
 
@@ -191,7 +193,7 @@ class TFDriver(object):
                 try:
                     _action, _critic, _surprise, _brake, _brake_critic, _features = self.sess.run(_ops, feed_dict=feeder)
                     return _action, _critic, _surprise, max(0, _brake), _brake_critic, _features
-                except (StandardError, CancelledError, FailedPreconditionError) as e:
+                except (CancelledError, FailedPreconditionError) as e:
                     if isinstance(e, FailedPreconditionError):
                         logger.warning('FailedPreconditionError')
                     else:

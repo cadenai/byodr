@@ -352,6 +352,7 @@ page_utils.add_toggle_debug_values_listener(function(collapse) {
 });
 
 function teleop_start_all() {
+    gamepad_controller.reset();
     if (gamepad_controller.socket == undefined) {
         gamepad_controller.start_socket();
     }
@@ -361,6 +362,7 @@ function teleop_start_all() {
 }
 
 function teleop_stop_all() {
+    gamepad_controller.reset();
     if (gamepad_controller.socket != undefined) {
         gamepad_controller.stop_socket();
     }
