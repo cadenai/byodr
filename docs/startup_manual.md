@@ -64,14 +64,13 @@ Your package should include:
 * 1 Victron charger with a Rosenberger connector
 * 1 PS4 controller
 * 1 USB cable
-
+##### Lifting  
+The robot should weight a little less than 25kg.  
+It should be able to lift the robot on the longitudinal beam at the top. Always check if the bolts are tight enough.
 ### E-mailed information
 In your email you should have:  
 
-* The manual starter and maintenance (this document)
-* The manual Connections and ZeroTier
-* The manual Controller and Browser
-* The manual Autopilot training
+* A reference to this pages
 * A credentials list
 
 
@@ -143,14 +142,15 @@ The robot is switched on and off with the ignition key.
 
 #### Start Robot
 * Take one of the ignition keys. Put it in the lock and turn it up.  
-* A blue led will light up. This is the 12vdc circuit. After a while some small leds on the router will light up and after one or 
+* A blue led will light up. This is the 12vdc circuit.  
+* After a while some small leds on the router will light up, and after one or 
   two minutes more leds will light up. You will hear a soft rattling sound from the camera’s.
 * Press `East` (see manual [controller and browser](operator_manual.md)), and the main engines will start with the sound of fans.
-* Ask the guard to hit the stop button. The main engines should stop.
+* Ask the guard to hit the stop button. The main motor should stop.
 
 
 #### Prepare operator seat
-Connect the cable between the computer and the controller.  
+Connect the controller to the computer via bluetooth or USB-cable.  
 Start google chrome.
 
 #### Start operation
@@ -167,10 +167,9 @@ See manual [‘Training Autopilot’](autopilot_manual.md) for further instructi
 When the robot is used the system will try to update software via the cloud. If functionality is changed, a release memo 
 and updated manuals will be provided.  
 To ensure the updates are possible:  
-1. Place the robot on a platform so that the wheels can turn freely.
+1. Place the robot on a platform so that the wheels can turn freely.  
 1. Plug the charging cable into the charging socket.
 1. Plug an internet connection into the WAN-port.
-1. For support, it is desirable to place the robot next to a mirror.
 
 
 #### Charge
@@ -182,7 +181,7 @@ At the back of the robot you will find a magnetic Rosenberger connector. The cha
 
 #### Clean
 It's important to keep the transparent casing of the camera’s clean.  
-For maintenance of the chassis please follow the guidelines of Traxxas.
+For maintenance of the chassis please follow the guidelines of Arrma.
 
 ## Troubleshooting
 
@@ -191,10 +190,10 @@ The robot is built with broadly general available parts. You can assemble it you
 For more information contact MWLC for a parts list and [assembly instructions](mwlc_kit.md).
 
 #### Main engine does not start but all lights are on.
-Please check the fuse for the chassis. Change the 10A fuse.
+Please check the fuse for the chassis.
 
 #### Main engine does not stop after hitting the red button.
-This is dangerous, don't use the robot.
+This is dangerous, don't use the robot. Contact us.
 
 ### Connection issues
 See manual [‘Connections and ZeroTier’](zerotier_manual.md).
