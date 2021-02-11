@@ -85,8 +85,7 @@ class RouteMemory(object):
 
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         _errors = (np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten() - self._code_diagonal) ** 2
-        _evidences = np.exp(-np.maximum(0, _errors))
-        self._beliefs = (self._beliefs * _evidences * _p_out)
+        self._beliefs = (self._beliefs * np.exp(-np.maximum(0, _errors)) * _p_out)
 
         # Before the global selection filter out the recent navigation point images.
         if _point is None:
@@ -94,7 +93,7 @@ class RouteMemory(object):
         else:
             _previous = (_point - 1) % n_points
             _filter = np.logical_or(code_points == _point, code_points == _previous)
-        _image = np.where(_filter, 0, self._beliefs).argmax()
+        _image = np.where(_filter, -1, self._beliefs).argmax()
 
         _match = None
         _error = _errors[_image]
@@ -107,20 +106,17 @@ class RouteMemory(object):
         _reached = _error < .009 or (_error < _threshold and _kurt < -1.25)
         if _reached and self._navigation_point != code_points[_image]:
             _match = code_points[_image]
-            _belief = self._beliefs[_image]
-            _evidence = _evidences[_image]
             self._navigation_point = _match
-            self._belief_reset()
             logger.info("Match {} error {:.2f} kurt {:.2f}".format(_match, _error, _kurt))
 
         if _match is None:
             # Select the destination from the next expected navigation point.
             _filter = np.ones(n_codes, dtype=np.bool) if _point is None else code_points == (_point + 1) % n_points
-            _image = np.where(_filter, _evidences, 0).argmax()
+            # The belief incorporates local information through the network probabilities.
+            _image = np.where(_filter, self._beliefs, -1).argmax()
 
-        _distance = _evidences[_image]
         _destination = self._destination_values[_image]
-        return _match, _image, _distance, _destination
+        return _match, _image, _error, _destination
 
     def match(self, features, query):
         return self.match_i1(features, query)
