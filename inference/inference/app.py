@@ -14,6 +14,7 @@ import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
 from scipy.special import softmax
+from scipy.stats import kurtosis
 from six.moves import range
 
 from byodr.utils import timestamp, Configurable, Application
@@ -31,20 +32,16 @@ else:
 logger = logging.getLogger(__name__)
 
 
-# def l2_normalize(features):
-#     return features / np.sqrt(np.sum(features ** 2))
-
-
 class RouteMemory(object):
     def __init__(self):
         self._recognition_threshold = 0
-        self._horizon = 50
+        self._horizon = 40
         self._evidence = collections.deque(maxlen=self._horizon)
         self._num_points = 0
         self._num_codes = 0
         self._navigation_point = None
         self._tracking = None
-        self._track_gradient = 0
+        self._beliefs = None
         # Image id index to navigation point id.
         self._code_points = None
         # Image id index to features.
@@ -53,35 +50,18 @@ class RouteMemory(object):
         self._destination_keys = None
         self._destination_values = None
 
-    def _track_reset(self, image=None, gradient=0):
+    def _track_reset(self, image=None):
         self._evidence.clear()
         self._tracking = image
-        self._track_gradient = gradient
 
-    def _reset(self):
-        self._track_reset()
-        self._navigation_point = None
-        self._code_book = None
-        self._code_diagonal = None
-        self._destination_keys = None
-        self._destination_values = None
-
-    def _trailing_error(self, window=10):
-        return 1 if len(self._evidence) < 1 else np.mean(np.array(self._evidence)[-window:])
-
-    def _destination(self):
-        return None if self._tracking is None else self._destination_values[self._tracking]
-
-    def _update_evidence(self, value):
-        _image = self._tracking
-        self._track_gradient = .9 * self._track_gradient + .1 * (value - (self._evidence[-1] if len(self._evidence) > 0 else 0))
-        self._evidence.append(value)
+    def _belief_reset(self):
+        self._beliefs = np.zeros(self._num_codes, dtype=np.float32)
 
     def set_threshold(self, value):
         self._recognition_threshold = value
 
     def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
-        self._reset()
+        self._navigation_point = None
         self._num_points = n_points
         self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
@@ -89,58 +69,61 @@ class RouteMemory(object):
         self._code_diagonal = None if self._code_book is None else np.diag(np.dot(self._code_book, self._code_book.T))
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
+        self._track_reset()
+        self._belief_reset()
 
     def is_open(self):
         return self._code_book is not None
 
-    def match_h1(self, features, query):
+    def match_i1(self, features, query):
         _point = self._navigation_point
+        code_points = self._code_points
         n_points = self._num_points
         n_codes = self._num_codes
-        code_points = self._code_points
-        _probabilities = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
+        _uniform_prior = 1. / n_codes
+        self._beliefs = np.maximum(_uniform_prior, self._beliefs)
+
+        _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         _errors = (np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten() - self._code_diagonal) ** 2
+        _evidences = np.exp(-np.maximum(0, _errors))
+        self._beliefs = (self._beliefs * _evidences * _p_out)
 
-        # Assume the next probable image.
-        if self._tracking is None:
-            mask = np.ones(n_codes, dtype=np.bool) if _point is None else code_points == (_point + 1) % n_points
-            self._track_reset(np.where(mask, _probabilities, -1).argmax())
-
-        # We could be tracking the wrong image.
-        has_evidence = len(self._evidence) > 20
-        _score = _errors + (1 - _probabilities) * _errors
-        _competitor = np.where(np.zeros(n_codes, dtype=np.bool) if _point is None else code_points == _point, 100, _score).argmin()
-        if has_evidence and _competitor != self._tracking and _probabilities[_competitor] > .90:
-            self._track_reset(_competitor)
-
-        # Skip further processing unless we are in proximity of something.
-        if _probabilities[_probabilities.argmax()] < .5:
-            _match = None
-            _image = self._tracking
-            _distance = self._trailing_error()
-            _destination = self._destination()
-            return _match, _image, _distance, _destination
-
-        # Update tracking with rate of change with momentum.
-        self._update_evidence(_errors[self._tracking])
-
-        has_evidence = len(self._evidence) > 20
-        _distance = self._trailing_error(window=20)
-        _destination = self._destination()
+        # Before the global selection filter out the recent navigation point images.
+        if _point is None:
+            _filter = np.zeros(n_codes, dtype=np.bool)
+        else:
+            _previous = (_point - 1) % n_points
+            _filter = np.logical_or(code_points == _point, code_points == _previous)
+        _image = np.where(_filter, 0, self._beliefs).argmax()
 
         _match = None
-        _image = self._tracking
+        _error = _errors[_image]
+        self._evidence.append(_error)
+        if self._tracking != _image:
+            self._track_reset(_image)
 
-        if has_evidence and _distance > np.min(self._evidence) < self._recognition_threshold and self._track_gradient > 0:
+        _threshold = self._recognition_threshold
+        _kurt = kurtosis(self._evidence) if len(self._evidence) == self._horizon else 0
+        _reached = _error < .009 or (_error < _threshold and _kurt < -1.25)
+        if _reached and self._navigation_point != code_points[_image]:
             _match = code_points[_image]
+            _belief = self._beliefs[_image]
+            _evidence = _evidences[_image]
             self._navigation_point = _match
-            self._track_reset()
-            logger.info("Match {} probability {:.2f} error {:.2f}".format(_match, _probabilities[_image], _distance))
+            self._belief_reset()
+            logger.info("Match {} error {:.2f} kurt {:.2f}".format(_match, _error, _kurt))
 
+        if _match is None:
+            # Select the destination from the next expected navigation point.
+            _filter = np.ones(n_codes, dtype=np.bool) if _point is None else code_points == (_point + 1) % n_points
+            _image = np.where(_filter, _evidences, 0).argmax()
+
+        _distance = _evidences[_image]
+        _destination = self._destination_values[_image]
         return _match, _image, _distance, _destination
 
     def match(self, features, query):
-        return self.match_h1(features, query)
+        return self.match_i1(features, query)
 
 
 class Navigator(object):
