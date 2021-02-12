@@ -6,11 +6,11 @@ import logging
 import os
 import time
 import traceback
+from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
 import tornado
-from ConfigParser import SafeConfigParser
 from tornado import web, websocket
 
 from byodr.utils import timestamp
@@ -23,7 +23,12 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # Do not use a single variable since class attributes mutate to be instance attributes.
     operators = set()
     operator_access_control = collections.deque(maxlen=1)
-    viewers = set()
+
+    def _has_operators(self):
+        return len(self.operators) > 0
+
+    def _is_operator(self):
+        return self in self.operators
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
@@ -38,34 +43,24 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        # Perhaps the operator has timed-out but the control connection was not closed somehow.
-        if self.operators:
-            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
-            if (timestamp() - _last_msg_micro > self._operator_timeout_micro) or next(iter(self.operators)).ws_connection is None:
-                logger.info("Operator server-side timeout.")
-                self.operators.clear()
-        # Proceed.
-        if self.operators:
-            self.viewers.add(self)
-            logger.info("Viewer {} connected.".format(self.request.remote_ip))
+        if self._is_operator():
+            logger.info("Operator {} reconnected.".format(self.request.remote_ip))
         else:
+            took_over = self._has_operators()
+            self.operators.clear()
             self.operators.add(self)
-            logger.info("Operator {} connected.".format(self.request.remote_ip))
+            logger.info("Operator {} {}.".format(self.request.remote_ip, ('took over' if took_over else 'connected')))
 
     def on_close(self):
-        if self in self.operators:
+        if self._is_operator():
             self.operators.clear()
             logger.info("Operator {} disconnected.".format(self.request.remote_ip))
         else:
-            try:
-                self.viewers.remove(self)
-            except KeyError:
-                pass
             logger.info("Viewer {} disconnected.".format(self.request.remote_ip))
 
     def on_message(self, json_message):
         _response = json.dumps(dict(control='viewer'))
-        if self in self.operators:
+        if self._is_operator():
             _micro_time = timestamp()
             # Throttle very fast operator connections.
             _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
