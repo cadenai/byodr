@@ -50,7 +50,7 @@ class CarlaHandler(Configurable):
             host, port = carla_host.split(':')
             carla_host, carla_port = host, int(port)
         carla_client = carla.Client(carla_host, carla_port)
-        carla_client.set_timeout(2.)
+        carla_client.set_timeout(5.)
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
         self._image_shape = _shape
