@@ -57,19 +57,15 @@ def _create_input_nodes():
 
 
 def _newest_file(paths, pattern):
+    # Find the newest file regardless which directory it may come from.
     if isinstance(paths, tuple) or isinstance(paths, list):
-        _result = None
-        for path in paths:
-            _result = _newest_file(path, pattern)
-            if _result is not None:
-                break
-        return _result
+        files = [_newest_file(path, pattern) for path in paths]
+        files = [f for f in files if f is not None]
     else:
         path = paths
         files = [] if path is None else glob.glob(os.path.join(os.path.expanduser(path), pattern))
-        match = max(files, key=os.path.getmtime) if len(files) > 0 else None
-        logger.info("Located file '{}'.".format(match))
-        return match
+    match = max(files, key=os.path.getmtime) if len(files) > 0 else None
+    return match
 
 
 def _load_definition(f_name):
@@ -134,25 +130,31 @@ class TRTDriver(object):
         self.tf_value = None
         self.sess = None
 
+    def _locate_optimized_graph(self):
+        f_name = _newest_file(self.model_directories, 'runtime*.optimized.pb')
+        logger.info("Located optimized graph '{}'.".format(f_name))
+        return f_name
+
+    def _is_compilation_required(self, f_optimized):
+        # The tensor runtime engine graph is device - and thus gpu - specific, build it on-device.
+        # Use the internal directory to store the compiled graphs.
+        # If the engine plan file is generated on an incompatible device, expecting compute x.x got compute y.y, please rebuild.)
+        file_name = '{}_{}'.format(self._gpu_id, os.path.basename(f_optimized))
+        dir_name = self.model_directories[-1]
+        f_runtime = os.path.join(dir_name, os.path.splitext(os.path.splitext(file_name)[0])[0] + '.trt.pb')
+        m_time = os.path.getmtime(f_runtime) if os.path.exists(f_runtime) else -1
+        _recompile = os.path.getmtime(f_optimized) > m_time
+        return f_runtime, _recompile
+
     def _compile(self):
         # Find the most recent optimized graph to compile.
-        f_optimized = _newest_file(self.model_directories, 'runtime*.optimized.pb')
+        f_optimized = self._locate_optimized_graph()
         if f_optimized is None or not os.path.isfile(f_optimized):
             logger.warning("Missing optimized graph.")
             return
 
-        # The tensor runtime engine graph is device specific - if necessary remove the compiled engine and rebuild on-device.
-        # The compile step may have previously been interrupted due to memory constraints resulting in an under optimized graph.
-        # Use the internal directory to store the compiled graphs.
-        # The compilation is gpu specific.
-        # The engine plan file is generated on an incompatible device, expecting compute x.x got compute y.y, please rebuild.)
-        file_name, dir_name = '{}_{}'.format(self._gpu_id, os.path.basename(f_optimized)), self.model_directories[-1]
-        f_runtime = os.path.join(dir_name, os.path.splitext(os.path.splitext(file_name)[0])[0] + '.trt.pb')
-        f_optimized_size = float(os.stat(f_optimized).st_size)
-        f_runtime_size = float(os.stat(f_runtime).st_size) if os.path.isfile(f_runtime) else f_optimized_size
-        # Determine whether to rebuild by file size ratio.
-        _size_ratio = f_runtime_size / f_optimized_size
-        if _size_ratio < 1.5:
+        f_runtime, _do_compilation = self._is_compilation_required(f_optimized)
+        if _do_compilation:
             trt_graph = trt.create_inference_graph(
                 get_frozen_graph(f_optimized),
                 ['output/steer/steering',
@@ -167,6 +169,7 @@ class TRTDriver(object):
                  'output/posor/value'
                  ],
                 max_batch_size=1,
+                # max_workspace_size_bytes=1 << 30,
                 is_dynamic_op=False,
                 precision_mode='FP16',
                 minimum_segment_size=5
@@ -175,43 +178,58 @@ class TRTDriver(object):
                 output_file.write(trt_graph.SerializeToString())
         return f_runtime
 
-    def activate(self):
-        with self._lock:
-            _start = time.time()
-            graph = tf.Graph()
-            with graph.as_default():
-                config = tf.ConfigProto()
-                # config.gpu_options.allow_growth = True
-                config.gpu_options.per_process_gpu_memory_fraction = 0.125
-                self.sess = tf.Session(config=config, graph=graph)
-                # Compile after session creation for tf memory management.
-                f_runtime = self._compile()
-                _nodes = _create_input_nodes()
-                self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
-                _inputs = {
-                    'input/dave_image': self.input_dave,
-                    'input/alex_image': self.input_alex,
-                    'input/maneuver_command': self.input_command,
-                    'input/current_destination': self.input_destination
-                }
-                tf.import_graph_def(_load_definition(f_runtime), input_map=_inputs, name='m')
-                logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
-                self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
-                self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
-                self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
-                self.tf_gumbel = graph.get_tensor_by_name('m/output/steer/gumbel:0')
-                self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
-                self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/brake_critic:0')
-                self.tf_coordinate = graph.get_tensor_by_name('m/output/posor/coordinate:0')
-                self.tf_query = graph.get_tensor_by_name('m/output/posor/query:0')
-                self.tf_key = graph.get_tensor_by_name('m/output/posor/key:0')
-                self.tf_value = graph.get_tensor_by_name('m/output/posor/value:0')
+    def _deactivate(self):
+        if self.sess is not None:
+            self.sess.close()
+            self.sess = None
+
+    def _activate(self):
+        _start = time.time()
+        graph = tf.Graph()
+        with graph.as_default():
+            config = tf.ConfigProto(allow_soft_placement=True)
+            # config.gpu_options.allow_growth = True
+            config.gpu_options.per_process_gpu_memory_fraction = 0.300
+            self.sess = tf.Session(config=config, graph=graph)
+            # Compile after session creation for tf memory management.
+            f_runtime = self._compile()
+            _nodes = _create_input_nodes()
+            self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
+            _inputs = {
+                'input/dave_image': self.input_dave,
+                'input/alex_image': self.input_alex,
+                'input/maneuver_command': self.input_command,
+                'input/current_destination': self.input_destination
+            }
+            tf.import_graph_def(_load_definition(f_runtime), input_map=_inputs, name='m')
+            logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
+            self.tf_steering = graph.get_tensor_by_name('m/output/steer/steering:0')
+            self.tf_critic = graph.get_tensor_by_name('m/output/steer/critic:0')
+            self.tf_surprise = graph.get_tensor_by_name('m/output/steer/surprise:0')
+            self.tf_gumbel = graph.get_tensor_by_name('m/output/steer/gumbel:0')
+            self.tf_brake = graph.get_tensor_by_name('m/output/speed/brake:0')
+            self.tf_brake_critic = graph.get_tensor_by_name('m/output/speed/brake_critic:0')
+            self.tf_coordinate = graph.get_tensor_by_name('m/output/posor/coordinate:0')
+            self.tf_query = graph.get_tensor_by_name('m/output/posor/query:0')
+            self.tf_key = graph.get_tensor_by_name('m/output/posor/key:0')
+            self.tf_value = graph.get_tensor_by_name('m/output/posor/value:0')
+
+    def will_compile(self):
+        f_optimized = self._locate_optimized_graph()
+        return False if f_optimized is None else self._is_compilation_required(f_optimized)[-1]
 
     def deactivate(self):
         with self._lock:
-            if self.sess is not None:
-                self.sess.close()
-                self.sess = None
+            self._deactivate()
+
+    def activate(self):
+        with self._lock:
+            self._activate()
+
+    def reactivate(self):
+        with self._lock:
+            self._deactivate()
+            self._activate()
 
     def features(self, dave_image, alex_image):
         with self._lock:
