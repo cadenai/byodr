@@ -1,12 +1,12 @@
 from __future__ import absolute_import
 
 import argparse
-import collections
 import glob
 import logging
 import os
 import sys
 import threading
+import time
 from functools import partial
 
 import cv2
@@ -14,7 +14,6 @@ import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
 from scipy.special import softmax
-from scipy.stats import kurtosis
 from six.moves import range
 
 from byodr.utils import timestamp, Configurable, Application
@@ -22,7 +21,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_intention, maneuver_index, index_maneuver
+from .inference import DynamicMomentum, TRTDriver, maneuver_intention, index_maneuver
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -35,13 +34,12 @@ logger = logging.getLogger(__name__)
 class RouteMemory(object):
     def __init__(self):
         self._recognition_threshold = 0
-        self._horizon = 40
-        self._evidence = collections.deque(maxlen=self._horizon)
         self._num_points = 0
         self._num_codes = 0
         self._navigation_point = None
         self._tracking = None
         self._beliefs = None
+        self._evidence = None
         # Image id index to navigation point id.
         self._code_points = None
         # Image id index to features.
@@ -51,8 +49,8 @@ class RouteMemory(object):
         self._destination_values = None
 
     def _track_reset(self, image=None):
-        self._evidence.clear()
         self._tracking = image
+        self._evidence = np.ones(self._num_codes, dtype=np.float32)
 
     def _belief_reset(self):
         self._beliefs = np.zeros(self._num_codes, dtype=np.float32)
@@ -75,51 +73,45 @@ class RouteMemory(object):
     def is_open(self):
         return self._code_book is not None
 
-    def match_i1(self, features, query):
-        _point = self._navigation_point
+    def match(self, features, query):
         code_points = self._code_points
-        n_points = self._num_points
-        n_codes = self._num_codes
-        _uniform_prior = 1. / n_codes
+        _uniform_prior = 1. / self._num_codes
         self._beliefs = np.maximum(_uniform_prior, self._beliefs)
+        _point, _previous, _next = (-1, -1, -1) if self._navigation_point is None else self._navigation_point
 
+        # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         _errors = (np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten() - self._code_diagonal) ** 2
         self._beliefs = (self._beliefs * np.exp(-np.maximum(0, _errors)) * _p_out)
+        self._evidence = np.minimum(self._evidence, _errors)
 
-        # Before the global selection filter out the recent navigation point images.
-        if _point is None:
-            _filter = np.zeros(n_codes, dtype=np.bool)
-        else:
-            _previous = (_point - 1) % n_points
-            _filter = np.logical_or(code_points == _point, code_points == _previous)
-        _image = np.where(_filter, -1, self._beliefs).argmax()
+        # Select the destination from the next expected navigation point.
+        _local = np.where(code_points == _next, self._beliefs, -1).argmax()
 
+        # Attempt a better match in case it is tracking the wrong image.
+        _competitor = np.where(np.logical_or(code_points == _point, code_points == _previous), -1, self._beliefs).argmax()
+
+        _winner = _competitor if _errors[_competitor] < self._evidence[_local] else _local
+        if self._tracking != _winner:
+            self._track_reset(_winner)
+
+        # Is there a match.
         _match = None
-        _error = _errors[_image]
-        self._evidence.append(_error)
-        if self._tracking != _image:
-            self._track_reset(_image)
+        _tracking = self._tracking
+        _error = _errors[_tracking]
+        _evidence = self._evidence[_tracking]
+        if _point != code_points[_tracking] and _evidence < self._recognition_threshold and _error > 2 * _evidence:
+            n_points = self._num_points
+            _match = code_points[_tracking]
+            self._navigation_point = _match, ((_match - 1) % n_points), ((_match + 1) % n_points)
+            self._track_reset(_tracking)
+            logger.info("Match {} error {:.2f} evidence {:.2f}".format(_match, _error, _evidence))
 
-        _threshold = self._recognition_threshold
-        _kurt = kurtosis(self._evidence) if len(self._evidence) == self._horizon else 0
-        _reached = _error < .009 or (_error < _threshold and _kurt < -1.25)
-        if _reached and self._navigation_point != code_points[_image]:
-            _match = code_points[_image]
-            self._navigation_point = _match
-            logger.info("Match {} error {:.2f} kurt {:.2f}".format(_match, _error, _kurt))
-
-        if _match is None:
-            # Select the destination from the next expected navigation point.
-            _filter = np.ones(n_codes, dtype=np.bool) if _point is None else code_points == (_point + 1) % n_points
-            # The belief incorporates local information through the network probabilities.
-            _image = np.where(_filter, self._beliefs, -1).argmax()
-
+        # Set the navigation destination.
+        _image = _local if _match is None and self._navigation_point is not None else self._tracking
+        _distance = _errors[_image]
         _destination = self._destination_values[_image]
-        return _match, _image, _error, _destination
-
-    def match(self, features, query):
-        return self.match_i1(features, query)
+        return _match, _image, _distance, _destination
 
 
 class Navigator(object):
@@ -174,6 +166,11 @@ class Navigator(object):
         elif route != self._store.get_selected_route():
             threading.Thread(target=self._route_open, args=(route,)).start()
 
+    def recompile(self):
+        with self._lock:
+            if self._network is not None and self._network.will_compile():
+                self._network.reactivate()
+
     def restart(self, fn_dave_image, fn_alex_image, recognition_threshold=0, gpu_id=0):
         self._quit_event.clear()
         with self._lock:
@@ -192,15 +189,14 @@ class Navigator(object):
             self._gumbel = None
             self._destination = None
 
-    def forward(self, image, intention, route=None):
+    def forward(self, image, route=None):
         # This runs at the service process frequency.
         self._check_state(route)
         _dave_img = self._fn_dave_image(image, dtype=np.float32)
         _alex_img = self._fn_alex_image(image, dtype=np.float32)
         _gumbel = self._gumbel
         _destination = self._destination
-        _cmd_index = maneuver_index(intention)
-        _command = maneuver_intention() if (_gumbel is None) else _gumbel
+        _command = maneuver_intention() if _gumbel is None else _gumbel
         _out = self._network.forward(dave_image=_dave_img,
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
@@ -256,6 +252,9 @@ class TFRunner(Configurable):
     def get_frequency(self):
         return self._process_frequency
 
+    def recompile(self):
+        self._navigator.recompile()
+
     def internal_quit(self, restarting=False):
         self._navigator.quit()
 
@@ -295,8 +294,8 @@ class TFRunner(Configurable):
     def _dnn_steering(self, raw):
         return raw * (self._steering_scale_left if raw < 0 else self._steering_scale_right)
 
-    def forward(self, image, intention, route=None):
-        _out = self._navigator.forward(image, intention, route)
+    def forward(self, image, route=None):
+        _out = self._navigator.forward(image, route)
         action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, _command = _out
 
         critic = self._fn_corridor_norm(critic_out)
@@ -341,6 +340,7 @@ class InferenceApplication(Application):
         self.teleop = None
         self.pilot = None
         self.ipc_chatter = None
+        self._last_known_active_time = timestamp()
 
     @staticmethod
     def _glob(directory, pattern):
@@ -353,8 +353,18 @@ class InferenceApplication(Application):
         cfg = dict(parser.items('inference'))
         return cfg
 
+    def _touch(self, c_pilot):
+        # Keep track of the activity to have the network update in case it has a new model and the robot is not in use.
+        if c_pilot is not None and abs(c_pilot.get('steering', 0)) > 1e-3 or abs(c_pilot.get('throttle', 0)) > 1e-3:
+            self._last_known_active_time = timestamp()
+
     def get_process_frequency(self):
         return self._runner.get_frequency()
+
+    def recompile(self, seconds=300):
+        _sleeping = (timestamp() - self._last_known_active_time) > seconds * 1e6
+        if _sleeping:
+            self._runner.recompile()
 
     def setup(self):
         if self.active():
@@ -372,17 +382,36 @@ class InferenceApplication(Application):
         # Leave the state as is on empty teleop state.
         c_teleop = self.teleop()
         c_pilot = self.pilot()
+        self._touch(c_pilot)
         image = self.camera.capture()[-1]
         if image is not None:
-            instruction = 'intersection.ahead' if c_pilot is None else c_pilot.get('instruction')
             c_route = None if c_teleop is None else c_teleop.get('navigator').get('route')
-            state = self._runner.forward(image=image, intention=instruction, route=c_route)
+            state = self._runner.forward(image=image, route=c_route)
             state['_fps'] = self.get_actual_hz()
             self.publisher.publish(state)
         chat = self.ipc_chatter()
         if chat is not None:
             if chat.get('command') == 'restart':
                 self.setup()
+
+
+class RecompilationThread(threading.Thread):
+    def __init__(self, application, sleep_seconds=600):
+        super(RecompilationThread, self).__init__()
+        self._app = application
+        self._sleep = sleep_seconds
+        self._quit_event = threading.Event()
+
+    def quit(self):
+        self._quit_event.set()
+
+    def is_running(self):
+        return not self._quit_event.is_set()
+
+    def run(self):
+        while self.is_running():
+            time.sleep(self._sleep)
+            self._app.recompile()
 
 
 def main():
@@ -410,7 +439,10 @@ def main():
     application.teleop = lambda: collector.get(0)
     application.pilot = lambda: collector.get(1)
     application.ipc_chatter = lambda: collector.get(2)
-    threads = [collector, application.camera, application.ipc_server]
+
+    recompilation = RecompilationThread(application)
+
+    threads = [collector, application.camera, application.ipc_server, recompilation]
     if quit_event.is_set():
         return 0
 
