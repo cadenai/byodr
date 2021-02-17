@@ -155,7 +155,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'nav_image': [pilot_match_image, inference_current_image],
                 'nav_distance': [pilot_match_sim, inference_current_sim],
                 'nav_command': inference_command,
-                'turn': None if inference is None else inference.get('navigation_instruction')
+                'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))
         except Exception:
