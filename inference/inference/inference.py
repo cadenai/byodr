@@ -52,7 +52,7 @@ def _create_input_nodes():
     input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 66, 200, 3], name='input/dave_image')
     input_alex = tf.placeholder(dtype=tf.float32, shape=[1, 100, 200, 3], name='input/alex_image')
     input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
-    input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 150], name='input/current_destination')
+    input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 90], name='input/current_destination')
     return input_dave, input_alex, input_command, input_destination
 
 
@@ -113,7 +113,7 @@ class TRTDriver(object):
         self._gpu_id = gpu_id
         self.model_directories = [cache_directory, internal_directory]
         self._lock = multiprocessing.Lock()
-        self._zero_vector = np.zeros(shape=(150,), dtype=np.float32)
+        self._zero_vector = np.zeros(shape=(90,), dtype=np.float32)
         self.input_dave = None
         self.input_alex = None
         self.input_command = None

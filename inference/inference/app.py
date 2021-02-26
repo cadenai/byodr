@@ -77,7 +77,9 @@ class RouteMemory(object):
         code_points = self._code_points
         _uniform_prior = 1. / self._num_codes
         self._beliefs = np.maximum(_uniform_prior, self._beliefs)
-        _point, _previous, _next = (-1, -1, -1) if self._navigation_point is None else self._navigation_point
+        _before_match = self._navigation_point is None
+        _point, _previous, _next = (-1, -1, -1) if _before_match else self._navigation_point
+        _threshold = self._recognition_threshold
 
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
@@ -86,29 +88,30 @@ class RouteMemory(object):
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
-        _local = np.where(code_points == _next, self._beliefs, -1).argmax()
+        _local = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
 
         # Attempt a better match in case it is tracking the wrong image.
-        _competitor = np.where(np.logical_or(code_points == _point, code_points == _previous), -1, self._beliefs).argmax()
+        _local_point = code_points[_local]
+        c_mask = np.logical_or.reduce([code_points == _point, code_points == _previous, code_points == _local_point])
+        _competitor = np.where(c_mask, -1, self._beliefs).argmax()
 
-        _winner = _competitor if _errors[_competitor] < self._evidence[_local] else _local
+        _winner = _competitor if _threshold > _errors[_competitor] < self._evidence[_local] else _local
         if self._tracking != _winner:
             self._track_reset(_winner)
 
         # Is there a match.
         _match = None
-        _tracking = self._tracking
-        _error = _errors[_tracking]
-        _evidence = self._evidence[_tracking]
-        if _point != code_points[_tracking] and _evidence < self._recognition_threshold and _error > 2 * _evidence:
+        _image = self._tracking
+        _error = _errors[_image]
+        _evidence = self._evidence[_image]
+        if _point != code_points[_image] and _evidence < _threshold and _error > 2 * _evidence:
             n_points = self._num_points
-            _match = code_points[_tracking]
+            _match = code_points[_image]
             self._navigation_point = _match, ((_match - 1) % n_points), ((_match + 1) % n_points)
-            self._track_reset(_tracking)
+            self._track_reset(_image)  # Resets the evidence.
             logger.info("Match {} error {:.2f} evidence {:.2f}".format(_match, _error, _evidence))
 
         # Set the navigation destination.
-        _image = _local if _match is None and self._navigation_point is not None else self._tracking
         _distance = _errors[_image]
         _destination = self._destination_values[_image]
         return _match, _image, _distance, _destination
