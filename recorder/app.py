@@ -186,7 +186,9 @@ class RecorderApplication(Application):
     def _config(self):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        return dict(parser.items('recorder'))
+        cfg = dict(parser.items('recorder'))
+        self.logger.info(cfg)
+        return cfg
 
     def get_process_frequency(self):
         return 0 if self._handler is None else self._handler.get_process_frequency()
