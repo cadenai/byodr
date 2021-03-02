@@ -251,7 +251,7 @@ class UserOptions(object):
         self.reload()
 
     def list_sections(self):
-        return self._parser.sections()
+        return [s for s in self._parser.sections() if s != 'inference']
 
     def get_options(self, section):
         return dict(self._parser.items(section))

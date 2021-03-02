@@ -108,9 +108,10 @@ def image_standardization(img):
 
 
 class TRTDriver(object):
-    def __init__(self, cache_directory, internal_directory, gpu_id=0):
+    def __init__(self, cache_directory, internal_directory, gpu_id=0, runtime_compilation=1):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
         self._gpu_id = gpu_id
+        self._rt_compile = runtime_compilation
         self.model_directories = [cache_directory, internal_directory]
         self._lock = multiprocessing.Lock()
         self._zero_vector = np.zeros(shape=(90,), dtype=np.float32)
@@ -153,30 +154,33 @@ class TRTDriver(object):
             logger.warning("Missing optimized graph.")
             return
 
-        f_runtime, _do_compilation = self._is_compilation_required(f_optimized)
-        if _do_compilation:
-            trt_graph = trt.create_inference_graph(
-                get_frozen_graph(f_optimized),
-                ['output/steer/steering',
-                 'output/steer/critic',
-                 'output/steer/surprise',
-                 'output/steer/gumbel',
-                 'output/speed/brake',
-                 'output/speed/brake_critic',
-                 'output/posor/coordinate',
-                 'output/posor/query',
-                 'output/posor/key',
-                 'output/posor/value'
-                 ],
-                max_batch_size=1,
-                # max_workspace_size_bytes=1 << 30,
-                is_dynamic_op=False,
-                precision_mode='FP16',
-                minimum_segment_size=5
-            )
-            with open(f_runtime, 'wb') as output_file:
-                output_file.write(trt_graph.SerializeToString())
-        return f_runtime
+        if self._rt_compile:
+            f_runtime, _do_compilation = self._is_compilation_required(f_optimized)
+            if _do_compilation:
+                trt_graph = trt.create_inference_graph(
+                    get_frozen_graph(f_optimized),
+                    ['output/steer/steering',
+                     'output/steer/critic',
+                     'output/steer/surprise',
+                     'output/steer/gumbel',
+                     'output/speed/brake',
+                     'output/speed/brake_critic',
+                     'output/posor/coordinate',
+                     'output/posor/query',
+                     'output/posor/key',
+                     'output/posor/value'
+                     ],
+                    max_batch_size=1,
+                    # max_workspace_size_bytes=1 << 30,
+                    is_dynamic_op=False,
+                    precision_mode='FP16',
+                    minimum_segment_size=5
+                )
+                with open(f_runtime, 'wb') as output_file:
+                    output_file.write(trt_graph.SerializeToString())
+            return f_runtime
+        else:
+            return f_optimized
 
     def _deactivate(self):
         if self.sess is not None:
@@ -216,7 +220,7 @@ class TRTDriver(object):
 
     def will_compile(self):
         f_optimized = self._locate_optimized_graph()
-        return False if f_optimized is None else self._is_compilation_required(f_optimized)[-1]
+        return False if f_optimized is None else (self._rt_compile and self._is_compilation_required(f_optimized)[-1])
 
     def deactivate(self):
         with self._lock:

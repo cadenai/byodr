@@ -21,7 +21,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_intention, index_maneuver
+from .inference import DynamicMomentum, TRTDriver, index_maneuver, maneuver_intention
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -37,7 +37,6 @@ class RouteMemory(object):
         self._num_points = 0
         self._num_codes = 0
         self._navigation_point = None
-        self._tracking = None
         self._beliefs = None
         self._evidence = None
         # Image id index to navigation point id.
@@ -48,8 +47,7 @@ class RouteMemory(object):
         self._destination_keys = None
         self._destination_values = None
 
-    def _track_reset(self, image=None):
-        self._tracking = image
+    def _evidence_reset(self):
         self._evidence = np.ones(self._num_codes, dtype=np.float32)
 
     def _belief_reset(self):
@@ -67,7 +65,7 @@ class RouteMemory(object):
         self._code_diagonal = None if self._code_book is None else np.diag(np.dot(self._code_book, self._code_book.T))
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
-        self._track_reset()
+        self._evidence_reset()
         self._belief_reset()
 
     def is_open(self):
@@ -83,32 +81,35 @@ class RouteMemory(object):
 
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
-        _errors = (np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten() - self._code_diagonal) ** 2
+        _dot_product = np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
+        _errors = (_dot_product - self._code_diagonal) ** 2
+        _errors = np.minimum(1, _errors)
         self._beliefs = (self._beliefs * np.exp(-np.maximum(0, _errors)) * _p_out)
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
         _local = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
 
+        _match = None
+        _image = _local
+
         # Attempt a better match in case it is tracking the wrong image.
         _local_point = code_points[_local]
         c_mask = np.logical_or.reduce([code_points == _point, code_points == _previous, code_points == _local_point])
         _competitor = np.where(c_mask, -1, self._beliefs).argmax()
 
-        _winner = _competitor if _threshold > _errors[_competitor] < self._evidence[_local] else _local
-        if self._tracking != _winner:
-            self._track_reset(_winner)
+        if self._evidence[_local] < _threshold and _errors[_local] > np.sqrt(self._evidence[_local]):
+            _match = code_points[_local]
+        elif self._evidence[_competitor] < _threshold and _errors[_competitor] > np.sqrt(self._evidence[_competitor]):
+            _image = _competitor
+            _match = code_points[_competitor]
 
-        # Is there a match.
-        _match = None
-        _image = self._tracking
         _error = _errors[_image]
         _evidence = self._evidence[_image]
-        if _point != code_points[_image] and _evidence < _threshold and _error > 2 * _evidence:
+        if _match is not None and _point != _match:
             n_points = self._num_points
-            _match = code_points[_image]
             self._navigation_point = _match, ((_match - 1) % n_points), ((_match + 1) % n_points)
-            self._track_reset(_image)  # Resets the evidence.
+            self._evidence_reset()
             logger.info("Match {} error {:.2f} evidence {:.2f}".format(_match, _error, _evidence))
 
         # Set the navigation destination.
@@ -131,9 +132,9 @@ class Navigator(object):
         self._gumbel = None
         self._destination = None
 
-    def _create_network(self, gpu_id=0):
+    def _create_network(self, gpu_id=0, runtime_compilation=1):
         cache_directory, internal_directory = self._model_directories
-        network = TRTDriver(cache_directory, internal_directory, gpu_id=gpu_id)
+        network = TRTDriver(cache_directory, internal_directory, gpu_id=gpu_id, runtime_compilation=runtime_compilation)
         return network
 
     def _pull_image_features(self, image):
@@ -174,7 +175,7 @@ class Navigator(object):
             if self._network is not None and self._network.will_compile():
                 self._network.reactivate()
 
-    def restart(self, fn_dave_image, fn_alex_image, recognition_threshold=0, gpu_id=0):
+    def restart(self, fn_dave_image, fn_alex_image, recognition_threshold=0, gpu_id=0, runtime_compilation=1):
         self._quit_event.clear()
         with self._lock:
             _load_image = (lambda fname: self._fn_alex_image(cv2.imread(fname)))
@@ -184,7 +185,7 @@ class Navigator(object):
             self._fn_alex_image = fn_alex_image
             if self._network is not None:
                 self._network.deactivate()
-            self._network = self._create_network(gpu_id)
+            self._network = self._create_network(gpu_id, runtime_compilation)
             self._network.activate()
             self._store.load_routes()
             self._memory.reset()
@@ -287,11 +288,13 @@ class TFRunner(Configurable):
         self._fn_corridor_norm = (lambda v: v)
         _fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         _fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        _nrt = parse_option('navigator.point.recognition.threshold', float, 0, _errors, **kwargs)
+        _nav_threshold = parse_option('navigator.point.recognition.threshold', float, 0, _errors, **kwargs)
+        _rt_compile = parse_option('runtime.graph.compilation', int, 1, _errors, **kwargs)
         self._navigator.restart(fn_dave_image=_fn_dave_image,
                                 fn_alex_image=_fn_alex_image,
-                                recognition_threshold=_nrt,
-                                gpu_id=self._gpu_id)
+                                recognition_threshold=_nav_threshold,
+                                gpu_id=self._gpu_id,
+                                runtime_compilation=_rt_compile)
         return _errors
 
     def _dnn_steering(self, raw):
@@ -351,9 +354,10 @@ class InferenceApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        # The end-user config overrides come last so all settings are modifiable.
-        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(self._config_dir, '*.ini')]
+        # Inference overrides are only allowed internally - ignore user settings. Overrides come last.
+        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini')]
         cfg = dict(parser.items('inference'))
+        logger.info(cfg)
         return cfg
 
     def _touch(self, c_pilot):
