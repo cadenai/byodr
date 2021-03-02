@@ -236,10 +236,10 @@ def _norm_scale(v, min_=0., max_=1.):
 
 
 class TFRunner(Configurable):
-    def __init__(self, user_directory, internal_directory, routes_directory=None):
+    def __init__(self, navigator):
         super(TFRunner, self).__init__()
         self._gpu_id = 0
-        self._navigator = Navigator(user_directory, internal_directory, routes_directory)
+        self._navigator = navigator
         self._process_frequency = 10
         self._steering_scale_left = 1
         self._steering_scale_right = 1
@@ -339,7 +339,9 @@ class InferenceApplication(Application):
         self._user_models = user_models
         if user_models is not None and not os.path.exists(user_models):
             os.makedirs(user_models, mode=0o755)
-        self._runner = TFRunner(user_models, internal_models, navigation_routes) if runner is None else runner
+        if runner is None:
+            runner = TFRunner(navigator=Navigator(user_models, internal_models, navigation_routes))
+        self._runner = runner
         self.publisher = None
         self.camera = None
         self.ipc_server = None
@@ -362,7 +364,7 @@ class InferenceApplication(Application):
 
     def _touch(self, c_pilot):
         # Keep track of the activity to have the network update in case it has a new model and the robot is not in use.
-        if c_pilot is not None and abs(c_pilot.get('steering', 0)) > 1e-3 or abs(c_pilot.get('throttle', 0)) > 1e-3:
+        if c_pilot is not None and (abs(c_pilot.get('steering', 0)) > 1e-3 or abs(c_pilot.get('throttle', 0)) > 1e-3):
             self._last_known_active_time = timestamp()
 
     def get_process_frequency(self):
