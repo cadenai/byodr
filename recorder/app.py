@@ -6,16 +6,16 @@ import logging
 import os
 import threading
 import time
-from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
+from ConfigParser import SafeConfigParser
+from store import Event
 
 from byodr.utils import Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, CollectorThread, JSONReceiver
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
-from store import Event
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +186,9 @@ class RecorderApplication(Application):
     def _config(self):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        return dict(parser.items('recorder'))
+        cfg = dict(parser.items('recorder'))
+        self.logger.info(cfg)
+        return cfg
 
     def get_process_frequency(self):
         return 0 if self._handler is None else self._handler.get_process_frequency()
@@ -234,8 +236,11 @@ def main():
 
     sessions_dir = os.path.expanduser(args.sessions)
     assert os.path.exists(sessions_dir), "Cannot use sessions directory '{}'".format(sessions_dir)
+    record_dir = os.path.join(sessions_dir, 'autopilot')
+    if not os.path.exists(record_dir):
+        os.makedirs(record_dir, mode=0o755)
 
-    application = RecorderApplication(config_dir=args.config, sessions_dir=sessions_dir)
+    application = RecorderApplication(config_dir=args.config, sessions_dir=record_dir)
     quit_event = application.quit_event
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')

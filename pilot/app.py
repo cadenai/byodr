@@ -2,6 +2,7 @@ import argparse
 import glob
 import logging
 import os
+
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
@@ -27,7 +28,7 @@ class PilotApplication(Application):
         parser = SafeConfigParser()
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
         cfg = dict(parser.items('pilot'))
-        cfg.update(dict(parser.items('navigation')))
+        self.logger.info(cfg)
         return cfg
 
     def get_process_frequency(self):

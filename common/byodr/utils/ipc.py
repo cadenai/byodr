@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import collections
 import datetime
 import json
@@ -115,7 +116,7 @@ class CollectorThread(threading.Thread):
     def run(self):
         while not self._quit_event.is_set():
             # Empty the receiver queues to not block upstream senders.
-            map(lambda receiver: receiver.consume(), self._receivers)
+            list(map(lambda receiver: receiver.consume(), self._receivers))
             time.sleep(self._sleep)
 
 
@@ -150,7 +151,7 @@ class ReceiverThread(threading.Thread):
             try:
                 _latest = json.loads(receive_string(self._subscriber).split(':', 1)[1])
                 self._queue.appendleft(_latest)
-                map(lambda x: x(_latest), self._listeners)
+                list(map(lambda x: x(_latest), self._listeners))
             except zmq.Again:
                 pass
 
@@ -204,7 +205,7 @@ class JSONServerThread(threading.Thread):
 
     def on_message(self, message):
         self._queue.appendleft(message)
-        map(lambda x: x(message), self._listeners)
+        list(map(lambda x: x(message), self._listeners))
 
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None

@@ -1,5 +1,3 @@
-import StringIO
-import datetime
 import io
 import logging
 import multiprocessing
@@ -7,6 +5,7 @@ import os
 import uuid
 import zipfile
 from abc import ABCMeta, abstractmethod
+from datetime import datetime
 
 import pandas as pd
 
@@ -61,7 +60,7 @@ class AbstractDataSource(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def open(self, session=None):
+    def open(self):
         raise NotImplementedError()
 
     @abstractmethod
@@ -85,47 +84,46 @@ image-shape-hwc: "{image_shape}"
         self._directory = directory
         self._lock = multiprocessing.Lock()
         self._running = False
-        self._read_only = True
         self._session = None
         self._data = None
         self._image_shape = None
 
-    def open(self, session=None):
+    def _zip_file_at_write(self):
+        # Create the directories now to avoid empty listings.
+        _now = datetime.today()
+        _directory = os.path.join(self._directory, _now.strftime('%Y'), _now.strftime('%m%B'))
+        if not os.path.exists(_directory):
+            os.makedirs(_directory, mode=0o755)
+        return os.path.join(_directory, self._session + '.zip')
+
+    def open(self):
         # Existing sessions can not be reopened.
         with self._lock:
             if self._running:
                 return
             self._running = True
-            self._read_only = session is not None
-            session = datetime.datetime.today().strftime('%Y%b%dT%H%M_%S%s') if session is None else session
-            self._session = session
-            _filename = os.path.join(self._directory, session + '.zip')
-            if self._read_only:
-                assert os.path.exists(_filename), "The session file '{}' does not exist.".format(_filename)
-                with zipfile.ZipFile(_filename, mode='r') as archive:
-                    self._data = pd.read_csv(StringIO.StringIO(archive.read('{}.csv'.format(session))))
-            else:
-                self._data = pd.DataFrame(columns=['time',
-                                                   'vehicle',
-                                                   'vehicle_conf',
-                                                   'image_uri',
-                                                   'steer_src',
-                                                   'speed_src',
-                                                   'steering',
-                                                   'desired_speed',
-                                                   'actual_speed',
-                                                   'heading',
-                                                   'throttle',
-                                                   'turn_src',
-                                                   'turn_val',
-                                                   'x_coord',
-                                                   'y_coord'])
+            self._session = datetime.today().strftime('%Y%b%dT%H%M_%S%s')
+            self._data = pd.DataFrame(columns=['time',
+                                               'vehicle',
+                                               'vehicle_conf',
+                                               'image_uri',
+                                               'steer_src',
+                                               'speed_src',
+                                               'steering',
+                                               'desired_speed',
+                                               'actual_speed',
+                                               'heading',
+                                               'throttle',
+                                               'turn_src',
+                                               'turn_val',
+                                               'x_coord',
+                                               'y_coord'])
 
     def close(self):
         with self._lock:
-            if self._running and not self._read_only and len(self._data) > 0:
+            if self._running and len(self._data) > 0:
                 logger.info("Writing session '{}' with {} rows.".format(self._session, len(self._data)))
-                with zipfile.ZipFile(os.path.join(self._directory, self._session + '.zip'), mode='a', compression=0) as archive:
+                with zipfile.ZipFile(self._zip_file_at_write(), mode='a', compression=0) as archive:
                     buf = io.BytesIO()
                     self._data.to_csv(buf, index=False)
                     archive.writestr('{}.csv'.format(self._session), buf.getvalue())
@@ -135,7 +133,6 @@ image-shape-hwc: "{image_shape}"
                     ))
             # Reset anyway.
             self._running = False
-            self._read_only = True
             self._session = None
             self._data = None
 
@@ -144,7 +141,6 @@ image-shape-hwc: "{image_shape}"
         with self._lock:
             # The store may have been closed while waiting on the lock.
             if self._running:
-                assert not self._read_only, "This is a read-only data source."
                 assert self._image_shape is None or self._image_shape == event.image.shape, "The image shape should be consistent."
                 self._image_shape = event.image.shape
                 timestamp = event.timestamp
@@ -156,7 +152,7 @@ image-shape-hwc: "{image_shape}"
                 filename = "{}__st{:+2.2f}__th{:+2.2f}__dsp{:+2.1f}__he{:+2.2f}__{}.jpg".format(
                     str(timestamp), steering, throttle, desired_speed, heading, str(steer_src)
                 )
-                with zipfile.ZipFile(os.path.join(self._directory, self._session + '.zip'), mode='a', compression=0) as archive:
+                with zipfile.ZipFile(self._zip_file_at_write(), mode='a', compression=0) as archive:
                     _, buf = imencode(".jpg", event.image)
                     archive.writestr(filename, io.BytesIO(buf).getvalue())
                 #

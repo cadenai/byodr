@@ -86,6 +86,7 @@ class CommandHistory(object):
             if not has_steering and not has_throttle:
                 self._num_missing += 1
             elif not self.is_missing():
+                # After the missing state is reached a wakeup is required to reset.
                 self._num_missing = 0
 
     def reset(self):

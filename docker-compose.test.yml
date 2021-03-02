@@ -63,7 +63,7 @@ services:
       - ./recorder:/app
   inference:
     restart: 'no'
-    command: ["python", "-m", "pytest", "-vvv", "tests.py"]
+    command: ["python3", "-m", "pytest", "-vvv", "inference/tests.py"]
     volumes:
       - ./common:/common
       - ./inference:/app
