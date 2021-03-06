@@ -101,6 +101,10 @@ var teleop_screen = {
         } else if (command.arrow_right) {
             this.request_camera_cycle('clockwise');
         }
+        //
+        if (command.button_left) {
+            setTimeout(function() {$('div#viewport_container').fadeOut(100).fadeIn(100);}, 0);
+        }
     }
 }
 
