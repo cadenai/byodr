@@ -98,9 +98,9 @@ class RouteMemory(object):
         c_mask = np.logical_or.reduce([code_points == _point, code_points == _previous, code_points == _local_point])
         _competitor = np.where(c_mask, -1, self._beliefs).argmax()
 
-        if self._evidence[_local] < _threshold and _errors[_local] > np.sqrt(self._evidence[_local]):
+        if self._evidence[_local] < _threshold and _errors[_local] > np.power(self._evidence[_local], .75):
             _match = code_points[_local]
-        elif self._evidence[_competitor] < _threshold and _errors[_competitor] > np.sqrt(self._evidence[_competitor]):
+        elif self._evidence[_competitor] < _threshold and _errors[_competitor] > np.power(self._evidence[_competitor], .75):
             _image = _competitor
             _match = code_points[_competitor]
 
@@ -342,7 +342,9 @@ class InferenceApplication(Application):
         self._internal_models = internal_models
         self._user_models = user_models
         if user_models is not None and not os.path.exists(user_models):
-            os.makedirs(user_models, mode=0o755)
+            _mask = os.umask(000)
+            os.makedirs(user_models, mode=0o775)
+            os.umask(_mask)
         if runner is None:
             runner = TFRunner(navigator=Navigator(user_models, internal_models, navigation_routes))
         self._runner = runner
