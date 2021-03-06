@@ -245,8 +245,8 @@ class TFRunner(Configurable):
         self._steering_scale_right = 1
         self._penalty_filter = None
         self._debug_filter = None
+        self._corridor_shift = 0
         self._fn_obstacle_norm = None
-        self._fn_brake_critic_norm = None
         self._fn_corridor_norm = None
         self._fn_corridor_penalty = None
 
@@ -273,8 +273,11 @@ class TFRunner(Configurable):
         _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 0, _errors, **kwargs)
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
         self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
+
+        self._corridor_shift = parse_option('driver.dnn.steer.corridor.shift', float, 0, _errors, **kwargs)
+
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
-        _brake_critic_scale_max = parse_option('driver.dnn.brake.critic.scale.max', float, 1e-6, _errors, **kwargs)
+
         _corridor_equation_key = 'driver.dnn.steer.corridor.equation'
         _corridor_penalty_eq = parse_option(_corridor_equation_key, str, "e ** (critic + surprise)", _errors, **kwargs)
         try:
@@ -284,7 +287,6 @@ class TFRunner(Configurable):
             _errors.append(PropertyError(_corridor_equation_key, str(te)))
             self._fn_corridor_penalty = lambda surprise, critic: 100
         self._fn_obstacle_norm = partial(_norm_scale, min_=0, max_=_brake_scale_max)
-        self._fn_brake_critic_norm = partial(_norm_scale, min_=0, max_=_brake_critic_scale_max)
         self._fn_corridor_norm = (lambda v: v)
         _fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         _fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
@@ -304,12 +306,14 @@ class TFRunner(Configurable):
         _out = self._navigator.forward(image, route)
         action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, _command = _out
 
-        critic = self._fn_corridor_norm(critic_out)
-        surprise = self._fn_corridor_norm(surprise_out)
-        _corridor_penalty = max(0, self._fn_corridor_penalty(surprise=surprise, critic=critic))
+        _corridor_penalty = max(0,
+                                self._fn_corridor_penalty(
+                                    surprise=(max(0, self._fn_corridor_norm(surprise_out) + self._corridor_shift)),
+                                    critic=(max(0, self._fn_corridor_norm(critic_out) + self._corridor_shift)))
+                                )
 
         # Penalties to decrease desired speed.
-        _obstacle_penalty = self._fn_obstacle_norm(brake_out) + self._fn_brake_critic_norm(brake_critic_out)
+        _obstacle_penalty = self._fn_obstacle_norm(brake_out)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         _command_index = int(np.argmax(_command))
@@ -320,7 +324,7 @@ class TFRunner(Configurable):
                     surprise_out=float(surprise_out),
                     critic_out=float(critic_out),
                     dagger=int(0),
-                    obstacle=float(_obstacle_penalty),
+                    obstacle=float(brake_out),
                     penalty=float(_total_penalty),
                     internal=[float(0)],
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),

@@ -6,10 +6,11 @@ import logging
 import os
 import threading
 import time
+from ConfigParser import SafeConfigParser
+from datetime import datetime
 
 import cv2
 import numpy as np
-from ConfigParser import SafeConfigParser
 from store import Event
 
 from byodr.utils import Application
@@ -42,6 +43,12 @@ def to_event(ts, blob, vehicle, image):
 
 def get_ts(val):
     return val.get('time')
+
+
+def _get_directory(directory, mode=0o755):
+    if not os.path.exists(directory):
+        os.makedirs(directory, mode=mode)
+    return directory
 
 
 class ImageEventLog(object):
@@ -78,12 +85,13 @@ class ImageEventLog(object):
 
 
 class EventHandler(threading.Thread):
-    def __init__(self, directory, **kwargs):
+    def __init__(self, sessions, photos, **kwargs):
         super(EventHandler, self).__init__()
-        _errors = []
         self._hash = hash_dict(**kwargs)
-        self._directory = directory
+        self._record_dir = sessions
+        self._photo_dir = photos
         self._quit_event = threading.Event()
+        _errors = []
         self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
         self._publish_frequency = parse_option('publish.hz', int, 1, _errors, **kwargs)
         self._vehicle = parse_option('constant.vehicle.type', str, 'none', _errors, **kwargs)
@@ -91,9 +99,10 @@ class EventHandler(threading.Thread):
         _im_width, _im_height = parse_option('image.persist.scale', str, '320x240', _errors, **kwargs).split('x')
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
-        self._active = False
-        self._tracker = ImageEventLog()
-        self._recorder = get_or_create_recorder(directory=directory, mode=None)
+        self._recorder_active = False
+        self._session_log = ImageEventLog()
+        self._photo_log = ImageEventLog()
+        self._recorder = get_or_create_recorder(directory=self._record_dir, mode=None)
         self._recent = collections.deque(maxlen=100)
         self._errors = _errors
 
@@ -112,7 +121,7 @@ class EventHandler(threading.Thread):
         elif self._automatic(driver):
             mode = 'record.mode.interventions'
         return get_or_create_recorder(mode=mode,
-                                      directory=self._directory,
+                                      directory=self._record_dir,
                                       vehicle_type=self._vehicle,
                                       vehicle_config=self._config)
 
@@ -129,38 +138,57 @@ class EventHandler(threading.Thread):
         return self._hash != hash_dict(**kwargs)
 
     def state(self):
-        return dict(active=self._active, mode=self._recorder.get_mode())
+        return dict(active=self._recorder_active, mode=self._recorder.get_mode())
 
     def record(self, blob, vehicle, image_meta, image):
-        # Switch on automatically and then off only when the driver changes.
-        _driver = blob.get('driver')
-        _recorder_auto = self._automatic(_driver)
-        _recorder_cruise = self._cruising(_driver)
-        if not self._active and (_recorder_auto or _recorder_cruise):
-            self._tracker.clear()
-            self._recorder = self._instance(_driver)
-            self._recorder.start()
-            self._active = True
-        elif self._active and not (_recorder_auto or _recorder_cruise):
-            self._recorder.stop()
-            self._recorder = self._instance(_driver)
-            self._active = False
-        if self._active:
-            self._tracker.append(blob, vehicle, image_meta, image)
+        if blob.get('button_left', 0) == 1:
+            self._photo_log.append(blob, vehicle, image_meta, image)
+        else:
+            # Switch on automatically and then off only when the driver changes.
+            _driver = blob.get('driver')
+            _recorder_auto = self._automatic(_driver)
+            _recorder_cruise = self._cruising(_driver)
+            if not self._recorder_active and (_recorder_auto or _recorder_cruise):
+                self._session_log.clear()
+                self._recorder = self._instance(_driver)
+                self._recorder.start()
+                self._recorder_active = True
+            elif self._recorder_active and not (_recorder_auto or _recorder_cruise):
+                self._recorder.stop()
+                self._recorder = self._instance(_driver)
+                self._recorder_active = False
+            if self._recorder_active:
+                self._session_log.append(blob, vehicle, image_meta, image)
 
     def quit(self):
         self._quit_event.set()
 
+    def _pop_from(self, tracker):
+        event = tracker.pop()
+        if event is not None:
+            # The resize operation can be considered costly - also do not transfer excessive bytes until the end of the line.
+            if event.image.shape != (self._im_height, self._im_width, 3):
+                logger.warning("Image size must be finalized as soon as possible.")
+                event.image = cv2.resize(event.image, (self._im_width, self._im_height))
+        return event
+
+    def _save_photo(self, event):
+        _now = datetime.today()
+        _directory = os.path.join(self._photo_dir, _now.strftime('%Y%B'))
+        if not os.path.exists(_directory):
+            os.makedirs(_directory, mode=0o755)
+        fname = os.path.join(_directory, _now.strftime('%Y%b%dT%H%M_%S%s')) + '.jpg'
+        cv2.imwrite(fname, event.image)
+
     def run(self):
         while not self._quit_event.is_set():
             try:
-                event = self._tracker.pop()
+                event = self._pop_from(self._session_log)
                 if event is not None:
-                    # The resize operation can be considered costly - also do not transfer excessive bytes until the end of the line.
-                    if event.image.shape != (self._im_height, self._im_width, 3):
-                        logger.warning("Image size must be finalized as soon as possible.")
-                        event.image = cv2.resize(event.image, (self._im_width, self._im_height))
                     self._recorder.do_record(event)
+                event = self._pop_from(self._photo_log)
+                if event is not None:
+                    self._save_photo(event)
                 # Allow other threads access to cpu.
                 time.sleep(2e-3)
             except IndexError:
@@ -171,7 +199,8 @@ class RecorderApplication(Application):
     def __init__(self, config_dir=os.getcwd(), sessions_dir=os.getcwd()):
         super(RecorderApplication, self).__init__()
         self._config_dir = config_dir
-        self._sessions_dir = sessions_dir
+        self._recorder_dir = _get_directory(os.path.join(sessions_dir, 'autopilot'))
+        self._photo_dir = _get_directory(os.path.join(sessions_dir, 'photos'))
         self._handler = None
         self.publisher = None
         self.ipc_server = None
@@ -201,7 +230,7 @@ class RecorderApplication(Application):
                 self._config_hash = _hash
                 if self._handler is not None:
                     self._handler.quit()
-                self._handler = EventHandler(self._sessions_dir, **_config)
+                self._handler = EventHandler(sessions=self._recorder_dir, photos=self._photo_dir, **_config)
                 self._handler.start()
                 self.ipc_server.register_start(self._handler.get_errors())
                 _process_hz = self._handler.get_process_frequency()
@@ -236,11 +265,8 @@ def main():
 
     sessions_dir = os.path.expanduser(args.sessions)
     assert os.path.exists(sessions_dir), "Cannot use sessions directory '{}'".format(sessions_dir)
-    record_dir = os.path.join(sessions_dir, 'autopilot')
-    if not os.path.exists(record_dir):
-        os.makedirs(record_dir, mode=0o755)
 
-    application = RecorderApplication(config_dir=args.config, sessions_dir=record_dir)
+    application = RecorderApplication(config_dir=args.config, sessions_dir=sessions_dir)
     quit_event = application.quit_event
 
     pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')

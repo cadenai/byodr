@@ -67,6 +67,8 @@ class Blob(AttrDict):
         self.throttle = kwargs.get('throttle', 0)
         self.arrow_up = kwargs.get('arrow_up')
         self.arrow_down = kwargs.get('arrow_down')
+        self.button_left = kwargs.get('button_left')
+        self.button_right = kwargs.get('button_right')
         self.navigation_active = kwargs.get('navigation_active')
         self.navigation_route = kwargs.get('navigation_route')
         self.navigation_match_image = kwargs.get('navigation_match_image', -1)
