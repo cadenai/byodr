@@ -93,7 +93,9 @@ image-shape-hwc: "{image_shape}"
         _now = datetime.today()
         _directory = os.path.join(self._directory, _now.strftime('%Y'), _now.strftime('%m%B'))
         if not os.path.exists(_directory):
-            os.makedirs(_directory, mode=0o755)
+            _mask = os.umask(000)
+            os.makedirs(_directory, mode=0o775)
+            os.umask(_mask)
         return os.path.join(_directory, self._session + '.zip')
 
     def open(self):

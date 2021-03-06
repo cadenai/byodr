@@ -45,9 +45,11 @@ def get_ts(val):
     return val.get('time')
 
 
-def _get_directory(directory, mode=0o755):
+def _get_directory(directory, mode=0o775):
     if not os.path.exists(directory):
+        _mask = os.umask(000)
         os.makedirs(directory, mode=mode)
+        os.umask(_mask)
     return directory
 
 
@@ -176,7 +178,9 @@ class EventHandler(threading.Thread):
         _now = datetime.today()
         _directory = os.path.join(self._photo_dir, _now.strftime('%Y%B'))
         if not os.path.exists(_directory):
-            os.makedirs(_directory, mode=0o755)
+            _mask = os.umask(000)
+            os.makedirs(_directory, mode=0o775)
+            os.umask(_mask)
         fname = os.path.join(_directory, _now.strftime('%Y%b%dT%H%M_%S%s')) + '.jpg'
         cv2.imwrite(fname, event.image)
 
@@ -200,7 +204,7 @@ class RecorderApplication(Application):
         super(RecorderApplication, self).__init__()
         self._config_dir = config_dir
         self._recorder_dir = _get_directory(os.path.join(sessions_dir, 'autopilot'))
-        self._photo_dir = _get_directory(os.path.join(sessions_dir, 'photos'))
+        self._photo_dir = _get_directory(os.path.join(sessions_dir, 'photos', 'cam0'))
         self._handler = None
         self.publisher = None
         self.ipc_server = None
