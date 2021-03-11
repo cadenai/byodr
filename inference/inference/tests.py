@@ -5,12 +5,23 @@ import sys
 from io import open
 
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer, QueueCamera
-from .app import InferenceApplication
+from .app import InferenceApplication, TFRunner
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
 else:
     from six.moves.configparser import SafeConfigParser
+
+
+class FakeNavigator(object):
+    def recompile(self):
+        pass
+
+    def restart(self, fn_dave_image, fn_alex_image, recognition_threshold=0, gpu_id=0, runtime_compilation=1):
+        pass
+
+    def quit(self):
+        pass
 
 
 def test_create_and_setup(tmpdir):
@@ -20,7 +31,8 @@ def test_create_and_setup(tmpdir):
     teleop = QueueReceiver()
     ipc_chatter = QueueReceiver()
 
-    app = InferenceApplication(config_dir=directory)
+    runner = TFRunner(navigator=FakeNavigator())
+    app = InferenceApplication(runner=runner, config_dir=directory, internal_models=directory)
     app.publisher = CollectPublisher()
     app.camera = QueueCamera()
     app.ipc_server = ipc_server
@@ -43,7 +55,7 @@ def test_create_and_setup(tmpdir):
         _parser = SafeConfigParser()
         _parser.add_section('inference')
         _parser.set('inference', 'clock.hz', str(new_process_frequency))
-        with open(os.path.join(directory, 'test_config.ini'), 'wb') as f:
+        with open(os.path.join(directory, 'test_config.ini'), 'w') as f:
             _parser.write(f)
         #
         # Issue the restart request.

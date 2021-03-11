@@ -1,5 +1,5 @@
 # Sourced from https://github.com/balena-io-examples
-# docker build -f jp42-nano-cp36-tensorrt.dockerfile -t centipede2donald/nvidia-jetson:jp42-nano-cp36-tensorrt-516 .
+# docker build -f jp42-nano-cp36-tensorrt.dockerfile -t centipede2donald/nvidia-jetson:jp42-nano-cp36-tensorrt516 .
 FROM balenalib/jetson-nano-ubuntu:bionic as buildstep
 
 WORKDIR /app
@@ -38,18 +38,18 @@ RUN dpkg -i cuda-repo-l4t-10-0-local-10.0.326_1.0-1_arm64.deb && \
     ldconfig && \
     rm -rf /usr/local/cuda-10.0/doc
 
-FROM balenalib/jetson-nano-ubuntu:bionic as final
-
-COPY --from=buildstep /usr/local/cuda-10.0 /usr/local/cuda-10.0
-COPY --from=buildstep /usr/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu
-COPY --from=buildstep /usr/local/lib /usr/local/lib
-
-WORKDIR /app
+#FROM balenalib/jetson-nano-ubuntu:bionic as final
+#
+#COPY --from=buildstep /usr/local/cuda-10.0 /usr/local/cuda-10.0
+#COPY --from=buildstep /usr/lib/aarch64-linux-gnu /usr/lib/aarch64-linux-gnu
+#COPY --from=buildstep /usr/local/lib /usr/local/lib
+#
+#WORKDIR /app
 
 COPY /nvidia_drivers.tbz2 .
 COPY /config.tbz2 .
 
-ENV DEBIAN_FRONTEND noninteractive
+#ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get update && apt-get install lbzip2 -y && \
     tar xjf nvidia_drivers.tbz2 -C / && \
@@ -85,5 +85,9 @@ ENV LD_LIBRARY_PATH=/usr/local/cuda-10.0/lib64
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda-10.0/targets/aarch64-linux/lib
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
 ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
+
+RUN pip3 install --global-option=build_ext \
+    --global-option="-I/usr/local/cuda-10.0/targets/aarch64-linux/include/" \
+    --global-option="-L/usr/local/cuda-10.0/targets/aarch64-linux/lib/" pycuda
 
 WORKDIR /

@@ -434,68 +434,32 @@ def _translate_navigation_direction(direction):
     return 'general.fallback'
 
 
-def _collapse(x):
-    return 0.0 if abs(x) < 1e-9 else 1.0 if abs(x - 1) < 1e-9 else x
-
-
-v_collapse = np.vectorize(_collapse)
-
-
-def update_belief(belief, hit, alpha=.5):
-    return v_collapse(belief + alpha * (hit - belief))
-
-
-class MatchMass(object):
-    def __init__(self, scale, alpha=.5):
-        self._alpha = alpha
-        self._observations = np.zeros(shape=(scale,), dtype=np.float32)
-
-    def clear(self):
-        self._observations = np.zeros_like(self._observations)
-
-    def observe(self, index, value):
-        hit = np.zeros_like(self._observations)
-        hit[index] = value
-        self._observations = update_belief(self._observations, hit, alpha=self._alpha)
-
-    def get_belief(self):
-        _id = np.argmax(self._observations)
-        return _id, self._observations[_id]
-
-
 class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
-        self._recognition_threshold = 0
-        self._lock = threading.Lock()
-        self._mass = None
-        self._mass_alpha = 0
-        self._current_image = None
-        self._current_distance = None
+        self._open_lock = threading.Lock()
         self._match_point = None
         self._match_image = None
         self._match_distance = None
 
-    def initialize(self, window, threshold):
-        self._mass_alpha = 1. / window if window > 0 else 1.
-        self._recognition_threshold = threshold
+    def initialize(self):
         self.reload()
 
     def reload(self):
         self._store.load_routes()
 
     def _open_store(self, route):
-        self._store.open(route)
-        with self._lock:
-            self._mass = MatchMass(scale=len(self._store), alpha=self._mass_alpha)
+        # Even though store is thread safe prevent concurrent store open processes which are started by threads in this class.
+        _acquired = self._open_lock.acquire(False)
+        try:
+            if _acquired:
+                self._store.open(route)
+        finally:
+            if _acquired:
+                self._open_lock.release()
 
     def close(self):
         self._store.close()
-        with self._lock:
-            if self._mass is not None:
-                self._mass.clear()
-        self._current_image = None
-        self._current_distance = None
         self._match_point = None
         self._match_image = None
         self._match_distance = None
@@ -505,12 +469,6 @@ class Navigator(object):
 
     def get_navigation_route(self):
         return self._store.get_selected_route()
-
-    def get_current_image_id(self):
-        return self._current_image
-
-    def get_current_distance(self):
-        return self._current_distance
 
     def get_match_image_id(self):
         return self._match_image
@@ -533,21 +491,17 @@ class Navigator(object):
     def update(self, c_inference):
         # This runs at the service process frequency.
         if self.is_active():
-            self._current_image = c_inference.get('navigation_image')
-            self._current_distance = c_inference.get('navigation_distance', 1.)
+            _point_id = c_inference.get('navigation_point')
+            _image_id = c_inference.get('navigation_image')
+            _distance = c_inference.get('navigation_distance', 1.)
             try:
-                with self._lock:
-                    if self._mass is not None and self._current_image >= 0:
-                        _point_id = self._store.get_image_navigation_point_id(self._current_image)
-                        self._mass.observe(_point_id, (1 - self._current_distance))
-                        _point_id, _mass = self._mass.get_belief()
-                        if _point_id is not None and _mass > (1 - self._recognition_threshold):
-                            _point = self._store.list_navigation_points()[_point_id]
-                            if _point != self._match_point:
-                                self._match_image = self._current_image
-                                self._match_distance = self._current_distance
-                                self._match_point = _point
-                                return self._store.get_instructions(self._match_point)
+                if _point_id >= 0:
+                    _point = self._store.list_navigation_points()[_point_id]
+                    if _point != self._match_point:
+                        self._match_point = _point
+                        self._match_image = _image_id
+                        self._match_distance = _distance
+                        return self._store.get_instructions(self._match_point)
             except LookupError:
                 pass
         # No new match.
@@ -577,13 +531,11 @@ class DriverManager(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
-        _navigation_recognition_threshold = parse_option('navigation.point.recognition.threshold', float, 0., _errors, **kwargs)
-        _navigator_window_size = parse_option('navigation.collection.window.size', int, 10, _errors, **kwargs)
         self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
         self._speed_scale = parse_option('driver.speed.norm.scale', float, 1, _errors, **kwargs)
         self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
-        self._navigator.initialize(window=_navigator_window_size, threshold=_navigation_recognition_threshold)
+        self._navigator.initialize()
         self._driver_cache.clear()
         _errors.extend(self._fill_driver_cache(**kwargs))
         self._driver = None
@@ -657,12 +609,14 @@ class DriverManager(Configurable):
             logger.info("Cruise speed set to '{}'.".format(new_val))
 
     def _set_direction(self, turn='general.fallback'):
-        with self._lock:
-            self._pilot_state.instruction = turn
+        pass
+        # with self._lock:
+        #     self._pilot_state.instruction = turn
 
     def teleop_direction(self, turn='general.fallback'):
-        with self._lock:
-            self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
+        pass
+        # with self._lock:
+        #     self._pilot_state.instruction = 'general.fallback' if self._pilot_state.instruction == turn else turn
 
     def get_driver_ctl(self):
         return self._driver_ctl
@@ -694,8 +648,6 @@ class DriverManager(Configurable):
             # If downstream processes need the teleop time then use an extra attribute.
             _nav_active = self._navigator.is_active()
             _nav_route = self._navigator.get_navigation_route() if _nav_active else None
-            _nav_current_image = self._navigator.get_current_image_id() if _nav_active else None
-            _nav_current_distance = self._navigator.get_current_distance() if _nav_active else None
             _nav_match_image = self._navigator.get_match_image_id() if _nav_active else None
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
             _nav_match_point = self._navigator.get_match_point() if _nav_active else None
@@ -705,8 +657,6 @@ class DriverManager(Configurable):
                         instruction=self._pilot_state.instruction,
                         navigation_active=_nav_active,
                         navigation_route=_nav_route,
-                        navigation_current_image=_nav_current_image,
-                        navigation_current_distance=_nav_current_distance,
                         navigation_match_image=_nav_match_image,
                         navigation_match_distance=_nav_match_distance,
                         navigation_match_point=_nav_match_point,

@@ -1,5 +1,5 @@
-# docker build -f jp42-nano-cp36-tf115.dockerfile -t centipede2donald/nvidia-jetson:jp42-nano-cp36-tensorflow-115 .
-FROM centipede2donald/nvidia-jetson:jp42-nano-cp36-base
+# docker build -f jp42-nano-cp36-tf115.dockerfile -t centipede2donald/nvidia-jetson:jp42-nano-cp36-tensorrt516-tensorflow115 .
+FROM centipede2donald/nvidia-jetson:jp42-nano-cp36-tensorrt516
 
 ENV DEBIAN_FRONTEND noninteractive
 

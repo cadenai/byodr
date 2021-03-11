@@ -22,6 +22,7 @@ class CarlaHandler(Configurable):
         self._image_shape = (600, 800, 3)
         self._tm_port = 8000
         self._rand_weather_seconds = -1
+        self._spawn_preferred_id = -1
         self._world = None
         self._traffic_manager = None
         self._actor = None
@@ -49,11 +50,12 @@ class CarlaHandler(Configurable):
             host, port = carla_host.split(':')
             carla_host, carla_port = host, int(port)
         carla_client = carla.Client(carla_host, carla_port)
-        carla_client.set_timeout(2.)
+        carla_client.set_timeout(5.)
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
         self._image_shape = _shape
         self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, -1, _errors, **kwargs)
+        self._spawn_preferred_id = parse_option('world.spawn.preferred.id', int, -1, _errors, **kwargs)
         self._world = carla_client.get_world()
         self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
         self._traffic_manager.global_percentage_speed_difference(65)
@@ -94,7 +96,8 @@ class CarlaHandler(Configurable):
         blueprint_library = self._world.get_blueprint_library()
         vehicle_bp = blueprint_library.find('vehicle.tesla.model3')
         spawn_points = self._world.get_map().get_spawn_points()
-        spawn_point = np.random.choice(spawn_points)
+        spawn_id = self._spawn_preferred_id if attempt == 0 and self._spawn_preferred_id >= 0 else np.random.randint(len(spawn_points))
+        spawn_point = spawn_points[spawn_id]
         try:
             self._actor = self._world.spawn_actor(vehicle_bp, spawn_point)
         except RuntimeError as e:
@@ -102,7 +105,7 @@ class CarlaHandler(Configurable):
                 self.reset(attempt + 1)
             else:
                 raise e
-        logger.info("Spawn point is '{}'.".format(spawn_point))
+        logger.info("Spawn point is '{}' with id {}.".format(spawn_point, spawn_id))
         # Attach the camera's - defaults at https://carla.readthedocs.io/en/latest/cameras_and_sensors/.
         # Provide the position of the sensor relative to the vehicle.
         # Tell the world to spawn the sensor, don't forget to attach it to your vehicle actor.

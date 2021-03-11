@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import glob
 import json
 import logging
@@ -115,6 +117,10 @@ class AbstractRouteDataSource(object):
         raise NotImplementedError()
 
     @abstractmethod
+    def is_open(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def close(self):
         raise NotImplementedError()
 
@@ -219,14 +225,14 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                     np_dirs = sorted([d for d in os.listdir(_route_directory) if not d.startswith('.')])
                     logger.info("{} -> {}".format(route_name, np_dirs))
                     # Take the existing sort-order.
-                    image_index = 0
-                    for point_id, point_name in enumerate(np_dirs):
+                    image_id = 0
+                    point_id = 0  # Cannot enumerate as points without images must be skipped.
+                    for point_name in np_dirs:
                         if self.quit_event.is_set():
                             break
-                        self.points.append(point_name)
                         np_dir = os.path.join(self.directory, route_name, point_name)
                         _pattern = np_dir + os.path.sep
-                        im_files = [f for f_ in [glob.glob(_pattern + e) for e in ('*.jpg', '*.jpeg')] for f in f_]
+                        im_files = sorted([f for f_ in [glob.glob(_pattern + e) for e in ('*.jpg', '*.jpeg')] for f in f_])
                         if len(im_files) < 1:
                             logger.info("Skipping point '{}' as there are no images for it.".format(point_name))
                             continue
@@ -237,12 +243,18 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
                         # Collect images by navigation point.
                         for im_file in im_files:
                             self.all_images.append(self.fn_load_image(im_file))
-                            self.image_index_to_point[image_index] = point_name
-                            self.image_index_to_point_id[image_index] = point_id
-                            image_index += 1
+                            self.image_index_to_point[image_id] = point_name
+                            self.image_index_to_point_id[image_id] = point_id
+                            image_id += 1
+                        # Accept the point.
+                        self.points.append(point_name)
+                        point_id += 1
                     self.selected_route = route_name
             except OSError as e:
                 logger.info(e)
+
+    def is_open(self):
+        return self.selected_route in self.routes
 
     def close(self):
         self._reset()
@@ -317,6 +329,9 @@ class ReloadableDataSource(AbstractRouteDataSource):
     def open(self, route_name=None):
         with self._lock:
             self._delegate.open(route_name)
+
+    def is_open(self):
+        return self._do_safe(lambda acquired: self._delegate.is_open() if acquired else False)
 
     def close(self):
         with self._lock:

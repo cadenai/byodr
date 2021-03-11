@@ -1,4 +1,6 @@
+from __future__ import absolute_import
 import collections
+from six.moves import map
 
 
 class QueueReceiver(object):
@@ -22,7 +24,7 @@ class QueueReceiver(object):
 
     def add(self, m):
         self._queue.appendleft(m)
-        map(lambda x: x(m), self._listeners)
+        list(map(lambda x: x(m), self._listeners))
 
     def get_latest(self):
         return self._queue[0] if bool(self._queue) else None

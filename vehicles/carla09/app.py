@@ -3,13 +3,14 @@ import glob
 import logging
 import os
 import shutil
+
 from ConfigParser import SafeConfigParser
+from vehicle import CarlaHandler
 
 from byodr.utils import Application
 from byodr.utils import Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, JSONReceiver, CollectorThread
 from byodr.utils.option import parse_option
-from vehicle import CarlaHandler
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,7 @@ class CarlaApplication(Application):
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
         cfg = dict(parser.items('vehicle'))
         cfg.update(dict(parser.items('platform')))
+        self.logger.info(cfg)
         return cfg
 
     @staticmethod

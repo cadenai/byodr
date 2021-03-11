@@ -3,13 +3,14 @@ import glob
 import logging
 import os
 import shutil
+
 from ConfigParser import SafeConfigParser
+from core import GpsPollerThread, GstSource, PTZCamera
 
 from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, CollectorThread, JSONReceiver
 from byodr.utils.option import parse_option, hash_dict
-from core import GpsPollerThread, GstSource, PTZCamera
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -139,6 +140,7 @@ class RoverApplication(Application):
         [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
         cfg = dict(parser.items('vehicle'))
         cfg.update(dict(parser.items('camera')))
+        self.logger.info(cfg)
         return cfg
 
     def _capabilities(self):

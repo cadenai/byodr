@@ -18,6 +18,8 @@ RUN pip3 install "opencv-python >=4.4.0.42,<4.5.0" && \
   pip3 install "Equation==1.2.1" && \
   pip3 install "pytest==4.6.11"
 
+#RUN pip3 install "pfilter==0.2.2"
+
 COPY ./common common/
 COPY ./inference app/
 WORKDIR /app

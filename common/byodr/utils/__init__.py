@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import collections
 import logging
 import multiprocessing
@@ -11,6 +12,7 @@ from contextlib import contextmanager
 import numpy as np
 
 from byodr.utils.option import hash_dict
+import six
 
 
 def timestamp(value=None):
@@ -49,9 +51,7 @@ class Profiler(Profile):
         self.disable()
 
 
-class Configurable(object):
-    __metaclass__ = ABCMeta
-
+class Configurable(six.with_metaclass(ABCMeta, object)):
     def __init__(self):
         self._lock = multiprocessing.Lock()
         self._errors = []
@@ -160,8 +160,10 @@ class Application(object):
                 # Report the actual clock frequency which includes the user specified wait time.
                 self._rt_queue.append(time.time() - _start)
         except Exception as e:
-            self.logger.error("{}".format(traceback.format_exc(e)))
+            # Quit first to be sure - the traceback may in some cases raise another exception.
             self.quit()
+            self.logger.error(e)
+            self.logger.error(traceback.format_exc(e))
         except KeyboardInterrupt:
             self.quit()
         finally:

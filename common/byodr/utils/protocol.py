@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 from byodr.utils import timestamp
 
 
@@ -23,7 +24,7 @@ class MessageStreamProtocol(object):
         self._max_age_micro = max_age_ms * 1000.
         self._max_delay_micro = max_delay_ms * 1000.
         # There is currently no distinction in violation types.
-        self._n_violations = 0L
+        self._n_violations = 0
         self._last_message_time = 0
         self._last_protocol_time = 0
 
@@ -34,7 +35,7 @@ class MessageStreamProtocol(object):
         self._n_violations -= 1
 
     def reset(self):
-        self._n_violations = 0L
+        self._n_violations = 0
         self._last_message_time = 0
         self._last_protocol_time = 0
 

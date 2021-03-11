@@ -23,7 +23,12 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # Do not use a single variable since class attributes mutate to be instance attributes.
     operators = set()
     operator_access_control = collections.deque(maxlen=1)
-    viewers = set()
+
+    def _has_operators(self):
+        return len(self.operators) > 0
+
+    def _is_operator(self):
+        return self in self.operators
 
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
@@ -38,34 +43,24 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        # Perhaps the operator has timed-out but the control connection was not closed somehow.
-        if self.operators:
-            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
-            if (timestamp() - _last_msg_micro > self._operator_timeout_micro) or next(iter(self.operators)).ws_connection is None:
-                logger.info("Operator server-side timeout.")
-                self.operators.clear()
-        # Proceed.
-        if self.operators:
-            self.viewers.add(self)
-            logger.info("Viewer {} connected.".format(self.request.remote_ip))
+        if self._is_operator():
+            logger.info("Operator {} reconnected.".format(self.request.remote_ip))
         else:
+            took_over = self._has_operators()
+            self.operators.clear()
             self.operators.add(self)
-            logger.info("Operator {} connected.".format(self.request.remote_ip))
+            logger.info("Operator {} {}.".format(self.request.remote_ip, ('took over' if took_over else 'connected')))
 
     def on_close(self):
-        if self in self.operators:
+        if self._is_operator():
             self.operators.clear()
             logger.info("Operator {} disconnected.".format(self.request.remote_ip))
         else:
-            try:
-                self.viewers.remove(self)
-            except KeyError:
-                pass
             logger.info("Viewer {} disconnected.".format(self.request.remote_ip))
 
     def on_message(self, json_message):
         _response = json.dumps(dict(control='viewer'))
-        if self in self.operators:
+        if self._is_operator():
             _micro_time = timestamp()
             # Throttle very fast operator connections.
             _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
@@ -130,12 +125,12 @@ class MessageServerSocket(websocket.WebSocketHandler):
             recorder = None if state is None else state[3]
             speed_scale = 1. if pilot is None else float(pilot.get('speed_scale', 1))
             pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
-            pilot_current_image = -1 if pilot is None else pilot.get('navigation_current_image', -1)
-            pilot_current_sim = 1 if pilot is None else pilot.get('navigation_current_distance', 1)
             pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
             pilot_match_sim = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
             pilot_match_point = '' if pilot is None else pilot.get('navigation_match_point', '')
-            assert None not in (pilot_match_image, pilot_current_sim)
+            inference_current_image = -1 if inference is None else inference.get('navigation_image', -1)
+            inference_current_sim = 1 if inference is None else inference.get('navigation_distance', 1)
+            inference_command = 0 if inference is None else inference.get('navigation_command', 0)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'debug1': 0 if inference is None else inference.get('corridor'),
@@ -143,7 +138,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'debug3': 0 if inference is None else inference.get('penalty'),
                 'debug4': 0 if inference is None else inference.get('surprise_out'),
                 'debug5': 0 if inference is None else inference.get('critic_out'),
-                'debug6': 0 if inference is None else inference.get('fallback'),
+                'debug6': 0,
                 'debug7': 0 if inference is None else inference.get('_fps'),
                 'rec_act': False if recorder is None else recorder.get('active'),
                 'rec_mod': self._translate_recorder(recorder),
@@ -157,8 +152,9 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'nav_active': pilot_navigation_active,
                 'nav_point': pilot_match_point,
-                'nav_image': [pilot_match_image, pilot_current_image],
-                'nav_distance': [pilot_match_sim, pilot_current_sim],
+                'nav_image': [pilot_match_image, inference_current_image],
+                'nav_distance': [pilot_match_sim, inference_current_sim],
+                'nav_command': inference_command,
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))
@@ -255,7 +251,7 @@ class UserOptions(object):
         self.reload()
 
     def list_sections(self):
-        return self._parser.sections()
+        return [s for s in self._parser.sections() if s != 'inference']
 
     def get_options(self, section):
         return dict(self._parser.items(section))
