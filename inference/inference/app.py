@@ -88,33 +88,27 @@ class RouteMemory(object):
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
-        _local = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
+        _image = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
+
+        # Allow for a better match in case it is tracking the wrong image.
+        _competitor = np.where(np.logical_or.reduce([code_points == _point, code_points == _previous]), -1, self._beliefs).argmax()
 
         _match = None
-        _image = _local
-
-        # Attempt a better match in case it is tracking the wrong image.
-        _local_point = code_points[_local]
-        c_mask = np.logical_or.reduce([code_points == _point, code_points == _previous, code_points == _local_point])
-        _competitor = np.where(c_mask, -1, self._beliefs).argmax()
-
-        if self._evidence[_local] < _threshold and _errors[_local] > np.power(self._evidence[_local], .75):
-            _match = code_points[_local]
+        if self._evidence[_image] < _threshold and _errors[_image] > np.power(self._evidence[_image], .75):
+            _match = code_points[_image]
         elif self._evidence[_competitor] < _threshold and _errors[_competitor] > np.power(self._evidence[_competitor], .75):
             _image = _competitor
             _match = code_points[_competitor]
 
-        _error = _errors[_image]
-        _evidence = self._evidence[_image]
         if _match is not None and _point != _match:
+            logger.info("Match {} error {:.2f} evidence {:.2f}".format(_match, _errors[_image], self._evidence[_image]))
             n_points = self._num_points
             self._navigation_point = _match, ((_match - 1) % n_points), ((_match + 1) % n_points)
             self._evidence_reset()
-            logger.info("Match {} error {:.2f} evidence {:.2f}".format(_match, _error, _evidence))
 
-        # Set the navigation destination.
+        # Set the navigation destination unless it is too far.
         _distance = _errors[_image]
-        _destination = self._destination_values[_image]
+        _destination = self._destination_values[_image] if _distance < .99 else None
         return _match, _image, _distance, _destination
 
 
