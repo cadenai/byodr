@@ -49,7 +49,7 @@ class Barrier(object):
 
 
 def _create_input_nodes():
-    input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 66, 200, 3], name='input/dave_image')
+    input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 3, 66, 200], name='input/dave_image')
     input_alex = tf.placeholder(dtype=tf.float32, shape=[1, 100, 200, 3], name='input/alex_image')
     input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
     input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 90], name='input/current_destination')

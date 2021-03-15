@@ -31,14 +31,14 @@ def hwc_squeeze(image, resize_wh=None, dtype=np.uint8):
     return image
 
 
-def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, dtype=np.uint8):
+def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, chw=True, dtype=np.uint8):
     # If resize is not the first operation, then resize the incoming image to the start of the data pipeline persistent images.
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
     top, right, bottom, left = crop
     image = image[top:image.shape[0] - bottom, left:image.shape[1] - right]
     image = cv2.resize(image, (200, 66)) if dave else image
     image = hwc_bgr_to_yuv(image) if yuv else image
-    # image = hwc_to_chw(image) if chw else image
+    image = hwc_to_chw(image) if chw else image
     image = image.astype(dtype)
     return image
 
