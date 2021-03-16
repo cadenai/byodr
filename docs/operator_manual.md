@@ -49,16 +49,16 @@ Please use the triggers carefully, the robot may be more powerful than you expec
 ---
 
 ## Certificates
-The W3C-community decide recently that Game-pads are only available within the secure-context(https)
-There are no official certificates for private IP-no as used within the ZeroTier VPN's.
+The W3C-community decide recently that Game-pads are only available within the secure-context(https).  
+There are no official certificates for private IP-no as used within the ZeroTier VPN's.  
 MWLC made self-signed certificates available via the webserver on the robot.
 To use the certificate you have:  
 - Get the certificate  
 - Install and trust it
 
 ###Get the certificate
-Assure your Robot is available in the ZeroTier network.
-In th Mac-environment the following steps are taken:  
+Assure your Robot is available in the ZeroTier network.  
+With Firefox, in the Mac-environment, the following steps are taken:  
 Click the HTTPS-lock-icon before the URL.
 
 ![](img/controller/cert_20lockiconclicked.jpg)
@@ -88,11 +88,12 @@ Go to the certificate and open it.
 ![](img/controller/cert_40downloadcertificateclicked.jpg)  
   
 The mac will ask to add the certificate to the computer for further usage.
-Choose 'login' and click add.  
+Choose as keychain 'login' and click add.  
 It's installed.
 
 Go on with trusting it.  
-Go to your key-chain and double-click the certificate.
+Go to your key-chain and double-click the certificate. The certificate is called 'rover.mwlc.ai'.  
+
 
 ![](img/controller/cert_50certificateopeninkeychain.jpg)  
   
@@ -148,6 +149,7 @@ Press `east` twice:
 
 ![](img/controller/msg_controller_not_detected.png)
 ![](img/controller/msg_another_user_in_control.png)
+![](img/controller/msg_connection_lost.png)
 
 The screen has three warnings.  
 1. Controller not detected. Try to press `east` to get it online.
@@ -163,6 +165,7 @@ The screen has three warnings.
 * Click the “hamburger” icon (leftmost) to:   
     - Stop the data stream from the camera to your computer 
     - Go to the settings screen. To return to the main screen use the browser's ‘Back’ button.  
+    - The settings itself are only used for developmentpurposes. Check github for more information.
 * h264: Stream from the camera based on system settings.
 * mjpeg: Stream from the camera with manual compression control. Use the up- and down arrows to change the image quality in order to 
   minimize latency.
@@ -346,6 +349,16 @@ The autopilot can be overridden by commands from the operator:
 * `Right joystick` 
     - steer
     - record images, instructions and values including but not limited to steering and throttle, for training purposes   
-    - up/down movements are ignored
-
+    - up/down movements are ignored  
+    
+### Camera home setting
+The cameras have a home setting. This can be changed.  
+Warning: For the front-camera, the home setting should be the position that makes the AI-models work.  
+A slight mis-alignment may give unexpected behaviour of the robot.  
+  
+For changing the home setting:  
+- choose the camera by pressing the the right or left arrow.  
+- Set the camera in the new home-position with the left stick.  
+- Save the new home position by pressing the X-button(blue) 10 seconds, then keep this button pressed and pres three times the A-button(green).
+- Test the new home positon by turning the camera with the left stick,  press the A-button and see if the camera turn back to the new home-position. 
 

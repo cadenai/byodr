@@ -1,11 +1,12 @@
 ## Parts list
 
-The parts are summarised per subsystem. These groups are also use the differentiate the assembly stages.  
+The parts are summarised per subsystem. These groups are also used to differentiate the assembly stages.  
 - Chassis  
 - Body  
 - Power  
 - ICT  
-- Communication and sensors
+- Communication and sensors  
+Remark: Our computers use the metric system. A comma, ',', is used for decimals. 
 ###Chassis<br>
 The basis for the chassis is a standard RC-vehicle. We use the Kraton 8s.  The main changes we make are:<br>- Remove cover, receiver, spoiler, battery holders and some smaller parts.  <br>- Make the steering stronger.  <br>- Make it manageable for the computers  <br>- Remove the start/stop-option from the button.  <br>- Make ity possible to carry the equipment an a payload.  <br>- Depending on the application, we also change wheels to have tires with harder compound.<br>
  1   [Arrma Kraton 8S](https://www.arrma-rc.com/kraton8s/)<br>
@@ -59,7 +60,7 @@ For the body lots of bolts and nuts are used.<br>
  2   [Tripod screw 1/4”](https://www.caruba.com)<br>
 37   [Washer M4](https://www.boikon.com/webshop/fastenings/washer-din-125-1a-zp-m4/)<br>
 ###Power: Sources and converters
-The main system uses a 7s batery-pack. The voltage differs and gets lower the more empty the battery is.<br>
+The main system uses a 7s battery-pack. The voltage gets lower the more empty the battery is.<br>
  1   [Battery 400Wh, 25V, 7s5p](http://www.emergostar.com)<br>
  1   [DC/DC Converter 12vdc 60W Rail mounted, 18-75vdc](https://www.meanwell.com/webapp/product/search.aspx?prod=DDR-60)<br>
  2   [DDR-15G-5 DIN-rail](https://www.meanwell.com/webapp/product/search.aspx?prod=DDR-15)<br>
@@ -89,7 +90,7 @@ To activate en deactivate the equipment, lots of breakers are used.<br>
  2   [Relay 5Volt USB NO / NC](https://www.conrad.com/p/conrad-components-393905-relay-card-component-5-v-dc-393905)<br>
  4   [WAGO 2006-1681 Fuse terminal 7.50 mm](https://www.wago.com/us/rail-chassis-terminal-blocks/2-conductor-fuse-terminal-block-for-automotive-blade-style-fuses/p/2006-1681)<br>
 ###Power: Wires and ferrules
-To identify the different connection, different colors are used.<br>
+To identify the different connections, different colors are used.<br>
  2   [Ferrule 0,34mm2 x 6 roze, micro usb to Pi](https://www.vogtshop.ch/index.cfm?content=productData&Language=1&TreeID=D9CAD446-200B-4BED-A9E0-8983A8022FFC&ObjId=6F4D89D7-5D65-4A1A-8E62-43D50D553427&sId=BAB90BCD-E0B2-4BF3-B775-41EC38DB71FB)<br>
  4   [Ferrule 0,50mm2 x 8 orange](https://www.conrad.com/p/tru-components-1091293-ferrule-050-mm-partially-insulated-orange-100-pcs-1571000)<br>
  4   [Ferrule 0,50mm2 x 8, white PoE, front cam](https://www.phoenixcontact.com/online/portal/de?uri=pxc-oc-itemdetail:pid=3200522&library=dede&tab=1)<br>
@@ -141,5 +142,5 @@ For the ethernet, different colors are used.<br>
  1   [Ethernet 50 cm red Pi](https://www.conrad.com/p/basetech-rj45-network-cable-patch-cable-cat-5e-u-utp-25.00-cm-red-incl.-detent-1717510)<br>
  1   [Ethernet 50 cm white Wan](https://www.conrad.com/p/basetech-rj45-network-cable-patch-cable-cat-5e-uutp-050-m-white-incl-detent-1717520)<br>
 
-You can put this al together. The parts are obvious to use.
+You can put this all together. The parts are obvious to use.
 If you have any question, don't hesitate to contact us at [www.mwlc.global/contact/](http://www.mwlc.global/contact/).  
