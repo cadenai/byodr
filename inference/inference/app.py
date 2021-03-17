@@ -106,9 +106,8 @@ class RouteMemory(object):
             self._navigation_point = _match, ((_match - 1) % n_points), ((_match + 1) % n_points)
             self._evidence_reset()
 
-        # Set the navigation destination unless it is too far.
         _distance = _errors[_image]
-        _destination = self._destination_values[_image] if _distance < .99 else None
+        _destination = self._destination_values[_image]
         return _match, _image, _distance, _destination
 
 
@@ -240,6 +239,7 @@ class TFRunner(Configurable):
         self._penalty_filter = None
         self._debug_filter = None
         self._corridor_shift = 0
+        self._obstruction_shift = 0
         self._fn_obstacle_norm = None
         self._fn_corridor_norm = None
         self._fn_corridor_penalty = None
@@ -269,6 +269,7 @@ class TFRunner(Configurable):
         self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
 
         self._corridor_shift = parse_option('driver.dnn.steer.corridor.shift', float, 0, _errors, **kwargs)
+        self._obstruction_shift = parse_option('driver.dnn.obstacle.corridor.shift', float, 0, _errors, **kwargs)
 
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
 
@@ -307,7 +308,7 @@ class TFRunner(Configurable):
                                 )
 
         # Penalties to decrease desired speed.
-        _obstacle_penalty = self._fn_obstacle_norm(brake_out)
+        _obstacle_penalty = self._fn_obstacle_norm(brake_out) + max(0, brake_critic_out + self._obstruction_shift)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         _command_index = int(np.argmax(_command))
@@ -317,6 +318,7 @@ class TFRunner(Configurable):
                     corridor=float(self._debug_filter.calculate(_corridor_penalty)),
                     surprise_out=float(surprise_out),
                     critic_out=float(critic_out),
+                    brake_critic_out=float(brake_critic_out),
                     dagger=int(0),
                     obstacle=float(brake_out),
                     penalty=float(_total_penalty),

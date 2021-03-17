@@ -133,7 +133,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             inference_command = 0 if inference is None else inference.get('navigation_command', 0)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
-                'debug1': 0 if inference is None else inference.get('corridor'),
+                'debug1': 0 if inference is None else inference.get('brake_critic_out'),
                 'debug2': 0 if inference is None else inference.get('obstacle'),
                 'debug3': 0 if inference is None else inference.get('penalty'),
                 'debug4': 0 if inference is None else inference.get('surprise_out'),
