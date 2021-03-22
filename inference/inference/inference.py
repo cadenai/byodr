@@ -77,19 +77,19 @@ def _load_definition(f_name):
     return graph_def
 
 
-def maneuver_index(turn='general.fallback'):
+def _maneuver_index(turn='general.fallback'):
     _options = {'general.fallback': 0, 'intersection.left': 1, 'intersection.ahead': 2, 'intersection.right': 3}
     return _options[turn]
 
 
-def index_maneuver(index=0):
+def _index_maneuver(index=0):
     _options = {0: 'general.fallback', 1: 'intersection.left', 2: 'intersection.ahead', 3: 'intersection.right'}
     return _options[index]
 
 
 def maneuver_intention(turn='general.fallback', dtype=np.float32):
     command = np.zeros(4, dtype=dtype)
-    command[maneuver_index(turn=turn)] = 1
+    command[_maneuver_index(turn=turn)] = 1
     return command
 
 

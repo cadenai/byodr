@@ -21,7 +21,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, index_maneuver, maneuver_intention
+from .inference import DynamicMomentum, TRTDriver, maneuver_intention
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -326,8 +326,7 @@ class TFRunner(Configurable):
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),
                     navigation_distance=float(1 if nav_distance is None else nav_distance),
-                    navigation_command=float(_command_index - 1) + _command[_command_index],
-                    navigation_instruction=index_maneuver(_command_index)
+                    navigation_command=float(_command_index - 1) + _command[_command_index]
                     )
 
 
