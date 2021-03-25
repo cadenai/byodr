@@ -326,7 +326,7 @@ class TFRunner(Configurable):
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),
                     navigation_distance=float(1 if nav_distance is None else nav_distance),
-                    navigation_command=float(_command_index - 1) + _command[_command_index]
+                    navigation_command=float(_command_index + _command[_command_index] - 1e-3)
                     )
 
 
@@ -421,7 +421,13 @@ class RecompilationThread(threading.Thread):
     def run(self):
         while self.is_running():
             time.sleep(self._sleep)
-            self._app.recompile()
+            # noinspection PyBroadException
+            try:
+                self._app.recompile()
+            except Exception:
+                # This will exit the application - let the service manager handle restarts.
+                self.quit()
+                self._app.quit()
 
 
 def main():
