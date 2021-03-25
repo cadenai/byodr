@@ -49,8 +49,8 @@ class Barrier(object):
 
 
 def _create_input_nodes():
-    input_dave = tf.placeholder(dtype=tf.float32, shape=[1, 3, 66, 200], name='input/dave_image')
-    input_alex = tf.placeholder(dtype=tf.float32, shape=[1, 100, 200, 3], name='input/alex_image')
+    input_dave = tf.placeholder(dtype=tf.uint8, shape=[1, 3, 66, 200], name='input/dave_image')
+    input_alex = tf.placeholder(dtype=tf.uint8, shape=[1, 100, 200, 3], name='input/alex_image')
     input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
     input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 90], name='input/current_destination')
     return input_dave, input_alex, input_command, input_destination
@@ -100,11 +100,11 @@ def get_frozen_graph(_file):
     return graph_def
 
 
-def image_standardization(img):
-    # Mimic the tensorflow operation.
-    # The op computes (x - mean) / adjusted_stddev, where mean is the average of all values in image,
-    # and adjusted_stddev = max(stddev, 1.0 / sqrt(image.NumElements())).
-    return (img - np.mean(img)) / max(np.std(img), (1. / np.sqrt(img.size)))
+# def image_standardization(img):
+# Mimic the tensorflow operation.
+# The op computes (x - mean) / adjusted_stddev, where mean is the average of all values in image,
+# and adjusted_stddev = max(stddev, 1.0 / sqrt(image.NumElements())).
+# return (img - np.mean(img)) / max(np.std(img), (1. / np.sqrt(img.size)))
 
 
 class TRTDriver(object):
@@ -199,9 +199,12 @@ class TRTDriver(object):
             f_runtime = self._compile()
             _nodes = _create_input_nodes()
             self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
+            # Copy the trainer behavior.
+            input_dave = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), tf.cast(self.input_dave, tf.float32) / 255.)
+            input_alex = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), tf.cast(self.input_alex, tf.float32) / 255.)
             _inputs = {
-                'input/dave_image': self.input_dave,
-                'input/alex_image': self.input_alex,
+                'input/dave_image': input_dave,
+                'input/alex_image': input_alex,
                 'input/maneuver_command': self.input_command,
                 'input/current_destination': self.input_destination
             }
@@ -240,9 +243,6 @@ class TRTDriver(object):
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_coordinate, self.tf_key, self.tf_value]
             with self.sess.graph.as_default():
-                # Copy the trainer behavior.
-                dave_image = image_standardization(dave_image / 255.)
-                alex_image = image_standardization(alex_image / 255.)
                 feed = {
                     self.input_dave: [dave_image],
                     self.input_alex: [alex_image],
@@ -266,9 +266,6 @@ class TRTDriver(object):
                     ]
             destination = self._zero_vector if destination is None else destination
             with self.sess.graph.as_default():
-                # Copy the trainer behavior.
-                dave_image = image_standardization(dave_image / 255.)
-                alex_image = image_standardization(alex_image / 255.)
                 feed = {
                     self.input_dave: [dave_image],
                     self.input_alex: [alex_image],
@@ -277,5 +274,5 @@ class TRTDriver(object):
                 }
                 _out = [x.flatten() for x in self.sess.run(_ops, feed_dict=feed)]
                 _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query = _out
-                _gumbel = np.insert(_gumbel, 0, values=0, axis=0)
+                # _gumbel = np.insert(_gumbel, 0, values=0, axis=0)
                 return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query
