@@ -49,10 +49,10 @@ class Barrier(object):
 
 
 def _create_input_nodes():
-    input_dave = tf.placeholder(dtype=tf.uint8, shape=[1, 3, 66, 200], name='input/dave_image')
-    input_alex = tf.placeholder(dtype=tf.uint8, shape=[1, 100, 200, 3], name='input/alex_image')
-    input_command = tf.placeholder(dtype=tf.float32, shape=[1, 4], name='input/maneuver_command')
-    input_destination = tf.placeholder(dtype=tf.float32, shape=[1, 90], name='input/current_destination')
+    input_dave = tf.placeholder(dtype=tf.uint8, shape=[3, 66, 200], name='input/dave_image')
+    input_alex = tf.placeholder(dtype=tf.uint8, shape=[100, 200, 3], name='input/alex_image')
+    input_command = tf.placeholder(dtype=tf.float32, shape=[4], name='input/maneuver_command')
+    input_destination = tf.placeholder(dtype=tf.float32, shape=[90], name='input/current_destination')
     return input_dave, input_alex, input_command, input_destination
 
 
@@ -200,13 +200,13 @@ class TRTDriver(object):
             _nodes = _create_input_nodes()
             self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
             # Copy the trainer behavior.
-            input_dave = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), tf.cast(self.input_dave, tf.float32) / 255.)
-            input_alex = tf.map_fn(lambda frame: tf.image.per_image_standardization(frame), tf.cast(self.input_alex, tf.float32) / 255.)
+            input_dave = tf.image.per_image_standardization(tf.cast(self.input_dave, tf.float32) / 255.)
+            input_alex = tf.image.per_image_standardization(tf.cast(self.input_alex, tf.float32) / 255.)
             _inputs = {
-                'input/dave_image': input_dave,
-                'input/alex_image': input_alex,
-                'input/maneuver_command': self.input_command,
-                'input/current_destination': self.input_destination
+                'input/dave_image': [input_dave],
+                'input/alex_image': [input_alex],
+                'input/maneuver_command': [self.input_command],
+                'input/current_destination': [self.input_destination]
             }
             tf.import_graph_def(_load_definition(f_runtime), input_map=_inputs, name='m')
             logger.info("Loaded '{}' in {:2.2f} seconds.".format(f_runtime, time.time() - _start))
@@ -244,10 +244,10 @@ class TRTDriver(object):
             _ops = [self.tf_coordinate, self.tf_key, self.tf_value]
             with self.sess.graph.as_default():
                 feed = {
-                    self.input_dave: [dave_image],
-                    self.input_alex: [alex_image],
-                    self.input_command: [maneuver_intention()],
-                    self.input_destination: [self._zero_vector]
+                    self.input_dave: dave_image,
+                    self.input_alex: alex_image,
+                    self.input_command: maneuver_intention(),
+                    self.input_destination: self._zero_vector
                 }
                 _out = [x.flatten() for x in self.sess.run(_ops, feed_dict=feed)]
                 return _out
@@ -267,10 +267,10 @@ class TRTDriver(object):
             destination = self._zero_vector if destination is None else destination
             with self.sess.graph.as_default():
                 feed = {
-                    self.input_dave: [dave_image],
-                    self.input_alex: [alex_image],
-                    self.input_command: [maneuver_command],
-                    self.input_destination: [destination]
+                    self.input_dave: dave_image,
+                    self.input_alex: alex_image,
+                    self.input_command: maneuver_command,
+                    self.input_destination: destination
                 }
                 _out = [x.flatten() for x in self.sess.run(_ops, feed_dict=feed)]
                 _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query = _out
