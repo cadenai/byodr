@@ -193,7 +193,7 @@ class TRTDriver(object):
         with graph.as_default():
             config = tf.ConfigProto(allow_soft_placement=True)
             # config.gpu_options.allow_growth = True
-            config.gpu_options.per_process_gpu_memory_fraction = 0.300
+            config.gpu_options.per_process_gpu_memory_fraction = 0.295
             self.sess = tf.Session(config=config, graph=graph)
             # Compile after session creation for tf memory management.
             f_runtime = self._compile()
