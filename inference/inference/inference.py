@@ -274,5 +274,4 @@ class TRTDriver(object):
                 }
                 _out = [x.flatten() for x in self.sess.run(_ops, feed_dict=feed)]
                 _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query = _out
-                # _gumbel = np.insert(_gumbel, 0, values=0, axis=0)
                 return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query

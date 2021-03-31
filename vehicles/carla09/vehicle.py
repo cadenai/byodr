@@ -23,6 +23,7 @@ class CarlaHandler(Configurable):
         self._tm_port = 8000
         self._rand_weather_seconds = -1
         self._spawn_preferred_id = -1
+        self._spawn_preferred_weather = None
         self._world = None
         self._traffic_manager = None
         self._actor = None
@@ -56,6 +57,7 @@ class CarlaHandler(Configurable):
         self._image_shape = _shape
         self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, -1, _errors, **kwargs)
         self._spawn_preferred_id = parse_option('world.spawn.preferred.id', int, -1, _errors, **kwargs)
+        self._spawn_preferred_weather = parse_option('world.spawn.preferred.weather', str, None, _errors, **kwargs)
         self._world = carla_client.get_world()
         self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
         self._traffic_manager.global_percentage_speed_difference(65)
@@ -123,7 +125,7 @@ class CarlaHandler(Configurable):
         camera_rear.listen(lambda data: self._on_camera(data, camera=1))
         self._reset_agent_travel()
         self._traffic_manager.ignore_lights_percentage(self._actor, 100.)
-        self._set_weather('ClearNoon')
+        self._set_weather()
 
     def _on_camera(self, data, camera=0):
         img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
@@ -177,13 +179,14 @@ class CarlaHandler(Configurable):
         else:
             self._in_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.99  # and command.get('arrow_down', 0) == 1
 
-    def _set_weather(self, preset=None):
-        if preset is None and self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
-            self._change_weather_time = time.time() + self._rand_weather_seconds
-            preset = np.random.choice([x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)])
-        if preset is not None:
+    def _set_weather(self):
+        preset = self._spawn_preferred_weather
+        if self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
+            presets = [x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)]
+            preset = preset if preset in presets else np.random.choice(presets)
             logger.info("Setting the weather to '{}'.".format(preset))
             self._world.set_weather(getattr(carla.WeatherParameters, preset))
+            self._change_weather_time = time.time() + self._rand_weather_seconds
 
     def state(self):
         x, y = self._position()
