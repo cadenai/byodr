@@ -1,146 +1,77 @@
-# Manual Training of the Autopilot
-
-## Summary
-
-The robot has an option to drive autonomously, the autopilot. Only in few situations will the autopilot be able to drive your route 
-without any extra training. To have the robot drive your route there is an option to train the robot.  
-
-To teach the robot to complete a route autonomously, without halts (planned stops), go through the following steps:  
-* Decide upon a route
-* Send route information to MWLC    
-    - For an inside environment: a map or drawing  
-    - For an outside environment: a map or satellite image
-* Ensure that the robot is accompanied by a person who has received instructions
-* Complete the route 5-10 times in autopilot mode while training - do this clockwise and counter clockwise
-* Send start and end times of your training sessions to MWLC
-* Wait for the model update to complete - this may take several days to weeks
-* Repeat the training steps until satisfied
-
-### To stop the robot
-
-Press the red button on the outside of the casing.  
-
-![](img/autopilot/rover_front.jpg)
-
-> On the port side of the robot there is a red button that stops the engine when pressed.
-
-
----
-
+# Training the Autopilot
 ## Introduction
-
-The main function of our robot is routine transport of small goods, such as packages or inspection equipment, using simple routes.  
-As there is no driver on board the vehicle, it can be smaller, cheaper and will consume less energy. 
+The main function of the robot is driving routes on a routine base, carrying small goods, such as packages or inspection equipment.  
+As there is no driver on board, the vehicle can be smaller, cheaper and will consume less energy. 
 Without a driver on board there is a need for remote supervision by an operator or traffic controller.   
 
-The robot has three modes to give an operator and/or traffic controller supervision over the vehicle and to save time:  
-1. Teleoperation 
-1. An autopilot with remote supervision, that can drive simple routes.
-1. An option to train the autopilot to drive more complex routes.  
-
-The teleoperation mode is explained in manual [controller and browser](operator_manual.md).  
-To work with the autopilot it is useful to have some background information about its characteristics and the training procedure.
-
+The robot has two modes to give an operator and/or traffic controller supervision over the vehicle and to save time:  
+1. Teleoperation for remote control of the robot 
+2. The autopilot to train the robot and have the robot driving autonomously.
+The teleoperation mode is explained in manual [Controller and Browser](operator_manual.md).  
 ## Autopilot general behaviour 
-
 ### Virtual tracks within a corridor
-
-![](img/autopilot/corridor_average.png)
-
+![](img/autopilot/corridor_average.png)  
 By training the autopilot the model will learn to project virtual <span style="color:blue">tracks (blue)</span> on the route. 
 The collection of tracks creates a <span style="color:orange">corridor (orange)</span> on the route. Within the corridor the robot 
 knows where to go. The software will try to keep the robot on the average of all tracks in the corridor, the preferred 
 <span style="color:green">path (green)</span>. The corridor is defined by the envelope of virtual tracks.  
 
-As long as the autopilot recognises a corridor it will follow the preferred path. As soon it does not recognise this anymore, 
+If the autopilot recognises a corridor it will try to follow the preferred path. As soon it does not recognise this anymore, 
 the robot will stop. Recognition of the corridor by the robot can be also be lost if circumstances change. Think of different 
-light conditions, other furniture, extra cars, leaves, etc. all can cause a lack of recognition.  
+light conditions, shades, other furniture, extra cars, leaves, etc. all can cause a lack of recognition.  
 Lack of recognition can be solved by additional training of the robot.
-
 ### Free passage
-
 The robot will recognise if it has free passage on the corridor. This may not work 100% reliably, for instance when a person 
 jumps in front of the robot to see if it will stop. If you are using the robot in autopilot take care that no unauthorised persons 
-are near. The robot should be accompanied by a person who has been instructed and who can stop the robot by pressing the red button 
+are near. The robot should be accompanied by a steward who can stop the robot by pressing the red button 
 or by moving it by force.
-
-### Avoid ambiguities
-
-Any route can be trained as long as there is no situation that creates an ambiguity for the robot. The robot will drive as it has 
-learned. When it encounters an ambiguity the robot cannot decide what to do.  
-This means that the position and orientation of the robot cannot be the same for two different preferred paths.
-
+### No ambiguities, no navigation instructions
+Any route can be trained without navigation instructions, as long as there is no situation that creates an ambiguity for the robot. The robot will drive as it 'as 
+learned'.  
+When it encounters an ambiguity the robot cannot decide what to do.  
+This means that if the robot drives 'as learned' the position and orientation of the robot cannot be the same for two different preferred paths.
 #### Example A
-
 The robot can be taught to go left at a certain point.  
 Or (exclusive) the robot can be taught to go right at that same point.
-
 ![](img/autopilot/two_junctions.png)
-
 However when completing a route it cannot learn to go right at one moment and left at another moment.  
-
 ![](img/autopilot/ambiguous_corridor.png)
-
 #### Example B
-
 The robot can be taught to cross another route. On the marked spot the position of the vehicle is the same but the orientation 
 is different.  
-
-![](img/autopilot/corridor_crossing.png)
-
+![](img/autopilot/corridor_crossing.png)  
 This means that routes can merge. Before merging the orientation is different.  
-
 ![](img/autopilot/corridor_merge.png)
-
-
 #### Example C
-
 The robot can learn to complete complex routes as long as position and orientation of the robot are not the same for different preferred 
 paths.  
-
 ![](img/autopilot/labyrinth.png)
-
 
 In this situation there is no difference in position and orientation for the short section of the route that is marked. 
 Depending on the width of the corridors and how the relevant right and left turns are executed, this situation is likely to be 
 ambiguous for the robot.   
-
-
 ![](img/autopilot/labyrinth2.png)
-
-
 #### Stopping
-
 Besides stopping in the case of ambiguities the robot will stop if it does not recognise the situation.  
-
-
 ![](img/autopilot/uncertain.png)
-
-
 The robot will stop if there is no free passage.
-
-
 ![](img/autopilot/blocked_passage.png)
-
-
 ## Your own route using autopilot
-
 Training a new route is done in steps. For a simple route it wil take less than a day collecting data. 
 More complex routes will take more time.  
 To train a route follow these steps:  
-  
-* Define a route  
-* Collect data by driving and thereby showing how to complete the route  
-* MWLC will train the model  
-
+1. Define the route  
+2. Send route information to MWLC    
+3. Have the operator driving the route in the tele-operation mode to assure he or she can drive the route smoothly. The autopilot learns to drive the route in the same way as the operator. The autopilot can never do it better as de operator.  
+4. Ensure that the robot is accompanied by a person who has received safety instructions, the steward.  
+5. Complete the route 5-10 times in autopilot mode in both directions.  
+6. Send start and end times of your training sessions to MWLC.  
+7. Delete the data which shouldn't be used for the training with a ftp-client.  
+8. Wait for the model update to complete - this may take several days to weeks  
+9. Repeat the training steps 4-8, until satisfied  
 As long as you are not satisfied with the route you can improve it by collecting additional data.
-
-
+To handle ambiguities you need extra pictures and file-management on the robot. This wil be explained under 'Ambiguities and halts'
 #### Define the route
-MWLC will check the route to see if it fits in the model builder.  
-Even after checking this  it’s not always certain that the route will work.  
-
-##### How to define a route.
 * Make your first route a simple route.
 * Start and finish at the same point.
 * An outside route is more simple than an inside route.
@@ -149,101 +80,186 @@ Even after checking this  it’s not always certain that the route will work.
 * A route along a long path is easier to learn than a short route with many non-typical turns.
 * Make sure the route can be driven in clockwise and counter clockwise directions.
 * Avoid ambiguities.
-
-
-##### Map
+#### Inform MWLC cloud-management
 Make a map of the route:  
-* For an inside environment: a map or drawing
+* For an inside environment: a map or drawing  
 * For an outside environment: a map or satellite image  
-  
 Collect information about the intensity of other traffic on the route as a function of time.  
 Contact Cloud-management at MWLC with the information.
-
-##### Feedback
 Cloud-management will make an estimate of the amount of training runs required and at estimate which sections of the route require
 more intensive training.
-
+#### Learn the operator to drive smoothly
+All interventions in the autopilot mode, done by the operator are seen as data for training and will be integrated in de model.  
+To avoid unwanted behaviour of the robot the operator should be able to drive the route smooth, without aan unnecessary turns of breaks.
+Before training the robot, the operator should drive the route completely to see if unwanted manoeuvres has to be made.
 #### Collect data
-
-To collect data, complete the route 5 to 10 times in autopilot mode, in clockwise and counter clockwise direction.
-On a new route the autopilot may not recognise much as indicated by the red steering wheel in the display. 
-In this case the operator should override the autopilot and drive the robot while remaining in autopilot mode. 
-When continuing like this the data will be collected and stored.  
+#####First training
 Steps:  
-1. Check the last update of the [Controller and Browser](operator_manual.md) manual.
-2. Have an instructed person accompany the robot, out of sight of the forward facing camera.
-3. Ensure that this person knows how to stop the robot.
-4. Place the robot at the start of the route. This can be done with teleoperation.
-1. Make a note of the start time of the training.
-1. Set the robot to autopilot mode.
-1. The operator has to drive the robot as long as the steering wheel is shown in red.
-1. Start driving your robot.
-1. Drive the route 5 to 10 times clockwise and 5 to 10 times counter clockwise.
-1. Make a note of the end time of the training and leave the robot switched on.
-1. Inform Cloud-management that you have collected data and during which time slots.   
-
-> Cloud-management will analyse the data to see if and how it can be used.
-
-
-#### Model-update
-
-To use data in a model the data has to be reviewed and annotated.  
-This will be done by Cloud-management.  
-Useful data will be added to the database with annotation.  
-If all data is reviewed a model update will be carried out.  
-After some time the model in the robot will be automatically updated.  
-If necessary the need for additional data collection will be highlighted or further usage instructions will be provided.
-  
-> Please note: leave the robot switched on during updates and also while charging.  
-
-#### Repeated data collection
+- Check the last update of the [Controller and Browser](operator_manual.md) manual.
+- Have a steward accompany the robot, out of sight of the forward facing camera.  
+- Place the robot at the start of the route. This can be done with teleoperation.  
+- Make a note of the start time of the training.  
+- Set the robot to autopilot mode.  
+- In the first trainingssession set the max speed zero, to avoid unplanned accelerations.  
+![](img/autopilot/max_speed_zero.jpg)  
+- Start driving your robot.  
+- Drive slowly to collect more visuals. Per meter between 20 and 200 visuals, under different circumstances, are necessary.  
+- While driving, the steering wheel may swap between red and blue. Blue means that the autopilot recognise a corridor and free passage. Ignore this during the first training.  
+- Drive the route 5 to 10 times clockwise and 5 to 10 times counter clockwise.  
+- If finished, make a note of the end time of the training and leave the robot switched on.  
+- Inform Cloud-management that you have collected data and during which time windows.  
+- Cloud-management will analyse the data to see if and how it can be used.
+#####Additional training
+The autopilot needs several training sessions. Especially in complex situations or if the circumstances have been changed.
+And, outside the circumstances will chances. Clouds, rain, sun from the east, sun from de west, etc.  
 After the first model update you can check if the autopilot has a better understanding of the route.  
-Just repeat the steps of paragraph ‘Collect data’. We expect the steering wheel in the browser to turn blue more often than 
-before the first and previous data collection runs, af successful model updates.  
-It might be useful to collect extra data for difficult parts and expand your corridor (see corresponding section below).  
+We expect the steering wheel in the browser to turn blue more often than 
+before the first and previous data collection runs.  
+For additional trainings you only have to train the parts of the route where de robot doesn't do well.  
+Sometimes the hole route as to be trained just like the first training. Most of the time it are interventions on the route the autopilot chooses.
+Differences for training with interventions:  
+- Set the max speed of the autopilot on the desired speed.  
+- As long as the steering wheel is blue and robot drives as the operator want it, no intervention is necessary.  
+- If the steering wheel is red or the direction isn't right, the operator has to override the autopilot.  
+- If the speed is according to the requirements, but the direction isn't, use the steering option for the right direction  
+- If the direction is according to the requirements, but the speed isn't, use the acceleration or break options for the right speed and use the steering option to keep de robot in the right direction. If the speed is overruled the direction should be done manually.  
 
-
-##### Complex situations
-To train a complex situation have the autopilot drive the route.  
-  
-1. If the steering wheel is red, the operator has to override the autopilot.
-1. The operator should drive the robot until the steering wheel is blue again.
-1.  When de steering wheel is blue, take the robot off autopilot and drive the robot back to just before the point where the 
-    steering wheel became red.
-1. Put the robot in autopilot and have it drive until the steer turns red again.
-1. Repeat the steps 1 to 4 several times in different conditions.
-
-##### Expand corridor
+Advise:  
+Don't make the intervention to short. If you do an intervention do this at least until the end of the turn. (keep as minimum 10 seconds.)  
 The corridor is defined by data from the accepted routes driven in training. To broaden the corridor the operator can steer 
 the robot a bit further away from the preferred path.  
-
-##### Outside corridor correction
 It is possible to train the robot to go back to the center of the corridor. Take the robot, without autopilot on, just outside 
 the corridor. Put the robot in autopilot mode and steer it back to the preferred path.  
 
+####Delete unwanted trainingdata
+If the operator is not satisfied with, parts of, the training, it's possible to delete this from the storage.
+For deleting training data you can use a ftp-client. In this explanation [Filezilla](https://filezilla-project.org) for MacOS is used.
+#####Filezilla
+- Download and install Filezilla
+- Under Filezilla/settings..., set Transfer Mode to Active under optoin Connection/FTP   
+- Set Host: to ipno of the robot in ZeroTier.  
+- Set Username: to  the ftp-login-id as mentioned in your credentials document.  
+- Set Password: to  the ftp-login-password as mentioned in your credentials document.  
+- Connect  
+Under Remote site the folder structure of the robot will appear.
+#####Structure of the data on the robot
+![](img/autopilot/filezilla_robot_side.jpg) 
+autopilot - userdata, training and intervention sessions in zip format.  
+models - systemdata, the ai-models downloaded by the robot from the MWLC-cloud.  
+photos - userdata, pictures taken by the operator by pressing the left button n the controller.  
+routes - userdata, routes managed by the operator  
+To manage the training and intervention data only the autopilot data are relevant. 
+Photos and routes will be explained under ambiguities and halts.  
+Don't change anything in the systemdata.  
+#####Delete training-data from the storage on the robot
+Go in the folder autopilot to the folder of the month, via the year-folder, you want to manage the data. 
+In the folder the zip files are named by the day and time of the moment of the first image in the folder.  
+If you want to see what's in the zipfile, don't hesitate to download it to you own computer.  
+Delete the unwanted training-sessions.  
+Modifications in the training data are synchronised with the MWLC-cloud until 3 months after the are collected.
+####Model-update
+To use data in a model the data has to be reviewed and annotated.  
+This will be done by Cloud-management.  
+Data will be added to the database with annotation.  
+If all data is reviewed a model update will be carried out.  
+After some time the model in the robot will be automatically updated.  
+If necessary the need for additional data collection will be highlighted or further usage instructions will be provided.  
+The procces of colleting datafrom the robot, reviewing, upgrading the models and dowloading the model back to the robot will take 5 days to 2 weeks.  
+  
+> Please note: leave the robot switched on during updates and also while charging.  
 
+## Ambiguities, halts and commands
+The robot can be asked to recognise a location as a navigationpoint. This can be done by putting some images of that location in a folder on the robot.  
+On that location the robot can be told to execute a predefined json-command of drive in a certain the direction.
+The first option is used to have the robot stopping for sometime, increase or decrease the power to the engine.   
+With the second option ambiguities can be solved. An ambiguity is a location in one or more routes where the robot, having the same orientation has more preferred paths. To solve this ambiguity, just ad some images of the direction where te robot has to go.  
+Navigationpoints are part of a route.  
+To use routes with navigationpoints and instruction you have to make, with a ftp-client:  
+- in the folder 'routes' a folder with a recognisable name of a route.  
+- in the route-folder a folder with a recognisable name of a navigationpoint  
+- in the navigationpoint folder the images of the navigationpoint has to be placed.  
+- if an instruction is desired put the json-command in the folder of the navigationpoint.  
+- if more navigationpoints are use in a route, the should be sorted to the order of driving.  
+  
+The have the robot driving a route you can select it via the browser. Browse through the routes on the robot in the browser window at the top right, with the '<' and '>' buttons. The name of the active route appears between the buttons.  
+To show this mechanism find an example hereunder.  
+###Example route with navigationpoints
+Behind our office there is our test track in the garden.  
+Our duration test robot drove the track around 40thousand times.  
+We want to complicate this by driving around an obstacle. Sometimes keeping it left, sometimes right.  
+It should increase the max. power to the engine before the ramp-up and decrease after the ramp-up.
+And the robot, Baxter, should sometimes stop just before the ramp-down to contemplate a few seconds about the meaning of live.  
+We make two routes:  
+mb3_left, keeping the obstacle at the left and stopping a moment before going the ramp-down.  
+mb4_right, keeping the obstacle right and increasing speed at the ramp-up.
+We wil use several navigation points and json-commands.
+####Make routes in the datastorage on the robot
+First, decide about the position and orientation where the robot has to recognise a navigationpoint.  
+Take care that there are enough visual clues so the robot can recognise the location.  
+Assure you have a ftp-client to connect with de datastorage on the robot.  
+In the folder 'routes', make to new folders, 'mb3_left' and 'mb4_right'.  
+  
+  ![](img/autopilot/filezilla_newroutes.jpg) 
 
+In the new route-folder 'mb3_left' we make navigationpoint-folders:  
+- '20_keepleft', with images of keeping the obstacle left.
+- '50_endrampup', with images of turning to the left after the ramp-up.
+- '80_stopbeforedown', with images of the place where to stop.  
+  
+In the new route-folder 'mb4_rigt' we make navigationpoint-folders:  
+- '20_keepright', with images of keeping the obstacle left.
+- '30_startrampup', with images of where to increase power before the ramp-up.
+- '50_endrampup', with images of where to decrease after the ramp-up.
 
-### Adding halts to your route
+The algorithms expect the navigationpoints in order of driving. Therefore, we start the name of the navigationpoint-folder with a number related to the position in the route.  
 
-The autopilot will stop the robot at the end of a route.
-If the route ends at the at the same position and orientation as it started then there is no end to the route.
-In many cases this can be useful, f.i. in case of routine inspections.
-Often its useful to have planned stops at certain points at the route.
-A planned stop is called a halt.
-To add halts to your route you have to take the steps:   
- * Decide about the position and orientation where the robot has to stop.  
- * Take care that there are enough visual clues so the robot can recognise the location.  
- * Let the robot make images, in training mode, at this position and orientation.  
- * Select at least 3 images from different angles, and send them to cloud-management.  
-Cloud-management will add the halts to your route.
+####Make images and place them in the correct folder
+Drive the robot to the navigationpoint.  
+Make an image (Left button, see manual 'Controller and Browser').  
+The image appears in the folder /photos/cam0/eeyymmmmm.  
+Give a refresh if it's not there yet.  
+To check if the image is correct, drag the image to your computer.  
+If it's good, drag the image to the navigationpoint folder.
+Make three images from slightly different angels and later also under different circumstances.  
 
-##### How to fetch images from the robot
-The image-management system on the robot stores the images in zip-files.  
-The name of the zip-file refers to the timestamp of the first image in the zip-file.  
-The zip-files can be downloaded from te robot with via ftp, f.i. 'ftp://192.126.164.78'.  
-The address is the ip-no of the robot in the ZeroTier-network.  
-Ask cloud-management for the login-ID and password.
+![](img/autopilot/filezilla_navigationpointfolder.jpg)  
+
+![](img/autopilot/navigationpointpictures.jpg)
+  
+
+Make images for al navigationpoints and drag them to the navigationpoint-folder.  
+#####Test the navigationpoints  
+If you want you can check if your navigation are working.  
+Go to the browser window of the robot.  
+In the top right you see the route selector en navigationpoint status:  
+ 
+![](img/autopilot/browser_route_selector1.jpg)
+
+Click the '<' or '>' to select a route.  
+
+Start a route with:  
+![](img/autopilot/browser_route_start.jpg)
+
+Pauze a route with:  
+![](img/autopilot/browser_route_pause.jpg)
+
+Start driving the robot in autopilot.
+
+If the robot recognises a navigationpoint, this will appear in the little window.
+
+![](img/autopilot/browser_navigationpoint_recognised1.jpg)
+  
+####Add json-command
+In the naviagationpoint-folder '/mb4_right/30_startrampup' we add a file with the name 'command.json' with content:  
+![](img/autopilot/json_30_startrampup.jpg)  
+
+In the naviagationpoint-folder '/mb4_right/50_endrampup' we add a file with the name 'command.json' with content:  
+![](img/autopilot/json_50_endrampup.jpg)  
+
+In the naviagationpoint-folder '/mb3_left/80_stopbeforedown' we add a file with the name 'command.json' with content:  
+![](img/autopilot/json_80_stopbeforedown.jpg)  
+
+Test if you routes are working.
 
 ## Using the model
 Never leave the robot unattended.

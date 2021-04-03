@@ -23,7 +23,7 @@ Certain controllers need a secured connection, https. A secured conection needs 
 As the VPN is private it uses IP-numbers from Private-ranges like 192.nnn.nnn.nnn and 10.nnn.nnn.nnn.  
 For these ranges there are no official certificates form a certified-provider.  
 Therefore there a, so called, selfsigned-certicicate is used.  
-THis might give warnings from you security-softeware and/or the browser.  
+This might give warnings from you security-softeware and/or the browser.  
 Please, check-carefully if this warning is caused by the robot internet-server via the vpn. If so yo can connect to the robot.
 ## Connections of the robot
 The robot has three types of methods to connect to the internet:  
