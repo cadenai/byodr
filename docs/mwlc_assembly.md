@@ -99,7 +99,7 @@ __ Place RUT-distrbution __<br>Put beside the ESC connector:<br>- 6 red thin t
 ![](img/instructions/img206310.jpg)<br>
 __ Connect RUT-distribution __ <br>See scheme.<br>This goes via the relay on the RUT955.<br><br>
 ![](img/instructions/img206315.jpg)<br>
-__ Ethernet switch __<br>Connet the power of the ethernet switch.<br><br>
+__ Ethernet switch __<br>Connect the power of the ethernet switch.<br><br>
 ![](img/instructions/img206510.jpg)<br>
 __ Front camera __<br>Plug in power wires in according to scheme<br>
 __ Back camera __<br>Plug in power wires in according to scheme<br>

@@ -5,9 +5,11 @@ As there is no driver on board, the vehicle can be smaller, cheaper and will con
 Without a driver on board there is a need for remote supervision by an operator or traffic controller.   
 
 The robot has two modes to give an operator and/or traffic controller supervision over the vehicle and to save time:  
-1. Teleoperation for remote control of the robot 
-2. The autopilot to train the robot and have the robot driving autonomously.
-The teleoperation mode is explained in manual [Controller and Browser](operator_manual.md).  
+1. Teleoperation; for remote control of the robot. The teleoperation mode is explained in manual [Controller and Browser](operator_manual.md).  
+2. The autopilot; to train the robot and have the robot driving autonomously. To have the robot drive autonomous, the autopilot has to be trained.  
+
+  
+
 ## Autopilot general behaviour 
 ### Virtual tracks within a corridor
 ![](img/autopilot/corridor_average.png)  
@@ -53,8 +55,9 @@ ambiguous for the robot.
 ![](img/autopilot/labyrinth2.png)
 #### Stopping
 Besides stopping in the case of ambiguities the robot will stop if it does not recognise the situation.  
-![](img/autopilot/uncertain.png)
-The robot will stop if there is no free passage.
+![](img/autopilot/uncertain.png)  
+  
+The robot will stop if there is no free passage.  
 ![](img/autopilot/blocked_passage.png)
 ## Your own route using autopilot
 Training a new route is done in steps. For a simple route it wil take less than a day collecting data. 
@@ -172,7 +175,12 @@ The procces of colleting datafrom the robot, reviewing, upgrading the models and
 The robot can be asked to recognise a location as a navigationpoint. This can be done by putting some images of that location in a folder on the robot.  
 On that location the robot can be told to execute a predefined json-command of drive in a certain the direction.
 The first option is used to have the robot stopping for sometime, increase or decrease the power to the engine.   
-With the second option ambiguities can be solved. An ambiguity is a location in one or more routes where the robot, having the same orientation has more preferred paths. To solve this ambiguity, just ad some images of the direction where te robot has to go.  
+With the second option ambiguities can be solved.  
+  
+![](img/autopilot/navigationpoint_choice.jpg)  
+
+  
+An ambiguity is a location in one or more routes where the robot, having the same orientation has more preferred paths. To solve this ambiguity, just ad some images of the direction where te robot has to go.  
 Navigationpoints are part of a route.  
 To use routes with navigationpoints and instruction you have to make, with a ftp-client:  
 - in the folder 'routes' a folder with a recognisable name of a route.  
@@ -203,8 +211,10 @@ In the folder 'routes', make to new folders, 'mb3_left' and 'mb4_right'.
 
 In the new route-folder 'mb3_left' we make navigationpoint-folders:  
 - '20_keepleft', with images of keeping the obstacle left.
-- '50_endrampup', with images of turning to the left after the ramp-up.
-- '80_stopbeforedown', with images of the place where to stop.  
+- '30_startrampup', with images of where to increase power before the ramp-up.
+- '50_endrampup', with images of where to decrease after the ramp-up.
+- '80_stopbeforedown', with images of the place where to stop and drive ramp-down slowly.  
+- '90_fasterafterdown', with images of the place where to speed up.  
   
 In the new route-folder 'mb4_rigt' we make navigationpoint-folders:  
 - '20_keepright', with images of keeping the obstacle left.
@@ -237,11 +247,12 @@ In the top right you see the route selector en navigationpoint status:
 
 Click the '<' or '>' to select a route.  
 
-Start a route with:  
+By moving your cursor over the small image window you get te option to start:  
 ![](img/autopilot/browser_route_start.jpg)
 
-Pauze a route with:  
+You can stop a route by moving your cursor over the small image window when a route is running:  
 ![](img/autopilot/browser_route_pause.jpg)
+For caning a route you have to stop the old route, choose another en start the new route.
 
 Start driving the robot in autopilot.
 
@@ -252,12 +263,15 @@ If the robot recognises a navigationpoint, this will appear in the little window
 ####Add json-command
 In the naviagationpoint-folder '/mb4_right/30_startrampup' we add a file with the name 'command.json' with content:  
 ![](img/autopilot/json_30_startrampup.jpg)  
-
-In the naviagationpoint-folder '/mb4_right/50_endrampup' we add a file with the name 'command.json' with content:  
-![](img/autopilot/json_50_endrampup.jpg)  
+This is just a single command.  
 
 In the naviagationpoint-folder '/mb3_left/80_stopbeforedown' we add a file with the name 'command.json' with content:  
 ![](img/autopilot/json_80_stopbeforedown.jpg)  
+This is a more complex command. First reduce speed to zero, the wait 5 seconds and the set speed to 1,5. 
+
+With these commands there is an increase of power before the ramp up and a decrease of power after the ramp-up.
+For the ramp-down the opposite is done, first a stop and wait 5 seconds, then drive slowly to and off the ramp-down. After the ramp down the regular speed is set.
+
 
 Test if you routes are working.
 
