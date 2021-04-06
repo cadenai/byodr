@@ -4,7 +4,8 @@ nav:
     - Startup and maintenance: startup_manual.md
     - ZeroTier VPN: zerotier_manual.md
     - Controller and Browser: operator_manual.md
-    - Autopilot: autopilot_manual.md
+    - Training Autopilot: autopilot_manual.md
+    - Interfaces: interfaces_manual.md
     - Assembly kit: mwlc_kit.md
     - Assembly schemes: mwlc_as_schemes.md
     - Assembly documentation: mwlc_assembly.md
