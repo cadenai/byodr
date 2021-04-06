@@ -125,7 +125,7 @@ class CarlaHandler(Configurable):
         camera_rear.listen(lambda data: self._on_camera(data, camera=1))
         self._reset_agent_travel()
         self._traffic_manager.ignore_lights_percentage(self._actor, 100.)
-        self._set_weather()
+        self._set_weather(use_preset=True)
 
     def _on_camera(self, data, camera=0):
         img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
@@ -179,9 +179,9 @@ class CarlaHandler(Configurable):
         else:
             self._in_reverse = self._velocity() < 1e-2 and command.get('throttle') < -.99  # and command.get('arrow_down', 0) == 1
 
-    def _set_weather(self):
-        preset = self._spawn_preferred_weather
-        if self._rand_weather_seconds > 0 and time.time() > self._change_weather_time:
+    def _set_weather(self, use_preset=False):
+        preset = self._spawn_preferred_weather if use_preset else None
+        if use_preset or (self._rand_weather_seconds > 0 and time.time() > self._change_weather_time):
             presets = [x for x in dir(carla.WeatherParameters) if re.match('[A-Z].+', x)]
             preset = preset if preset in presets else np.random.choice(presets)
             logger.info("Setting the weather to '{}'.".format(preset))

@@ -37,6 +37,8 @@ class RouteMemory(object):
         self._num_points = 0
         self._num_codes = 0
         self._navigation_point = None
+        # Image is locked in when threshold reached.
+        self._tracking = None
         self._beliefs = None
         self._evidence = None
         # Image id index to navigation point id.
@@ -58,6 +60,7 @@ class RouteMemory(object):
 
     def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
         self._navigation_point = None
+        self._tracking = None
         self._num_points = n_points
         self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
@@ -88,17 +91,27 @@ class RouteMemory(object):
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
-        _image = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
+        _image = self._tracking
+        if _image is None:
+            _image = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
 
         # Allow for a better match in case it is tracking the wrong image.
         _competitor = np.where(np.logical_or.reduce([code_points == _point, code_points == _previous]), -1, self._beliefs).argmax()
 
         _match = None
-        if self._evidence[_image] < _threshold and _errors[_image] > np.power(self._evidence[_image], .75):
+        image_evidence = self._evidence[_image]
+        other_evidence = self._evidence[_competitor]
+        _tracking = self._tracking is not None
+
+        if _tracking and _errors[_image] > np.power(image_evidence, .75):
             _match = code_points[_image]
-        elif self._evidence[_competitor] < _threshold and _errors[_competitor] > np.power(self._evidence[_competitor], .75):
+            self._tracking = None
+        elif not _tracking and image_evidence < _threshold:
+            self._tracking = _image
+        elif not _tracking and other_evidence < _threshold and _errors[_competitor] > np.power(other_evidence, .75):
             _image = _competitor
             _match = code_points[_competitor]
+            self._tracking = None
 
         if _match is not None and _point != _match:
             logger.info("Match {} error {:.2f} evidence {:.2f}".format(_match, _errors[_image], self._evidence[_image]))
