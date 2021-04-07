@@ -278,6 +278,7 @@ To avoid unwanted actions from the robot, delete the trainingsdata from the stor
     - leave the speed for the autopilot to determine and stop recording
 * `Right joystick` 
     - steer
+    - override speed instructions from autopilo(operator should give speed). 
     - record images, instructions and values including but not limited to steering and throttle, for training purposes   
     - up/down movements are ignored  
 * `East`
