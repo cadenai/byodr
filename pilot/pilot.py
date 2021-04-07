@@ -47,6 +47,10 @@ class AttrDict(dict):
         self.__dict__ = self
 
 
+def _is_forced_value(value):
+    return abs(0 if value is None else value) > 0
+
+
 class Blob(AttrDict):
     def __init__(self, **kwargs):
         super(Blob, self).__init__(**kwargs)
@@ -75,9 +79,9 @@ class Blob(AttrDict):
         self.navigation_match_distance = kwargs.get('navigation_match_distance', 1)
         self.navigation_match_point = kwargs.get('navigation_match_point')
         if self.forced_steering is None:
-            self.forced_steering = abs(self.steering) > 0
+            self.forced_steering = _is_forced_value(self.steering)
         if self.forced_throttle is None:
-            self.forced_throttle = abs(self.throttle) > 0
+            self.forced_throttle = _is_forced_value(self.throttle)
         if self.forced_acceleration is None:
             self.forced_acceleration = self.forced_throttle and self.throttle > 0
         if self.forced_deceleration is None:
@@ -608,7 +612,6 @@ class DriverManager(Configurable):
             new_val = (value / self._speed_scale)
             new_val = max(0., self._pilot_state.cruise_speed + new_val if relative else new_val)
             self._pilot_state.cruise_speed = new_val
-            logger.info("Cruise speed set to '{}'.".format(new_val))
 
     def _set_direction(self, turn='general.fallback'):
         pass
@@ -714,15 +717,19 @@ class CommandProcessor(Configurable):
     def _process(self, c_teleop, c_ros, c_inference):
         self._driver.process_navigation(c_teleop, c_inference)
 
-        # Continue with teleop instructions which take precedence over a route.
+        # Continue with ros instructions which take precedence over a route.
         c_ros = {} if c_ros is None else c_ros
         if 'pilot.driver.set' in c_ros:
             self._cache_safe('ros switch driver', lambda: self._driver.switch_ctl(c_ros.get('pilot.driver.set')))
         if 'pilot.maximum.speed' in c_ros:
             self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed')))
 
-        # Continue with teleop instructions which take precedence over the rest.
         c_teleop = {} if c_teleop is None else c_teleop
+        # Steering interventions must be accompanied with throttle.
+        if _is_forced_value(c_teleop.get('steering')):
+            self._driver.set_cruise_speed(0)
+
+        # Continue with teleop instructions which take precedence over the rest.
         if 'quit' in c_teleop:
             self._driver.switch_ctl()
         #

@@ -50,7 +50,7 @@ var NoneController = {
 }
 
 var Xbox360StandardController = extend(NoneController, {
-    threshold: 0.18,
+    threshold: 0.195,
 
     poll: function() {
         pad = this.gamepad();
