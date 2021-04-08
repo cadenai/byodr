@@ -4,7 +4,7 @@
 
 The robot is accessible via a ZeroTier Virtual Private Network (VPN) which is setup to accommodate one or more robots managed by 
 the VPN-manager.  
-We setup a ZeroTier-VPN with the robot as a node. The VPN-manager has an mwlc.global account. Please refer to your credentials document.  
+We setup a ZeroTier-VPN with the robot as a node. The VPN-manager has a mwlc.global account. Please refer to your credentials document.  
 The robot can be driven by one operator at a time, not more.
 
 ### Preparation

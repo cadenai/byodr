@@ -28,3 +28,9 @@ ros2 topic pub --once /rover1/v10/pilot/set_maximum_speed std_msgs/msg/Float32 "
   
 Switch to teleop with:  
 ros2 topic pub --once /rover1/v10/pilot/set_mode actionlib_msgs/msg/GoalID "{id: 'teleoperation'}"
+  
+##Other options
+For more options check the assembly schemes and assembly documentation.  
+Check out the code on [github](https://github.com/cadenai/byodr).
+
+
