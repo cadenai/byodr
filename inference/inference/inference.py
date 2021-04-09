@@ -193,7 +193,7 @@ class TRTDriver(object):
         with graph.as_default():
             config = tf.ConfigProto(allow_soft_placement=True)
             # config.gpu_options.allow_growth = True
-            config.gpu_options.per_process_gpu_memory_fraction = 0.15
+            config.gpu_options.per_process_gpu_memory_fraction = 0.10
             self.sess = tf.Session(config=config, graph=graph)
             # Compile after session creation for tf memory management.
             f_runtime = self._compile()
@@ -204,7 +204,9 @@ class TRTDriver(object):
             input_dave = tf.image.rgb_to_yuv(input_dave)
             input_dave = tf.transpose(input_dave, perm=[2, 0, 1])  # NHWC -> NCHW
             input_dave = tf.image.per_image_standardization(input_dave)
-            input_alex = tf.image.per_image_standardization(tf.cast(self.input_alex, tf.float32) / 255.)
+            input_alex = tf.cast(self.input_alex, tf.float32) / 255.
+            input_alex = tf.image.rgb_to_yuv(input_alex)
+            input_alex = tf.image.per_image_standardization(input_alex)
             _inputs = {
                 'input/dave_image': [input_dave],
                 'input/alex_image': [input_alex],

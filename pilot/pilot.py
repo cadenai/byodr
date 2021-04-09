@@ -726,7 +726,7 @@ class CommandProcessor(Configurable):
 
         c_teleop = {} if c_teleop is None else c_teleop
         # Steering interventions must be accompanied with throttle.
-        if _is_forced_value(c_teleop.get('steering')):
+        if _is_forced_value(c_teleop.get('steering')) or _is_forced_value(c_teleop.get('throttle')):
             self._driver.set_cruise_speed(0)
 
         # Continue with teleop instructions which take precedence over the rest.
