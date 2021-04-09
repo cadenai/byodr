@@ -171,7 +171,7 @@ class TRTDriver(object):
                      'output/posor/value'
                      ],
                     max_batch_size=1,
-                    max_workspace_size_bytes=1 << 28,
+                    max_workspace_size_bytes=1 << 27,
                     is_dynamic_op=False,
                     precision_mode='FP16',
                     minimum_segment_size=5
