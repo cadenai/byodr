@@ -78,6 +78,7 @@ class Blob(AttrDict):
         self.navigation_match_image = kwargs.get('navigation_match_image', -1)
         self.navigation_match_distance = kwargs.get('navigation_match_distance', 1)
         self.navigation_match_point = kwargs.get('navigation_match_point')
+        self.inference_brake = kwargs.get('inference_brake', 0)
         if self.forced_steering is None:
             self.forced_steering = _is_forced_value(self.steering)
         if self.forced_throttle is None:
@@ -656,6 +657,7 @@ class DriverManager(Configurable):
             _nav_match_image = self._navigator.get_match_image_id() if _nav_active else None
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
             _nav_match_point = self._navigator.get_match_point() if _nav_active else None
+            _inference_brake = 0. if inference is None else inference.get('obstacle', 0.)
             blob = Blob(driver=self._driver_ctl,
                         speed_scale=self._speed_scale,
                         cruise_speed=self._pilot_state.cruise_speed,
@@ -665,6 +667,7 @@ class DriverManager(Configurable):
                         navigation_match_image=_nav_match_image,
                         navigation_match_distance=_nav_match_distance,
                         navigation_match_point=_nav_match_point,
+                        inference_brake=_inference_brake,
                         **teleop)
             # Scale teleop before interpretation by the driver.
             blob.steering = self._principal_steer_scale * blob.steering

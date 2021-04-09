@@ -31,7 +31,8 @@ class Event(object):
                  throttle,
                  command,
                  x_coordinate,
-                 y_coordinate):
+                 y_coordinate,
+                 inference_brake):
         self.timestamp = timestamp
         self.image = image
         self.steer_src = steer_src
@@ -45,6 +46,7 @@ class Event(object):
         self.command = command
         self.x_coordinate = x_coordinate
         self.y_coordinate = y_coordinate
+        self.inference_brake = inference_brake
         self.vehicle = None
         self.vehicle_config = None
         self.image_uri = None
@@ -73,7 +75,7 @@ class AbstractDataSource(object):
 
 
 class ZipDataSource(AbstractDataSource):
-    MF_TEMPLATE = """zip-datasource-version: 0.5
+    MF_TEMPLATE = """zip-datasource-version: 0.6
 zip-num-entries: {num_entries}
 platform-uuid-node: "{uuid_node}"
 image-shape-hwc: "{image_shape}"
@@ -119,7 +121,8 @@ image-shape-hwc: "{image_shape}"
                                                'turn_src',
                                                'turn_val',
                                                'x_coord',
-                                               'y_coord'])
+                                               'y_coord',
+                                               'inference_brake'])
 
     def close(self):
         with self._lock:
@@ -172,4 +175,5 @@ image-shape-hwc: "{image_shape}"
                                                    event.command_src,
                                                    event.command,
                                                    event.x_coordinate,
-                                                   event.y_coordinate]
+                                                   event.y_coordinate,
+                                                   event.inference_brake]

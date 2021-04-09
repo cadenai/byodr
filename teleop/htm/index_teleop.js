@@ -271,11 +271,14 @@ log_controller.start_socket = function() {
             view.notify_server_message_listeners(command);
             el_pilot_steering.text(Math.abs(command.ste).toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
-            el_inference_penalty.text(command.debug1.toFixed(2));
-            el_inference_obstacle.text(command.debug2.toFixed(2));
-            el_inference_surprise.text(command.debug4.toFixed(2));
-            el_inference_critic.text(command.debug5.toFixed(2));
-            el_inference_fps.text(command.debug7.toFixed(0));
+            // It may be the inference service is not yet available.
+            if (command.debug1 != undefined) {
+                el_inference_penalty.text(command.debug1.toFixed(2));
+                el_inference_obstacle.text(command.debug2.toFixed(2));
+                el_inference_surprise.text(command.debug4.toFixed(2));
+                el_inference_critic.text(command.debug5.toFixed(2));
+                el_inference_fps.text(command.debug7.toFixed(0));
+            }
             // el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
             // speed is the desired speed
             // vel_y is the actual vehicle speed
