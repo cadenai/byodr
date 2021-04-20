@@ -4,13 +4,13 @@ import glob
 import logging
 import multiprocessing
 import os
-import time
 from io import open
-from threading import Semaphore
 
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.tensorrt as trt
+import time
+from threading import Semaphore
 
 logger = logging.getLogger(__name__)
 
@@ -201,11 +201,9 @@ class TRTDriver(object):
             self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
             # Copy the trainer behavior.
             input_dave = tf.cast(self.input_dave, tf.float32) / 255.
-            input_dave = tf.image.rgb_to_yuv(input_dave)
             input_dave = tf.transpose(input_dave, perm=[2, 0, 1])  # NHWC -> NCHW
             input_dave = tf.image.per_image_standardization(input_dave)
             input_alex = tf.cast(self.input_alex, tf.float32) / 255.
-            input_alex = tf.image.rgb_to_yuv(input_alex)
             input_alex = tf.image.per_image_standardization(input_alex)
             _inputs = {
                 'input/dave_image': [input_dave],
@@ -245,6 +243,7 @@ class TRTDriver(object):
 
     def features(self, dave_image, alex_image):
         with self._lock:
+            assert dave_image.dtype == np.uint8 and alex_image.dtype == np.uint8, "Expected np.uint8 images."
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_coordinate, self.tf_key, self.tf_value]
             with self.sess.graph.as_default():
@@ -259,6 +258,7 @@ class TRTDriver(object):
 
     def forward(self, dave_image, alex_image, maneuver_command=maneuver_intention(), destination=None):
         with self._lock:
+            assert dave_image.dtype == np.uint8 and alex_image.dtype == np.uint8, "Expected np.uint8 images."
             assert self.sess is not None, "There is no session - run activation prior to calling this method."
             _ops = [self.tf_steering,
                     self.tf_critic,

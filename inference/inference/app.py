@@ -1,18 +1,19 @@
 from __future__ import absolute_import
 
-import argparse
 import glob
 import logging
 import os
 import sys
-import threading
-import time
 from functools import partial
 
+import argparse
 import cv2
 import numpy as np
+import threading
+import time
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
+from scipy.spatial.distance import cdist
 from scipy.special import softmax
 from six.moves import range
 
@@ -144,8 +145,8 @@ class Navigator(object):
         return network
 
     def _pull_image_features(self, image):
-        return self._network.features(dave_image=self._fn_dave_image(image, dtype=np.float32),
-                                      alex_image=self._fn_alex_image(image, dtype=np.float32))
+        return self._network.features(dave_image=self._fn_dave_image(image),
+                                      alex_image=self._fn_alex_image(image))
 
     def _route_open(self, route):
         # This may take a while.
@@ -202,8 +203,8 @@ class Navigator(object):
     def forward(self, image, route=None):
         # This runs at the service process frequency.
         self._check_state(route)
-        _dave_img = self._fn_dave_image(image, dtype=np.float32)
-        _alex_img = self._fn_alex_image(image, dtype=np.float32)
+        _dave_img = self._fn_dave_image(image)
+        _alex_img = self._fn_alex_image(image)
         _gumbel = self._gumbel
         _destination = self._destination
         _command = maneuver_intention() if _gumbel is None else _gumbel

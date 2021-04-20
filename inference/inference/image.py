@@ -17,21 +17,25 @@ def hwc_to_chw(img):
     return None if img is None else img.transpose((2, 0, 1))
 
 
-def hwc_alexnet(image, resize_wh=None, dtype=np.uint8):
-    image = image if resize_wh is None else cv2.resize(image, resize_wh)
-    image = cv2.resize(image, (227, 227))
+def _image(image, im_width=32, im_height=32, crop_top=0, crop_bottom=0, yuv=False, chw=False, dtype=np.uint8):
+    image = cv2.resize(image, (im_width, im_height + crop_top + crop_bottom))[crop_top: im_height + crop_top, ...]
+    image = hwc_bgr_to_yuv(image) if yuv else image
     image = image.astype(dtype)
+    image = hwc_to_chw(image) if chw else image
     return image
 
 
-def hwc_squeeze(image, resize_wh=None, dtype=np.uint8):
+def hwc_alexnet(image, resize_wh=None):
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
-    image = cv2.resize(image, (200, 100))
-    image = image.astype(dtype)
-    return image
+    return _image(image, im_width=227, im_height=227, yuv=False, chw=False)
 
 
-def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=False, chw=False, dtype=np.uint8):
+def hwc_squeeze(image, resize_wh=None):
+    image = image if resize_wh is None else cv2.resize(image, resize_wh)
+    return _image(image, im_width=200, im_height=100, yuv=False, chw=False)
+
+
+def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=True, chw=True):
     # If resize is not the first operation, then resize the incoming image to the start of the data pipeline persistent images.
     image = image if resize_wh is None else cv2.resize(image, resize_wh)
     top, right, bottom, left = crop
@@ -39,19 +43,8 @@ def caffe_dave_200_66(image, resize_wh=None, crop=(0, 0, 0, 0), dave=True, yuv=F
     image = cv2.resize(image, (200, 66)) if dave else image
     image = hwc_bgr_to_yuv(image) if yuv else image
     image = hwc_to_chw(image) if chw else image
-    image = image.astype(dtype)
+    image = image.astype(np.uint8)
     return image
-
-
-def _exr_dave_img(image):
-    frame = np.zeros((240, 320, 3), dtype=np.uint8)
-    frame[:190, :, :] = image[50:240, :, :]
-    frame[190:, :, :] = image[-190:-140, :, :]
-    return caffe_dave_200_66(frame)
-
-
-def _exr_alex_img(image, top=True):
-    return hwc_alexnet(image[:240] if top else image[-240:])
 
 
 class Alternator(object):
@@ -65,12 +58,10 @@ class Alternator(object):
 
 
 _registered_functions = {
-    'alex__227_227': partial(hwc_alexnet, resize_wh=(320, 240)),
     'alex__200_100': partial(hwc_squeeze, resize_wh=(320, 240)),
-    'dave__320_240__200_66__0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(0, 0, 0, 0)),
-    'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0)),
-    'dave__exr1': partial(_exr_dave_img),
-    'alex__exr1': Alternator(partial(_exr_alex_img, top=True), partial(_exr_alex_img, top=False))
+    'dave__320_240__200_66__0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(0, 0, 0, 0), yuv=False, chw=False),
+    'dave__320_240__200_66__70_0_10_0': partial(caffe_dave_200_66, resize_wh=(320, 240), crop=(70, 0, 10, 0), yuv=False, chw=False)
+    # 'alex__exr1': Alternator(partial(_exr_alex_img, top=True), partial(_exr_alex_img, top=False))
 }
 
 
