@@ -13,7 +13,6 @@ import threading
 import time
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
-from scipy.spatial.distance import cdist
 from scipy.special import softmax
 from six.moves import range
 
@@ -140,8 +139,8 @@ class Navigator(object):
         self._destination = None
 
     def _create_network(self, gpu_id=0, runtime_compilation=1):
-        cache_directory, internal_directory = self._model_directories
-        network = TRTDriver(cache_directory, internal_directory, gpu_id=gpu_id, runtime_compilation=runtime_compilation)
+        user_directory, internal_directory = self._model_directories
+        network = TRTDriver(user_directory, internal_directory, gpu_id=gpu_id, runtime_compilation=runtime_compilation)
         return network
 
     def _pull_image_features(self, image):
@@ -371,8 +370,8 @@ class InferenceApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        # Inference overrides are only allowed internally - ignore user settings. Overrides come last.
-        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini')]
+        # Ignore the end user config directory. Overrides come last.
+        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(self._user_models, '*.ini')]
         cfg = dict(parser.items('inference'))
         logger.info(cfg)
         return cfg

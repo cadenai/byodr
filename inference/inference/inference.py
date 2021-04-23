@@ -108,11 +108,11 @@ def get_frozen_graph(_file):
 
 
 class TRTDriver(object):
-    def __init__(self, cache_directory, internal_directory, gpu_id=0, runtime_compilation=1):
+    def __init__(self, user_directory, internal_directory, gpu_id=0, runtime_compilation=1):
         os.environ["CUDA_VISIBLE_DEVICES"] = "{}".format(gpu_id)
         self._gpu_id = gpu_id
         self._rt_compile = runtime_compilation
-        self.model_directories = [cache_directory, internal_directory]
+        self.model_directories = [user_directory, internal_directory]
         self._lock = multiprocessing.Lock()
         self._zero_vector = np.zeros(shape=(90,), dtype=np.float32)
         self.input_dave = None
