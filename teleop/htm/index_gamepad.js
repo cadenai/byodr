@@ -76,7 +76,7 @@ var Xbox360StandardController = extend(NoneController, {
 });
 
 var PS4StandardController = extend(NoneController, {
-    threshold: 0.05,
+    threshold: 0.09,
 
     poll: function() {
         // On ubuntu 18 under chrome button 17 does not exist - use button 16.
