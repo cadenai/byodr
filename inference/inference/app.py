@@ -4,7 +4,6 @@ import glob
 import logging
 import os
 import sys
-from functools import partial
 
 import argparse
 import cv2
@@ -13,6 +12,7 @@ import threading
 import time
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
+from functools import partial
 from scipy.special import softmax
 from six.moves import range
 
@@ -87,7 +87,7 @@ class RouteMemory(object):
         _dot_product = np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
         _errors = (_dot_product - self._code_diagonal) ** 2
         _errors = np.minimum(1, _errors)
-        self._beliefs = (self._beliefs * np.exp(-np.maximum(0, _errors)) * _p_out)
+        self._beliefs *= _p_out * np.exp(-np.e * np.maximum(0, _errors))
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
