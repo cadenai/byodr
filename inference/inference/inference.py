@@ -201,7 +201,7 @@ class TRTDriver(object):
             self.input_dave, self.input_alex, self.input_command, self.input_destination = _nodes
             # Copy the trainer behavior.
             input_dave = tf.cast(self.input_dave, tf.float32) / 255.
-            input_dave = tf.transpose(input_dave, perm=[2, 0, 1])  # NHWC -> NCHW
+            # input_dave = tf.transpose(input_dave, perm=[2, 0, 1])  # NHWC -> NCHW
             input_dave = tf.image.per_image_standardization(input_dave)
             input_alex = tf.cast(self.input_alex, tf.float32) / 255.
             input_alex = tf.image.per_image_standardization(input_alex)
