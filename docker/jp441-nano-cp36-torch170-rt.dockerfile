@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y wget tar lbzip2 \
     sed -i 's/install --owner=root --group=root \"${QEMU_BIN}\" \"${L4T_ROOTFS_DIR}\/usr\/bin\/\"/#install --owner=root --group=root \"${QEMU_BIN}\" \"${L4T_ROOTFS_DIR}\/usr\/bin\/\"/g' nv_tegra/nv-apply-debs.sh && \
     sed -i 's/chroot . \//  /g' nv_tegra/nv-apply-debs.sh && \
     ./apply_binaries.sh -r / --target-overlay && cd .. \
-    rm -rf Tegra210_Linux_R32.4.2_aarch64.tbz2 && \
+    rm -rf /*.tbz2 && \
     rm -rf Linux_for_Tegra && \
     echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/nvidia-tegra.conf && ldconfig
 
@@ -46,16 +46,53 @@ ENV LD_LIBRARY_PATH="/usr/local/cuda/lib64:${LD_LIBRARY_PATH}"
 RUN echo "$PATH" && echo "$LD_LIBRARY_PATH"
 
 RUN apt-get update && apt-get install -y python3 python3-pip
-RUN apt-get install -y libopenblas-base libopenmpi-dev cuda-toolkit-10-2 && apt-get clean
-RUN apt-get update && apt-get install -y libcudnn8 python3-libnvinfer-dev cuda-compiler-10-2 && apt-get clean
+RUN apt-get install -y libopenblas-base libopenmpi-dev cuda-toolkit-10-2 && apt-get clean && rm -rf /usr/local/cuda/doc
+
+# Download with the nvidia sdk manager
+COPY /libcudnn8_8.0.0.180*.deb .
+COPY /libcudnn8-dev_8.0.0.180*.deb .
+COPY /libnvinfer7_7.1.3*.deb .
+COPY /libnvinfer-dev_7.1.3*.deb .
+COPY /libnvinfer-plugin7_7.1.3*.deb .
+COPY /libnvparsers7_7.1.3*.deb .
+COPY /libnvonnxparsers7_7.1.3*.deb .
+#COPY /libnvinfer-plugin-dev_7.1.3*.deb .
+#COPY /libnvparsers-dev_7.1.3*.deb .
+#COPY /libnvonnxparsers-dev_7.1.3*.deb .
+COPY /python3-libnvinfer_7.1.3*.deb .
+#COPY /python3-libnvinfer-dev_7.1.3* .
+
+RUN apt-get install -y --no-install-recommends ./libcudnn8_8.0.0.180-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./libcudnn8-dev_8.0.0.180-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./libnvinfer7_7.1.3-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./libnvinfer-dev_7.1.3-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./libnvinfer-plugin7_7.1.3-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./libnvparsers7_7.1.3-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./libnvonnxparsers7_7.1.3-1+cuda10.2_arm64.deb && \
+#    apt-get install -y --no-install-recommends ./libnvinfer-plugin-dev_7.1.3-1+cuda10.2_arm64.deb && \
+#    apt-get install -y --no-install-recommends ./libnvparsers-dev_7.1.3-1+cuda10.2_arm64.deb && \
+#    apt-get install -y --no-install-recommends ./libnvonnxparsers-dev_7.1.3-1+cuda10.2_arm64.deb && \
+    apt-get install -y --no-install-recommends ./python3-libnvinfer_7.1.3-1+cuda10.2_arm64.deb && \
+#    apt-get install -y --no-install-recommends ./python3-libnvinfer-dev_7.1.3-1+cuda10.2_arm64.deb && \
+    rm -rf *.deb
+
+RUN apt-get update && apt-get install -y cuda-compiler-10-2 && apt-get clean
 #RUN apt-get update && apt-get install -y -o Dpkg::Options::=--force-confdef nvidia-l4t-gstreamer libgstreamer1.0-0 gstreamer1.0-plugins-base gobject-introspection gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-tools && apt-get clean
-RUN pip3 install pycuda --verbose
+
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/local/cuda/targets/aarch64-linux/lib
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu
+ENV LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/usr/lib/aarch64-linux-gnu/tegra
+
+RUN pip3 install setuptools Cython wheel
+RUN pip3 install numpy==1.19.5
+
+RUN pip3 install pycuda
 
 
 # ----------------------------------------------------------
 # Gst Python
 # ----------------------------------------------------------
-RUN apt update && apt install python3-gi python3-dev python3-gst-1.0 -y
+#RUN apt update && apt install python3-gi python3-dev python3-gst-1.0 -y
 
 
 
@@ -79,8 +116,6 @@ RUN apt-get update && \
         openmpi-common \
 	gfortran
 
-RUN pip3 install setuptools Cython wheel
-RUN pip3 install numpy --verbose
 
 
 # ----------------------------------------------------------
