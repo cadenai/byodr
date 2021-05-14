@@ -11,7 +11,7 @@ services:
     build:
       context: ./docker
       dockerfile: zerotier.dockerfile
-    image: centipede2donald/byodr-ce:zerotier-160
+    image: centipede2donald/byodr-ce:zerotier-165
     container_name: zerotier-one
     restart: always
     network_mode: host
