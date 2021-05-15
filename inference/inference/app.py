@@ -1,18 +1,18 @@
 from __future__ import absolute_import
 
+import argparse
 import glob
 import logging
 import os
 import sys
-
-import argparse
-import cv2
-import numpy as np
 import threading
 import time
+from functools import partial
+
+import cv2
+import numpy as np
 # For operators see: https://github.com/glenfletcher/Equation/blob/master/Equation/equation_base.py
 from Equation import Expression
-from functools import partial
 from scipy.special import softmax
 from six.moves import range
 
@@ -85,15 +85,14 @@ class RouteMemory(object):
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         _dot_product = np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
-        _errors = (_dot_product - self._code_diagonal) ** 2
-        _errors = np.minimum(1, _errors)
-        self._beliefs *= _p_out * np.exp(-np.e * np.maximum(0, _errors))
+        _errors = np.clip((_dot_product - self._code_diagonal) ** 2, 0, 1)
+        self._beliefs *= _p_out * np.exp(-np.e * _errors)
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
         _image = self._tracking
         if _image is None:
-            _image = self._beliefs.argmax() if _before_match else np.where(code_points == _next, self._beliefs, -1).argmax()
+            _image = _errors.argmin() if _before_match else np.where(code_points == _next, _errors, 2).argmin()
 
         # Allow for a better match in case it is tracking the wrong image.
         _competitor = np.where(np.logical_or.reduce([code_points == _point, code_points == _previous]), -1, self._beliefs).argmax()
