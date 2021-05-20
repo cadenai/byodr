@@ -17,8 +17,14 @@ The robot runs webservices that can be accessed via a browser. To ensure securit
 Virtual Private Network (VPN) from ZeroTier.   
 The operators have access to the robot via a ZeroTier VPN that is setup in advance for one or more robots that are managed by the 
 VPN-manager.
-MWLC creates a ZeroTier-VPN with the robot as a node. The information to manage the VPN is available to the VPN-manager.  
-
+MWLC creates a ZeroTier-VPN with the robot as a node. The information to manage the VPN is available to the VPN-manager.   
+#### Warnings from your security-software
+Certain controllers need a secured connection, https. A secured conection needs an certificate.  
+As the VPN is private it uses IP-numbers from Private-ranges like 192.nnn.nnn.nnn and 10.nnn.nnn.nnn.  
+For these ranges there are no official certificates form a certified-provider.  
+Therefore there a, so called, selfsigned-certicicate is used.  
+This might give warnings from you security-softeware and/or the browser.  
+Please, check-carefully if this warning is caused by the robot internet-server via the vpn. If so yo can connect to the robot.
 ## Connections of the robot
 The robot has three types of methods to connect to the internet:  
 
