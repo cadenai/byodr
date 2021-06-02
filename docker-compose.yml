@@ -151,10 +151,10 @@ services:
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:rw
   inference:
-    cpuset: "3"
+#    cpuset: "3"
     build:
       context: .
-      dockerfile: inference/tf115-cp36-jp42.dockerfile
+      dockerfile: inference/runtime-cp36-jp441.dockerfile
     image: centipede2donald/byodr-ce:inference-tegra
     container_name: byodr_inference
     restart: always

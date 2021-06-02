@@ -43,9 +43,10 @@ services:
   inference:
     build:
       context: .
-      dockerfile: inference/tf115-cp36-x86.dockerfile
+      dockerfile: inference/runtime-cp36-x86.dockerfile
     image: centipede2donald/byodr-ce:inference-carla
     restart: 'no'
+    ipc: host
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
     volumes:

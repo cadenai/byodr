@@ -21,7 +21,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONRec
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_intention
+from .torched import DynamicMomentum, TRTDriver, maneuver_intention
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
