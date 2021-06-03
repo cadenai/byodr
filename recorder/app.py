@@ -6,11 +6,11 @@ import logging
 import os
 import threading
 import time
-from ConfigParser import SafeConfigParser
 from datetime import datetime
 
 import cv2
 import numpy as np
+from ConfigParser import SafeConfigParser
 from store import Event
 
 from byodr.utils import Application
@@ -264,6 +264,7 @@ class RecorderApplication(Application):
 
 def main():
     parser = argparse.ArgumentParser(description='Recorder.')
+    parser.add_argument('--name', type=str, default='none', help='Process name.')
     parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
@@ -274,9 +275,9 @@ def main():
     application = RecorderApplication(config_dir=args.config, sessions_dir=sessions_dir)
     quit_event = application.quit_event
 
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
+    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', receive_timeout_ms=0)
+    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', receive_timeout_ms=0)
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, receive_timeout_ms=0)
     collector = CollectorThread(receivers=(pilot, vehicle, ipc_chatter), event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')

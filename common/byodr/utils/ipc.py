@@ -72,7 +72,7 @@ class ImagePublisher(object):
 
 
 class JSONReceiver(object):
-    def __init__(self, url, topic=b'', hwm=1, receive_timeout_ms=1, pop=False):
+    def __init__(self, url, topic=b'', hwm=1, receive_timeout_ms=2, pop=False):
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.set_hwm(hwm)
         subscriber.setsockopt(zmq.RCVTIMEO, receive_timeout_ms)

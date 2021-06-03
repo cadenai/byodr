@@ -456,9 +456,9 @@ def main():
                                        navigation_routes=args.routes)
     quit_event = application.quit_event
 
-    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
+    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', receive_timeout_ms=0)
+    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', receive_timeout_ms=0)
+    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, receive_timeout_ms=0)
     collector = CollectorThread(receivers=(teleop, pilot, ipc_chatter), event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')

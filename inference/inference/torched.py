@@ -137,6 +137,5 @@ class TRTDriver(object):
                 'input/current_destination': np.array([destination], dtype=np.float32)
             }
             _out = [x.flatten() for x in self._sess.run(None, _feed)]
-            _steering, _critic, _surprise, _gumbel, _brake, _coord, _query, _key, _value = _out
-            _br_critic = np.zeros_like(_steering)
+            _steering, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query, _key, _value = _out
             return _steering, _critic, _surprise, _gumbel, _brake, _br_critic, _coord, _query, _key, _value

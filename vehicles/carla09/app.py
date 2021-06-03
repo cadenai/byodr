@@ -126,6 +126,7 @@ class RoutingImagePublisher(object):
 
 def main():
     parser = argparse.ArgumentParser(description='Carla vehicle client.')
+    parser.add_argument('--name', type=str, default='none', help='Process name.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 

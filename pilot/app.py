@@ -59,6 +59,7 @@ class PilotApplication(Application):
 
 def main():
     parser = argparse.ArgumentParser(description='Pilot.')
+    parser.add_argument('--name', type=str, default='none', help='Process name.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
