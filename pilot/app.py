@@ -2,7 +2,6 @@ import argparse
 import glob
 import logging
 import os
-
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
@@ -20,6 +19,7 @@ class PilotApplication(Application):
         self.ipc_server = None
         self.ipc_chatter = None
         self.teleop = None
+        self.external = None
         self.ros = None
         self.vehicle = None
         self.inference = None
@@ -47,7 +47,7 @@ class PilotApplication(Application):
         self._processor.quit()
 
     def step(self):
-        commands = (self.teleop(), self.ros(), self.vehicle(), self.inference())
+        commands = (self.teleop(), self.external(), self.ros(), self.vehicle(), self.inference())
         action = self._processor.next_action(*commands)
         if action:
             self.publisher.publish(action)
@@ -69,17 +69,19 @@ def main():
     logger = application.logger
 
     teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    ros = JSONReceiver(url='ipc:///byodr/ros.sock', topic=b'aav/ros/input')
+    external = JSONReceiver(url='ipc:///byodr/external.sock', topic=b'aav/external/input', hwm=10, pop=True)
+    ros = JSONReceiver(url='ipc:///byodr/ros.sock', topic=b'aav/ros/input', hwm=10, pop=True)
     vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
     inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
     ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(teleop, ros, vehicle, inference, ipc_chatter), event=quit_event)
+    collector = CollectorThread(receivers=(teleop, external, ros, vehicle, inference, ipc_chatter), event=quit_event)
 
     application.teleop = lambda: collector.get(0)
-    application.ros = lambda: collector.get(1)
-    application.vehicle = lambda: collector.get(2)
-    application.inference = lambda: collector.get(3)
-    application.ipc_chatter = lambda: collector.get(4)
+    application.external = lambda: collector.get(1)
+    application.ros = lambda: collector.get(2)
+    application.vehicle = lambda: collector.get(3)
+    application.inference = lambda: collector.get(4)
+    application.ipc_chatter = lambda: collector.get(5)
     application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
     threads = [collector, application.ipc_server]

@@ -4,6 +4,7 @@ import collections
 import json
 import logging
 import os
+import threading
 import time
 import traceback
 from ConfigParser import SafeConfigParser
@@ -14,6 +15,7 @@ import tornado
 from tornado import web, websocket
 
 from byodr.utils import timestamp
+from byodr.utils.navigate import AbstractRouteDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -227,7 +229,6 @@ class NavImageHandler(web.RequestHandler):
     def data_received(self, chunk):
         pass
 
-    # noinspection PyUnresolvedReferences,PyDeprecation
     @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
@@ -315,3 +316,169 @@ class JSONMethodDumpRequestHandler(JSONRequestHandler):
 
     def get(self):
         self.write(json.dumps(self._method()))
+
+
+class NavigationRequestError(Exception):
+    def __init__(self, *args, **kwargs):
+        super(NavigationRequestError, self).__init__(args, kwargs)
+
+
+class IllegalActionNavigationRequestError(Exception):
+    def __init__(self, *args, **kwargs):
+        super(IllegalActionNavigationRequestError, self).__init__(args, kwargs)
+
+
+class UnknownRouteNavigationRequestError(Exception):
+    def __init__(self, *args, **kwargs):
+        super(UnknownRouteNavigationRequestError, self).__init__(args, kwargs)
+
+
+class UnknownPointNavigationRequestError(Exception):
+    def __init__(self, *args, **kwargs):
+        super(UnknownPointNavigationRequestError, self).__init__(args, kwargs)
+
+
+class LocalRouteDataSource(AbstractRouteDataSource):
+    def __init__(self, delegate):
+        self._delegate = delegate
+        self._q_navigation_requests = collections.deque(maxlen=1)
+
+    def get_navigation_request(self):
+        try:
+            return self._q_navigation_requests.pop()
+        except IndexError:
+            return None
+
+    def set_navigation_request(self, item):
+        action = item.get('action', None)
+        route = item.get('route', None)
+        point = item.get('point', None)
+        # Inspect the request.
+        if action not in ('close', 'resume', 'halt'):
+            raise IllegalActionNavigationRequestError()
+        if action in ('resume', 'halt') and route not in self.list_routes():
+            raise UnknownRouteNavigationRequestError()
+        if action == 'halt' and not self.has_navigation_point(route, point):
+            raise UnknownPointNavigationRequestError()
+        # Handle a subset of the request.
+        if action == 'close':
+            self.close()
+        elif action == 'resume':
+            self.open(route)
+        else:
+            self._q_navigation_requests.append(item)
+
+    def __len__(self):
+        return len(self._delegate)
+
+    def load_routes(self):
+        return self._delegate.load_routes()
+
+    def list_routes(self):
+        return self._delegate.list_routes()
+
+    def get_selected_route(self):
+        return self._delegate.get_selected_route()
+
+    def open(self, route_name=None):
+        self._delegate.open(route_name)
+
+    def is_open(self):
+        return self._delegate.is_open()
+
+    def close(self):
+        self._delegate.close()
+
+    def quit(self):
+        self._delegate.quit()
+
+    def list_navigation_points(self):
+        return self._delegate.list_navigation_points()
+
+    def has_navigation_point(self, route, point):
+        return self._delegate.has_navigation_point(route, point)
+
+    def list_all_images(self):
+        return self._delegate.list_all_images()
+
+    def get_image(self, image_id):
+        return self._delegate.get_image(image_id)
+
+    def get_image_navigation_point(self, idx):
+        return self._delegate.get_image_navigation_point(idx)
+
+    def get_image_navigation_point_id(self, idx):
+        return self._delegate.get_image_navigation_point_id(idx)
+
+    def get_instructions(self, point):
+        return self._delegate.get_instructions(point)
+
+
+class SimpleRequestNavigationHandler(web.RequestHandler):
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self._store = kwargs.get('route_store')
+
+    def data_received(self, chunk):
+        pass
+
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def get(self):
+        nav_request = dict(
+            action=self.get_query_argument('action', default=None),
+            route=self.get_query_argument('route', default=None),
+            point=self.get_query_argument('point', default=None)
+        )
+        logger.info("{}".format(nav_request))
+        response_code = 200
+        blob = {}
+        try:
+            self._store.set_navigation_request(nav_request)
+            blob['message'] = 'Your request has been successfully completed'
+        except IllegalActionNavigationRequestError:
+            response_code = 404
+            blob['message'] = 'The action is invalid'
+        except UnknownRouteNavigationRequestError:
+            response_code = 404
+            blob['message'] = 'The route is invalid'
+        except UnknownPointNavigationRequestError:
+            response_code = 404
+            blob['message'] = 'The navigation point is invalid'
+
+        blob['status'] = 'ok' if response_code == 200 else 'error'
+        message = json.dumps(blob)
+        # self.set_header('Content-Type', 'text/plain; charset=UTF-8')
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Content-Length', len(message))
+        self.set_status(response_code)
+        self.write(message)
+        yield tornado.gen.Task(self.flush)
+
+
+class JSONNavigationHandler(JSONRequestHandler):
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self._store = kwargs.get('route_store')
+
+    def get(self):
+        action = self.get_query_argument('action')
+        if action == 'list':
+            _routes = self._store.list_routes()
+            _selected = self._store.get_selected_route()
+            _response = {'routes': sorted(_routes), 'selected': _selected}
+            self.write(json.dumps(_response))
+            threading.Thread(target=self._store.load_routes).start()
+        else:
+            self.write(json.dumps({}))
+
+    def post(self):
+        data = json.loads(self.request.body)
+        action = data.get('action')
+        selected_route = data.get('route')
+        _active = len(self._store) > 0
+        if action == 'start' or (action == 'toggle' and (not _active or self._store.get_selected_route() != selected_route)):
+            threading.Thread(target=self._store.open, args=(selected_route,)).start()
+        elif action in ('close', 'toggle'):
+            self._store.close()
+        self.write(json.dumps(dict(message='ok')))

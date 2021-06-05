@@ -1,18 +1,14 @@
 #!/usr/bin/env python
 import argparse
 import glob
-import json
 import logging
 import multiprocessing
 import os
 import signal
-import threading
 from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
-    JSONMethodDumpRequestHandler, NavImageHandler, JSONRequestHandler
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 
@@ -20,6 +16,8 @@ from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
+    JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler, LocalRouteDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +34,13 @@ def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
     io_loop.stop()
+
+
+def _load_nav_image(fname):
+    image = cv2.imread(fname)
+    image = cv2.resize(image, (160, 120))
+    image = image.astype(np.uint8)
+    return image
 
 
 class TeleopApplication(Application):
@@ -68,50 +73,17 @@ class TeleopApplication(Application):
                 self._config_hash = _hash
 
 
-def _load_nav_image(fname):
-    image = cv2.imread(fname)
-    image = cv2.resize(image, (160, 120))
-    image = image.astype(np.uint8)
-    return image
-
-
-class NavigationHandler(JSONRequestHandler):
-    # noinspection PyAttributeOutsideInit
-    def initialize(self, **kwargs):
-        self._store = kwargs.get('route_store')
-
-    def get(self):
-        action = self.get_query_argument('action')
-        if action == 'list':
-            _routes = self._store.list_routes()
-            _selected = self._store.get_selected_route()
-            _response = {'routes': sorted(_routes), 'selected': _selected}
-            self.write(json.dumps(_response))
-            threading.Thread(target=self._store.load_routes).start()
-        else:
-            self.write(json.dumps({}))
-
-    def post(self):
-        data = json.loads(self.request.body)
-        action = data.get('action')
-        selected_route = data.get('route')
-        _active = len(self._store) > 0
-        if action == 'start' or (action == 'toggle' and (not _active or self._store.get_selected_route() != selected_route)):
-            threading.Thread(target=self._store.open, args=(selected_route,)).start()
-        elif action in ('close', 'toggle'):
-            self._store.close()
-        self.write(json.dumps(dict(message='ok')))
-
-
 def main():
     parser = argparse.ArgumentParser(description='Teleop sockets server.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes,
-                                                                 fn_load_image=_load_nav_image,
-                                                                 load_instructions=False))
+    route_store = LocalRouteDataSource(ReloadableDataSource(FileSystemRouteDataSource(
+        directory=args.routes,
+        fn_load_image=_load_nav_image,
+        load_instructions=False))
+    )
     route_store.load_routes()
 
     application = TeleopApplication(event=quit_event, config_dir=args.config)
@@ -131,7 +103,8 @@ def main():
 
     [t.start() for t in threads]
 
-    publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
+    teleop_publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
+    external_publisher = JSONPublisher(url='ipc:///byodr/external.sock', topic='aav/external/input')
     chatter = JSONPublisher(url='ipc:///byodr/teleop_c.sock', topic='aav/teleop/chatter')
     zm_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock',
                                     'ipc:///byodr/inference_c.sock',
@@ -155,7 +128,10 @@ def main():
 
     def teleop_publish(cmd):
         cmd['navigator'] = dict(route=route_store.get_selected_route())
-        publisher.publish(cmd)
+        teleop_publisher.publish(cmd)
+        nav_request = route_store.get_navigation_request()
+        if nav_request is not None:
+            external_publisher.publish(nav_request)
 
     try:
         main_redirect_url = '/index.htm?v=0.47.4'
@@ -173,7 +149,8 @@ def main():
                                                                fn_on_save=on_options_save)),
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
-            (r"/api/navigation/routes", NavigationHandler, dict(route_store=route_store)),
+            (r"/api/navigation/routes", JSONNavigationHandler, dict(route_store=route_store)),
+            (r"/ext/v10/direct/navigate", SimpleRequestNavigationHandler, dict(route_store=route_store)),
             (r"/", web.RedirectHandler, dict(url=main_redirect_url, permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])

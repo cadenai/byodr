@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 import collections
 import datetime
 import json
@@ -81,7 +82,7 @@ class JSONReceiver(object):
         subscriber.setsockopt(zmq.SUBSCRIBE, topic)
         self._subscriber = subscriber
         self._peek = not pop
-        self._queue = collections.deque(maxlen=1)
+        self._queue = collections.deque(maxlen=hwm)
         self._lock = threading.Lock()
 
     def consume(self):
