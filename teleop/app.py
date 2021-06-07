@@ -127,6 +127,7 @@ def main():
         return route_store.get_image(image_id)
 
     def teleop_publish(cmd):
+        # We are the authority on route state.
         cmd['navigator'] = dict(route=route_store.get_selected_route())
         teleop_publisher.publish(cmd)
         nav_request = route_store.get_navigation_request()
