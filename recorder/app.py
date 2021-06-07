@@ -11,12 +11,12 @@ from datetime import datetime
 
 import cv2
 import numpy as np
-from store import Event
 
 from byodr.utils import Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, CollectorThread, JSONReceiver
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
+from store import Event
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +264,7 @@ class RecorderApplication(Application):
 
 def main():
     parser = argparse.ArgumentParser(description='Recorder.')
+    parser.add_argument('--name', type=str, default='none', help='Process name.')
     parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()

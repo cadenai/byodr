@@ -105,7 +105,7 @@ class CollectorThread(threading.Thread):
         self._quit_event = multiprocessing.Event() if event is None else event
         self._sleep = 1. / hz
 
-    def get(self, index):
+    def get(self, index=0):
         # Get the latest message.
         _receiver = self._receivers[index]
         _receiver.consume()

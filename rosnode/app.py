@@ -104,6 +104,7 @@ class RosApplication(Application):
 
 def main():
     parser = argparse.ArgumentParser(description='ROS2 rover node.')
+    parser.add_argument('--name', type=str, default='none', help='Process name.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
