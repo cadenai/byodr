@@ -407,6 +407,7 @@ class InferenceApplication(Application):
         self._touch(c_pilot)
         image = self.camera.capture()[-1]
         if image is not None:
+            # The teleop service is the authority on route state.
             c_route = None if c_teleop is None else c_teleop.get('navigator').get('route')
             state = self._runner.forward(image=image, route=c_route)
             state['_fps'] = self.get_actual_hz()
