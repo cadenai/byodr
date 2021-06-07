@@ -16,7 +16,6 @@ import tornado
 from tornado import web, websocket
 
 from byodr.utils import timestamp
-from byodr.utils.navigate import AbstractRouteDataSource
 
 logger = logging.getLogger(__name__)
 
@@ -339,74 +338,16 @@ class UnknownPointNavigationRequestError(Exception):
         super(UnknownPointNavigationRequestError, self).__init__(args, kwargs)
 
 
-class LocalRouteDataSource(AbstractRouteDataSource):
-    def __init__(self, delegate):
-        self._delegate = delegate
-        self._q_navigation_requests = collections.deque(maxlen=1)
-
-    def get_navigation_request(self):
-        try:
-            return self._q_navigation_requests.pop()
-        except IndexError:
-            return None
-
-    def set_navigation_request(self, item):
-        self._q_navigation_requests.append(item)
-
-    def __len__(self):
-        return len(self._delegate)
-
-    def load_routes(self):
-        return self._delegate.load_routes()
-
-    def list_routes(self):
-        return self._delegate.list_routes()
-
-    def get_selected_route(self):
-        return self._delegate.get_selected_route()
-
-    def open(self, route_name=None):
-        self._delegate.open(route_name)
-
-    def delayed_open(self, route_name):
-        if self.get_selected_route() != route_name:
-            threading.Thread(target=self.open, args=(route_name,)).start()
-
-    def is_open(self):
-        return self._delegate.is_open()
-
-    def close(self):
-        self._delegate.close()
-
-    def quit(self):
-        self._delegate.quit()
-
-    def list_navigation_points(self):
-        return self._delegate.list_navigation_points()
-
-    def has_navigation_point(self, route, point):
-        return self._delegate.has_navigation_point(route, point)
-
-    def list_all_images(self):
-        return self._delegate.list_all_images()
-
-    def get_image(self, image_id):
-        return self._delegate.get_image(image_id)
-
-    def get_image_navigation_point(self, idx):
-        return self._delegate.get_image_navigation_point(idx)
-
-    def get_image_navigation_point_id(self, idx):
-        return self._delegate.get_image_navigation_point_id(idx)
-
-    def get_instructions(self, point):
-        return self._delegate.get_instructions(point)
+def delayed_open(store, route_name):
+    if store.get_selected_route() != route_name:
+        threading.Thread(target=store.open, args=(route_name,)).start()
 
 
 class SimpleRequestNavigationHandler(web.RequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._store = kwargs.get('route_store')
+        self._fn_override = kwargs.get('fn_override')
 
     def data_received(self, chunk):
         pass
@@ -442,8 +383,8 @@ class SimpleRequestNavigationHandler(web.RequestHandler):
                 _ = float(speed)
             # We are the authority on route state.
             if route is not None:
-                self._store.delayed_open(route)
-            self._store.set_navigation_request(nav_request)
+                delayed_open(self._store, route)
+            self._fn_override(nav_request)
             blob['message'] = 'Your request has been successfully completed'
         except IllegalActionNavigationRequestError:
             response_code = 404
@@ -492,7 +433,7 @@ class JSONNavigationHandler(JSONRequestHandler):
         selected_route = data.get('route')
         _active = len(self._store) > 0
         if action == 'start' or (action == 'toggle' and (not _active or self._store.get_selected_route() != selected_route)):
-            self._store.delayed_open(selected_route)
+            delayed_open(self._store, selected_route)
         elif action in ('close', 'toggle'):
             self._store.close()
         self.write(json.dumps(dict(message='ok')))

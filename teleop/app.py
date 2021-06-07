@@ -17,7 +17,7 @@ from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
-    JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler, LocalRouteDataSource
+    JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler
 
 logger = logging.getLogger(__name__)
 
@@ -80,10 +80,11 @@ def main():
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    route_store = LocalRouteDataSource(ReloadableDataSource(FileSystemRouteDataSource(
-        directory=args.routes,
-        fn_load_image=_load_nav_image,
-        load_instructions=False))
+    route_store = ReloadableDataSource(
+        FileSystemRouteDataSource(
+            directory=args.routes,
+            fn_load_image=_load_nav_image,
+            load_instructions=False)
     )
     route_store.load_routes()
 
@@ -131,7 +132,9 @@ def main():
         # We are the authority on route state.
         cmd['navigator'] = dict(route=route_store.get_selected_route())
         teleop_publisher.publish(cmd)
-        nav_request = route_store.get_navigation_request()
+
+    def override_publish(nav_request):
+        # We are the authority on route state.
         if nav_request is not None:
             external_publisher.publish(nav_request)
 
@@ -152,7 +155,7 @@ def main():
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
             (r"/api/navigation/routes", JSONNavigationHandler, dict(route_store=route_store)),
-            (r"/ext/v10/direct/navigate", SimpleRequestNavigationHandler, dict(route_store=route_store)),
+            (r"/ext/v10/direct/navigate", SimpleRequestNavigationHandler, dict(route_store=route_store, fn_override=override_publish)),
             (r"/", web.RedirectHandler, dict(url=main_redirect_url, permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
