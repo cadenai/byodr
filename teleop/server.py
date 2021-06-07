@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import collections
+import datetime
 import json
 import logging
 import os
@@ -350,23 +351,7 @@ class LocalRouteDataSource(AbstractRouteDataSource):
             return None
 
     def set_navigation_request(self, item):
-        action = item.get('action', None)
-        route = item.get('route', None)
-        point = item.get('point', None)
-        # Inspect the request.
-        if action not in ('close', 'resume', 'halt'):
-            raise IllegalActionNavigationRequestError()
-        if action in ('resume', 'halt') and route not in self.list_routes():
-            raise UnknownRouteNavigationRequestError()
-        if action == 'halt' and not self.has_navigation_point(route, point):
-            raise UnknownPointNavigationRequestError()
-        # Handle a subset of the request.
-        if action == 'close':
-            self.close()
-        elif action == 'resume':
-            self.open(route)
-        else:
-            self._q_navigation_requests.append(item)
+        self._q_navigation_requests.append(item)
 
     def __len__(self):
         return len(self._delegate)
@@ -382,6 +367,10 @@ class LocalRouteDataSource(AbstractRouteDataSource):
 
     def open(self, route_name=None):
         self._delegate.open(route_name)
+
+    def delayed_open(self, route_name):
+        if self.get_selected_route() != route_name:
+            threading.Thread(target=self.open, args=(route_name,)).start()
 
     def is_open(self):
         return self._delegate.is_open()
@@ -428,12 +417,32 @@ class SimpleRequestNavigationHandler(web.RequestHandler):
         nav_request = dict(
             action=self.get_query_argument('action', default=None),
             route=self.get_query_argument('route', default=None),
-            point=self.get_query_argument('point', default=None)
+            point=self.get_query_argument('point', default=None),
+            speed=self.get_query_argument('speed', default=None)
         )
         logger.info("{}".format(nav_request))
         response_code = 200
         blob = {}
         try:
+            #   /navigate?action='halt'
+            #   /navigate?action='halt'&route=''&point=''
+            #   /navigate?action='resume'&route=''&speed=1
+            action = nav_request.get('action', None)
+            route = nav_request.get('route', None)
+            point = nav_request.get('point', None)
+            speed = nav_request.get('speed', None)
+            # Only the latest non-executed request is to be processed.
+            if action not in ('resume', 'halt'):
+                raise IllegalActionNavigationRequestError()
+            if route is not None and route not in self._store.list_routes():
+                raise UnknownRouteNavigationRequestError()
+            if action == 'halt' and route is not None and (point is None or not self._store.has_navigation_point(route, point)):
+                raise UnknownPointNavigationRequestError()
+            if speed is not None:
+                _ = float(speed)
+            # We are the authority on route state.
+            if route is not None:
+                self._store.delayed_open(route)
             self._store.set_navigation_request(nav_request)
             blob['message'] = 'Your request has been successfully completed'
         except IllegalActionNavigationRequestError:
@@ -445,8 +454,13 @@ class SimpleRequestNavigationHandler(web.RequestHandler):
         except UnknownPointNavigationRequestError:
             response_code = 404
             blob['message'] = 'The navigation point is invalid'
+        except StandardError as se:
+            logger.info(se)
+            response_code = 404
+            blob['message'] = 'An illegal value error occurred'
 
         blob['status'] = 'ok' if response_code == 200 else 'error'
+        blob['timestamp'] = datetime.datetime.utcnow().strftime('%b %d %H:%M:%S.%s UTC')
         message = json.dumps(blob)
         # self.set_header('Content-Type', 'text/plain; charset=UTF-8')
         self.set_header('Content-Type', 'application/json')
@@ -478,7 +492,7 @@ class JSONNavigationHandler(JSONRequestHandler):
         selected_route = data.get('route')
         _active = len(self._store) > 0
         if action == 'start' or (action == 'toggle' and (not _active or self._store.get_selected_route() != selected_route)):
-            threading.Thread(target=self._store.open, args=(selected_route,)).start()
+            self._store.delayed_open(selected_route)
         elif action in ('close', 'toggle'):
             self._store.close()
         self.write(json.dumps(dict(message='ok')))

@@ -446,7 +446,7 @@ class Navigator(object):
     def __init__(self, route_store):
         self._store = route_store
         self._open_lock = threading.Lock()
-        self._override_instructions = collections.deque(maxlen=1)
+        self._override_requests = collections.deque(maxlen=1)
         self._match_point = None
         self._match_image = None
         self._match_distance = None
@@ -469,7 +469,6 @@ class Navigator(object):
 
     def close(self):
         self._store.close()
-        self._override_instructions.clear()
         self._match_point = None
         self._match_image = None
         self._match_distance = None
@@ -489,11 +488,10 @@ class Navigator(object):
     def get_match_distance(self):
         return self._match_distance
 
-    def check_state(self, ui_navigator=None, override_request=None):
-        route = None if ui_navigator is None else ui_navigator.get('route', None)
-        # This runs at the service process frequency.
-        if override_request is not None:
-            self._override_instructions.append(override_request)
+    def handle_teleop_state(self, c_teleop):
+        # This must run quickly.
+        # The teleop service is the authority on route state.
+        route = c_teleop.get('navigator').get('route', None)
         if route is None:
             self.close()
         elif route not in self._store.list_routes():
@@ -501,40 +499,52 @@ class Navigator(object):
         elif route != self._store.get_selected_route():
             threading.Thread(target=self._open_store, args=(route,)).start()
 
-    def _get_instructions(self, point_name):
+    def set_override_request(self, request):
+        self._override_requests.append(request)
+
+    def _get_override_request(self):
         try:
-            _override = self._override_instructions[-1]
-            r_action = _override.get('action', None)
-            r_route = _override.get('route', None)
-            r_point = _override.get('point', None)
-            if r_action == 'halt' and r_route == self._store.get_selected_route() and r_point == point_name:
-                self._override_instructions.clear()
-                return NavigationInstructions(commands=NavigationCommand(speed=0))
-            else:
-                logger.warn("Illegal override request {}".format(_override))
-                self._override_instructions.clear()
+            return self._override_requests[-1]
         except IndexError:
-            pass
-        return self._store.get_instructions(point_name)
+            return None
 
     def update(self, c_inference):
         # This runs at the service process frequency.
-        if self.is_active():
-            _point_id = c_inference.get('navigation_point')
-            _image_id = c_inference.get('navigation_image')
-            _distance = c_inference.get('navigation_distance', 1.)
+        #   /navigate?action='halt'
+        #   /navigate?action='halt'&route=''&point=''
+        #   /navigate?action='resume'&route=''&speed=1
+        # Some overrides are independent of a matched point.
+        instructions = None
+        _override = self._get_override_request()
+        r_action = None if _override is None else _override.get('action', None)
+        r_point = None if _override is None else _override.get('point', None)
+        r_speed = None if _override is None else _override.get('speed', None)
+        if r_action == 'halt' and r_point is None:
+            instructions = NavigationInstructions(commands=NavigationCommand(speed=0))
+            self._override_requests.clear()
+        elif r_action == 'resume' and r_speed is not None:
+            instructions = NavigationInstructions(commands=NavigationCommand(speed=float(r_speed)))
+            self._override_requests.clear()
+        elif self.is_active():
             try:
+                _point_id = c_inference.get('navigation_point')
+                _image_id = c_inference.get('navigation_image')
+                _distance = c_inference.get('navigation_distance', 1.)
                 if _point_id >= 0:
                     _point_name = self._store.list_navigation_points()[_point_id]
                     if _point_name != self._match_point:
                         self._match_point = _point_name
                         self._match_image = _image_id
                         self._match_distance = _distance
-                        return self._get_instructions(_point_name)
+                        if r_action == 'halt' and r_point == _point_name:
+                            instructions = NavigationInstructions(commands=NavigationCommand(speed=0))
+                            self._override_requests.clear()
+                        else:
+                            instructions = self._store.get_instructions(_point_name)
             except LookupError:
                 pass
         # No new match.
-        return None
+        return instructions
 
 
 class DriverManager(Configurable):
@@ -599,11 +609,18 @@ class DriverManager(Configurable):
         finally:
             self._lock.release()
 
-    def process_navigation(self, c_teleop, c_external, c_inference):
+    def process_override(self, c_external):
+        r_action = None if c_external is None else c_external.get('action', None)
+        if r_action in ('halt', 'resume'):
+            self._navigator.set_override_request(c_external)
+        elif r_action is not None:
+            logger.warn("Illegal override request {}".format(c_external))
+
+    def process_navigation(self, c_teleop, c_inference):
         # This runs at the service process frequency.
         # Leave the state as is on empty teleop state.
         if c_teleop is not None:
-            self._navigator.check_state(c_teleop.get('navigator'), override_request=c_external)
+            self._navigator.handle_teleop_state(c_teleop)
         try:
             # Peek the first command in execution order.
             command = self._navigation_queue[0]
@@ -740,7 +757,12 @@ class CommandProcessor(Configurable):
                 self._cache[key] = 1
 
     def _process(self, c_teleop, c_external, c_ros, c_inference):
-        self._driver.process_navigation(c_teleop, c_external, c_inference)
+        r_action = None if c_external is None else c_external.get('action', None)
+        if r_action == 'resume':
+            self._cache_safe('external api call', lambda: self._driver.switch_ctl('driver_mode.inference.dnn'))
+
+        self._driver.process_navigation(c_teleop, c_inference)
+        self._driver.process_override(c_external)
 
         # Continue with ros instructions which take precedence over a route.
         c_ros = {} if c_ros is None else c_ros
