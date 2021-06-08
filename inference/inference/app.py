@@ -17,7 +17,7 @@ from scipy.special import softmax
 from six.moves import range
 
 from byodr.utils import timestamp, Configurable, Application
-from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
+from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
@@ -457,21 +457,20 @@ def main():
                                        navigation_routes=args.routes)
     quit_event = application.quit_event
 
-    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(teleop, pilot, ipc_chatter), event=quit_event)
+    teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
     application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/inference_c.sock', name='inference', event=quit_event)
-    application.teleop = lambda: collector.get(0)
-    application.pilot = lambda: collector.get(1)
-    application.ipc_chatter = lambda: collector.get(2)
+    application.teleop = lambda: teleop.get()
+    application.pilot = lambda: pilot.get()
+    application.ipc_chatter = lambda: ipc_chatter.get()
 
     recompilation = RecompilationThread(application)
 
-    threads = [collector, application.camera, application.ipc_server, recompilation]
+    threads = [teleop, pilot, ipc_chatter, application.camera, application.ipc_server, recompilation]
     if quit_event.is_set():
         return 0
 

@@ -11,7 +11,7 @@ from rclpy.node import Node
 from std_msgs.msg import Float32
 
 from byodr.utils import Application, timestamp
-from byodr.utils.ipc import CollectorThread, JSONReceiver, JSONPublisher
+from byodr.utils.ipc import json_collector, JSONPublisher
 
 
 class Bridge(Node):
@@ -113,13 +113,12 @@ def main():
     logger = application.logger
 
     publisher = JSONPublisher(url='ipc:///byodr/ros.sock', topic='aav/ros/input')
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(pilot, ipc_chatter), event=quit_event, hz=20)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
     application.publish = lambda m: publisher.publish(m)
-    application.pilot = lambda: collector.get(0)
-    application.ipc_chatter = lambda: collector.get(1)
-    threads = [collector]
+    application.pilot = lambda: pilot.get()
+    application.ipc_chatter = lambda: ipc_chatter.get()
+    threads = [pilot, ipc_chatter]
     if quit_event.is_set():
         return 0
 

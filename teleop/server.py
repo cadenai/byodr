@@ -380,7 +380,9 @@ class SimpleRequestNavigationHandler(web.RequestHandler):
             if action == 'halt' and route is not None and (point is None or not self._store.has_navigation_point(route, point)):
                 raise UnknownPointNavigationRequestError()
             if speed is not None:
-                _ = float(speed)
+                _speed_value = float(speed)
+                if _speed_value < 0:
+                    raise AssertionError("The use of a negative value for speed is not allowed.")
             # We are the authority on route state.
             if route is not None:
                 delayed_open(self._store, route)

@@ -5,7 +5,7 @@ import os
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
-from byodr.utils.ipc import JSONPublisher, LocalIPCServer, JSONReceiver, CollectorThread
+from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from pilot import CommandProcessor
 
@@ -69,23 +69,22 @@ def main():
     quit_event = application.quit_event
     logger = application.logger
 
-    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    external = JSONReceiver(url='ipc:///byodr/external.sock', topic=b'aav/external/input', hwm=10, pop=True)
-    ros = JSONReceiver(url='ipc:///byodr/ros.sock', topic=b'aav/ros/input', hwm=10, pop=True)
-    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(teleop, external, ros, vehicle, inference, ipc_chatter), event=quit_event)
+    teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    external = json_collector(url='ipc:///byodr/external.sock', topic=b'aav/external/input', hwm=10, pop=True, event=quit_event)
+    ros = json_collector(url='ipc:///byodr/ros.sock', topic=b'aav/ros/input', hwm=10, pop=True, event=quit_event)
+    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
+    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
-    application.teleop = lambda: collector.get(0)
-    application.external = lambda: collector.get(1)
-    application.ros = lambda: collector.get(2)
-    application.vehicle = lambda: collector.get(3)
-    application.inference = lambda: collector.get(4)
-    application.ipc_chatter = lambda: collector.get(5)
+    application.teleop = lambda: teleop.get()
+    application.external = lambda: external.get()
+    application.ros = lambda: ros.get()
+    application.vehicle = lambda: vehicle.get()
+    application.inference = lambda: inference.get()
+    application.ipc_chatter = lambda: ipc_chatter.get()
     application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
-    threads = [collector, application.ipc_server]
+    threads = [teleop, external, ros, vehicle, inference, ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 

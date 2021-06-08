@@ -13,7 +13,7 @@ import cv2
 import numpy as np
 
 from byodr.utils import Application
-from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, CollectorThread, JSONReceiver
+from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
 from store import Event
@@ -59,7 +59,7 @@ class ImageEventLog(object):
     Select the closest data to the image by timestamp.
     """
 
-    def __init__(self, buffer_size=int(2e3), window_ms=30):
+    def __init__(self, buffer_size=int(5e3), window_ms=30):
         self._micro = window_ms * 1e3
         self._observed = None
         self._events = collections.deque(maxlen=buffer_size)
@@ -106,7 +106,6 @@ class EventHandler(threading.Thread):
         self._session_log = ImageEventLog()
         self._photo_log = ImageEventLog()
         self._recorder = get_or_create_recorder(directory=self._record_dir, mode=None)
-        self._recent = collections.deque(maxlen=100)
         self._errors = _errors
 
     @staticmethod
@@ -131,7 +130,8 @@ class EventHandler(threading.Thread):
     def get_errors(self):
         return self._errors
 
-    def get_process_frequency(self):
+    def get_application_frequency(self):
+        # The application process frequency, not of this handler.
         return self._process_frequency
 
     def get_publish_frequency(self):
@@ -195,7 +195,7 @@ class EventHandler(threading.Thread):
                 if event is not None:
                     self._save_photo(event)
                 # Allow other threads access to cpu.
-                time.sleep(2e-3)
+                time.sleep(1e-3)
             except IndexError:
                 pass
 
@@ -225,7 +225,7 @@ class RecorderApplication(Application):
         return cfg
 
     def get_process_frequency(self):
-        return 0 if self._handler is None else self._handler.get_process_frequency()
+        return 0 if self._handler is None else self._handler.get_application_frequency()
 
     def setup(self):
         if self.active():
@@ -238,7 +238,7 @@ class RecorderApplication(Application):
                 self._handler = EventHandler(sessions=self._recorder_dir, photos=self._photo_dir, **_config)
                 self._handler.start()
                 self.ipc_server.register_start(self._handler.get_errors())
-                _process_hz = self._handler.get_process_frequency()
+                _process_hz = self._handler.get_application_frequency()
                 _publish_hz = self._handler.get_publish_frequency()
                 self.set_hz(_process_hz)
                 self._publish_duration = 1. / _publish_hz
@@ -275,19 +275,18 @@ def main():
     application = RecorderApplication(config_dir=args.config, sessions_dir=sessions_dir)
     quit_event = application.quit_event
 
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(pilot, vehicle, ipc_chatter), event=quit_event)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/recorder.sock', topic='aav/recorder/state')
     application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/recorder_c.sock', name='recorder', event=quit_event)
-    application.pilot = lambda: collector.get(0)
-    application.vehicle = lambda: collector.get(1)
-    application.ipc_chatter = lambda: collector.get(2)
+    application.pilot = lambda: pilot.get()
+    application.vehicle = lambda: vehicle.get()
+    application.ipc_chatter = lambda: ipc_chatter.get()
 
-    threads = [collector, application.camera, application.ipc_server]
+    threads = [pilot, vehicle, ipc_chatter, application.camera, application.ipc_server]
     if quit_event.is_set():
         return 0
 

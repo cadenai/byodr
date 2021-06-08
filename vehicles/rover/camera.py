@@ -14,7 +14,7 @@ from tornado import web, ioloop, websocket
 from tornado.httpserver import HTTPServer
 
 from byodr.utils import Application, Configurable
-from byodr.utils.ipc import JSONReceiver, CollectorThread, LocalIPCServer
+from byodr.utils.ipc import LocalIPCServer, json_collector
 from byodr.utils.option import parse_option
 from byodr.utils.video import GstRawSource
 
@@ -183,14 +183,13 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=ipc_chatter, event=quit_event)
+    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
     application = CameraApplication(event=quit_event, config_dir=args.config)
-    application.ipc_chatter = lambda: collector.get(0)
+    application.ipc_chatter = lambda: ipc_chatter.get()
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/camera_c.sock', name='camera_ws', event=quit_event)
 
-    threads = [collector, (threading.Thread(target=application.run)), application.ipc_server]
+    threads = [ipc_chatter, (threading.Thread(target=application.run)), application.ipc_server]
     if quit_event.is_set():
         return 0
 

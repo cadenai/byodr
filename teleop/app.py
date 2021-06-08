@@ -14,7 +14,7 @@ from tornado.httpserver import HTTPServer
 
 from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
-from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, JSONReceiver, CollectorThread
+from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
     JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler
@@ -93,13 +93,12 @@ def main():
 
     camera_front = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     camera_rear = CameraThread(url='ipc:///byodr/camera_1.sock', topic=b'aav/camera/1', event=quit_event)
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    vehicle = JSONReceiver(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state')
-    inference = JSONReceiver(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state')
-    recorder = JSONReceiver(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state')
-    collector = CollectorThread(receivers=(pilot, vehicle, inference, recorder), event=quit_event)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
+    recorder = json_collector(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state', event=quit_event)
 
-    threads = [camera_front, camera_rear, collector]
+    threads = [camera_front, camera_rear, pilot, vehicle, inference, recorder]
     if quit_event.is_set():
         return 0
 
@@ -143,10 +142,10 @@ def main():
         main_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
-             dict(fn_state=(lambda: (collector.get(0),
-                                     collector.get(1),
-                                     collector.get(2),
-                                     collector.get(3))))),
+             dict(fn_state=(lambda: (pilot.get(),
+                                     vehicle.get(),
+                                     inference.get(),
+                                     recorder.get())))),
             (r"/ws/cam", CameraMJPegSocket, dict(capture_front=(lambda: camera_front.capture()[-1]),
                                                  capture_rear=(lambda: camera_rear.capture()[-1]))),
             (r'/ws/nav', NavImageHandler, dict(fn_get_image=(lambda image_id: get_navigation_image(image_id)))),
