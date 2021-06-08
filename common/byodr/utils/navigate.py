@@ -133,6 +133,10 @@ class AbstractRouteDataSource(object):
         raise NotImplementedError()
 
     @abstractmethod
+    def has_navigation_point(self, route, point):
+        raise NotImplementedError()
+
+    @abstractmethod
     def list_all_images(self):
         raise NotImplementedError()
 
@@ -265,6 +269,10 @@ class FileSystemRouteDataSource(AbstractRouteDataSource):
     def list_navigation_points(self):
         return self.points
 
+    def has_navigation_point(self, route, point):
+        _dir = os.path.join(self.directory, route, point)
+        return os.path.exists(_dir) and os.path.isdir(_dir)
+
     def list_all_images(self):
         return self.all_images
 
@@ -343,6 +351,9 @@ class ReloadableDataSource(AbstractRouteDataSource):
 
     def list_navigation_points(self):
         return self._do_safe(lambda acquired: self._delegate.list_navigation_points() if acquired else [])
+
+    def has_navigation_point(self, route, point):
+        return self._do_safe(lambda acquired: self._delegate.has_navigation_point(route, point) if acquired else False)
 
     def list_all_images(self):
         return self._do_safe(lambda acquired: self._delegate.list_all_images() if acquired else [])

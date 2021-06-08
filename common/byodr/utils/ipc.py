@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 import collections
 import datetime
 import json
@@ -81,7 +82,7 @@ class JSONReceiver(object):
         subscriber.setsockopt(zmq.SUBSCRIBE, topic)
         self._subscriber = subscriber
         self._peek = not pop
-        self._queue = collections.deque(maxlen=1)
+        self._queue = collections.deque(maxlen=hwm)
         self._lock = threading.Lock()
 
     def consume(self):
@@ -104,10 +105,10 @@ class CollectorThread(threading.Thread):
         self._quit_event = multiprocessing.Event() if event is None else event
         self._sleep = 1. / hz
 
-    def get(self, index):
+    def get(self, index=0):
         # Get the latest message.
         _receiver = self._receivers[index]
-        _receiver.consume()
+        # _receiver.consume() -- blocks; perform at thread run not user call
         return _receiver.get()
 
     def quit(self):
@@ -118,6 +119,10 @@ class CollectorThread(threading.Thread):
             # Empty the receiver queues to not block upstream senders.
             list(map(lambda receiver: receiver.consume(), self._receivers))
             time.sleep(self._sleep)
+
+
+def json_collector(url, topic, event, receive_timeout_ms=1000, hwm=1, pop=False):
+    return CollectorThread(JSONReceiver(url, topic, hwm=hwm, receive_timeout_ms=receive_timeout_ms, pop=pop), event=event)
 
 
 class ReceiverThread(threading.Thread):
@@ -157,7 +162,7 @@ class ReceiverThread(threading.Thread):
 
 
 class CameraThread(threading.Thread):
-    def __init__(self, url, event, topic=b'', hwm=1, receive_timeout_ms=100):
+    def __init__(self, url, event, topic=b'', hwm=1, receive_timeout_ms=25):
         super(CameraThread, self).__init__()
         subscriber = zmq.Context().socket(zmq.SUB)
         subscriber.set_hwm(hwm)

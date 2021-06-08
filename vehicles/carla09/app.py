@@ -3,14 +3,13 @@ import glob
 import logging
 import os
 import shutil
-
 from ConfigParser import SafeConfigParser
-from vehicle import CarlaHandler
 
 from byodr.utils import Application
 from byodr.utils import Configurable
-from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, JSONReceiver, CollectorThread
+from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector
 from byodr.utils.option import parse_option
+from vehicle import CarlaHandler
 
 logger = logging.getLogger(__name__)
 
@@ -136,17 +135,16 @@ def main():
     application = CarlaApplication(image_publisher=(RoutingImagePublisher(front_camera, rear_camera)), config_dir=args.config)
     quit_event = application.quit_event
 
-    pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-    teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-    ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-    collector = CollectorThread(receivers=(pilot, teleop, ipc_chatter), event=quit_event)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/vehicle.sock', topic='aav/vehicle/state')
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/vehicle_c.sock', name='platform', event=quit_event)
-    application.pilot = lambda: collector.get(0)
-    application.teleop = lambda: collector.get(1)
-    application.ipc_chatter = lambda: collector.get(2)
-    threads = [collector, application.ipc_server]
+    application.pilot = lambda: pilot.get()
+    application.teleop = lambda: teleop.get()
+    application.ipc_chatter = lambda: ipc_chatter.get()
+    threads = [pilot, teleop, ipc_chatter, application.ipc_server]
     if quit_event.is_set():
         return 0
 

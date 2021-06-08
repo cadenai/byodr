@@ -5,7 +5,7 @@ import os
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application, timestamp
-from byodr.utils.ipc import ReceiverThread, LocalIPCServer, JSONZmqClient, JSONReceiver, CollectorThread
+from byodr.utils.ipc import ReceiverThread, LocalIPCServer, JSONZmqClient, json_collector
 from byodr.utils.option import parse_option, hash_dict
 from byodr.utils.protocol import MessageStreamProtocol
 from byodr.utils.usbrelay import SingleChannelUsbRelay, StaticChannelRelayHolder, SearchUsbRelayFactory
@@ -179,17 +179,16 @@ def monitor(arguments):
         application = MonitorApplication(relay=_holder, config_dir=arguments.config)
         quit_event = application.quit_event
 
-        pilot = JSONReceiver(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output')
-        teleop = JSONReceiver(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input')
-        ipc_chatter = JSONReceiver(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True)
-        collector = CollectorThread(receivers=(pilot, teleop, ipc_chatter), event=quit_event)
+        pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+        teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+        ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
         application.ipc_server = LocalIPCServer(url='ipc:///byodr/relay_c.sock', name='relay', event=quit_event)
-        application.pilot = lambda: collector.get(0)
-        application.teleop = lambda: collector.get(1)
-        application.ipc_chatter = lambda: collector.get(2)
+        application.pilot = lambda: pilot.get()
+        application.teleop = lambda: teleop.get()
+        application.ipc_chatter = lambda: ipc_chatter.get()
 
-        threads = [collector, application.ipc_server]
+        threads = [pilot, teleop, ipc_chatter, application.ipc_server]
         if quit_event.is_set():
             return 0
 
