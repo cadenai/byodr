@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import threading
-import time
 from functools import partial
 
 import cv2
@@ -21,7 +20,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_co
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .inference import DynamicMomentum, TRTDriver, maneuver_intention
+from .torched import DynamicMomentum, TRTDriver, maneuver_intention
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -85,7 +84,7 @@ class RouteMemory(object):
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         _dot_product = np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
-        _errors = np.clip((_dot_product - self._code_diagonal) ** 2, 0, 1)
+        _errors = np.clip(abs(_dot_product - self._code_diagonal), 0, 1)
         self._beliefs *= _p_out * np.exp(-np.e * _errors)
         self._evidence = np.minimum(self._evidence, _errors)
 
@@ -418,29 +417,29 @@ class InferenceApplication(Application):
                 self.setup()
 
 
-class RecompilationThread(threading.Thread):
-    def __init__(self, application, sleep_seconds=600):
-        super(RecompilationThread, self).__init__()
-        self._app = application
-        self._sleep = sleep_seconds
-        self._quit_event = threading.Event()
-
-    def quit(self):
-        self._quit_event.set()
-
-    def is_running(self):
-        return not self._quit_event.is_set()
-
-    def run(self):
-        while self.is_running():
-            time.sleep(self._sleep)
-            # noinspection PyBroadException
-            try:
-                self._app.recompile()
-            except Exception:
-                # This will exit the application - let the service manager handle restarts.
-                self.quit()
-                self._app.quit()
+# class RecompilationThread(threading.Thread):
+#     def __init__(self, application, sleep_seconds=600):
+#         super(RecompilationThread, self).__init__()
+#         self._app = application
+#         self._sleep = sleep_seconds
+#         self._quit_event = threading.Event()
+#
+#     def quit(self):
+#         self._quit_event.set()
+#
+#     def is_running(self):
+#         return not self._quit_event.is_set()
+#
+#     def run(self):
+#         while self.is_running():
+#             time.sleep(self._sleep)
+#             # noinspection PyBroadException
+#             try:
+#                 self._app.recompile()
+#             except Exception:
+#                 # This will exit the application - let the service manager handle restarts.
+#                 self.quit()
+#                 self._app.quit()
 
 
 def main():
@@ -468,9 +467,9 @@ def main():
     application.pilot = lambda: pilot.get()
     application.ipc_chatter = lambda: ipc_chatter.get()
 
-    recompilation = RecompilationThread(application)
+    # recompilation = RecompilationThread(application)
 
-    threads = [teleop, pilot, ipc_chatter, application.camera, application.ipc_server, recompilation]
+    threads = [teleop, pilot, ipc_chatter, application.camera, application.ipc_server]
     if quit_event.is_set():
         return 0
 
