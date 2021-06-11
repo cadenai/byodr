@@ -62,6 +62,10 @@ class AbstractDataSource(object):
     __metaclass__ = ABCMeta
 
     @abstractmethod
+    def is_open(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def open(self):
         raise NotImplementedError()
 
@@ -99,6 +103,14 @@ image-shape-hwc: "{image_shape}"
             os.makedirs(_directory, mode=0o775)
             os.umask(_mask)
         return os.path.join(_directory, self._session + '.zip')
+
+    def __len__(self):
+        with self._lock:
+            return 0 if not self._running else len(self._data)
+
+    def is_open(self):
+        with self._lock:
+            return self._running
 
     def open(self):
         # Existing sessions can not be reopened.

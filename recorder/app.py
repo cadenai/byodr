@@ -102,10 +102,10 @@ class EventHandler(threading.Thread):
         _im_width, _im_height = parse_option('image.persist.scale', str, '320x240', _errors, **kwargs).split('x')
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
-        self._recorder_active = False
+        self._session_active = False
         self._session_log = ImageEventLog()
         self._photo_log = ImageEventLog()
-        self._recorder = get_or_create_recorder(directory=self._record_dir, mode=None)
+        self._recorder = get_or_create_recorder(directory=self._record_dir, mode='record.mode.interventions')
         self._errors = _errors
 
     @staticmethod
@@ -115,17 +115,6 @@ class EventHandler(threading.Thread):
     @staticmethod
     def _automatic(mode):
         return mode in ('driver_mode.inference.dnn', 'driver_mode.automatic.backend')
-
-    def _instance(self, driver):
-        mode = None
-        if self._cruising(driver):
-            mode = 'record.mode.driving'
-        elif self._automatic(driver):
-            mode = 'record.mode.interventions'
-        return get_or_create_recorder(mode=mode,
-                                      directory=self._record_dir,
-                                      vehicle_type=self._vehicle,
-                                      vehicle_config=self._config)
 
     def get_errors(self):
         return self._errors
@@ -141,7 +130,7 @@ class EventHandler(threading.Thread):
         return self._hash != hash_dict(**kwargs)
 
     def state(self):
-        return dict(active=self._recorder_active, mode=self._recorder.get_mode())
+        return dict(active=self._session_active, mode=self._recorder.get_mode())
 
     def record(self, blob, vehicle, image_meta, image):
         if blob.get('button_left', 0) == 1:
@@ -151,16 +140,11 @@ class EventHandler(threading.Thread):
             _driver = blob.get('driver')
             _recorder_auto = self._automatic(_driver)
             _recorder_cruise = self._cruising(_driver)
-            if not self._recorder_active and (_recorder_auto or _recorder_cruise):
-                self._session_log.clear()
-                self._recorder = self._instance(_driver)
-                self._recorder.start()
-                self._recorder_active = True
-            elif self._recorder_active and not (_recorder_auto or _recorder_cruise):
-                self._recorder.stop()
-                self._recorder = self._instance(_driver)
-                self._recorder_active = False
-            if self._recorder_active:
+            if not self._session_active and (_recorder_auto or _recorder_cruise):
+                self._session_active = True
+            elif self._session_active and not (_recorder_auto or _recorder_cruise):
+                self._session_active = False
+            if self._session_active:
                 self._session_log.append(blob, vehicle, image_meta, image)
 
     def quit(self):
@@ -191,6 +175,8 @@ class EventHandler(threading.Thread):
                 event = self._pop_from(self._session_log)
                 if event is not None:
                     self._recorder.do_record(event)
+                elif not self._session_active:
+                    self._recorder.flush()
                 event = self._pop_from(self._photo_log)
                 if event is not None:
                     self._save_photo(event)

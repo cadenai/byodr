@@ -44,11 +44,7 @@ class AbstractRecorder:
     __metaclass__ = ABCMeta
 
     @abstractmethod
-    def start(self):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def stop(self):
+    def flush(self):
         raise NotImplementedError()
 
     @abstractmethod
@@ -64,10 +60,7 @@ class NoopRecorder(AbstractRecorder):
     def __init__(self):
         super(NoopRecorder, self).__init__()
 
-    def start(self):
-        pass
-
-    def stop(self):
+    def flush(self):
         pass
 
     def get_mode(self):
@@ -87,14 +80,9 @@ class DirectRecorder(AbstractRecorder):
         self._vehicle_type = vehicle_type
         self._vehicle_config = vehicle_config
         self._session_max = session_max
-        self._session_count = 0
         self._lock = multiprocessing.Lock()
 
-    def start(self):
-        self._session_count = 0
-        self._datasource.open()
-
-    def stop(self):
+    def flush(self):
         self._datasource.close()
 
     def get_mode(self):
@@ -102,14 +90,15 @@ class DirectRecorder(AbstractRecorder):
 
     def do_record(self, event):
         # Start by checking the session.
-        if self._session_count >= self._session_max:
-            self.stop()
-            self.start()
+        if not self._datasource.is_open():
+            self._datasource.open()
+        elif len(self._datasource) >= self._session_max:
+            self._datasource.close()
+            self._datasource.open()
         # Continue with recording the event.
         try:
             with self._lock:
-                num_recorded = self._record_event(event)
-                self._session_count += num_recorded
+                self._record_event(event)
         except Exception as e:
             # Overwrite the image otherwise it clutters the log.
             event.image = '_deleted_for_logging_'
@@ -142,11 +131,11 @@ class InterventionsRecorder(DirectRecorder):
                                                     vehicle_type=vehicle_type,
                                                     vehicle_config=vehicle_config,
                                                     session_max=session_max)
-        self._maxlen = intervention_batch_size + 1
-        self._queue = deque(maxlen=self._maxlen)
+        self._max_length = intervention_batch_size + 1
+        self._queue = deque(maxlen=self._max_length)
 
     def _do_save(self):
-        return len(self._queue) == self._maxlen and any([e.save_event for e in self._queue])
+        return len(self._queue) == self._max_length and any([e.save_event for e in self._queue])
 
     def _record_event(self, event):
         num_recorded = 0
