@@ -105,7 +105,10 @@ class EventHandler(threading.Thread):
         self._session_active = False
         self._session_log = ImageEventLog()
         self._photo_log = ImageEventLog()
-        self._recorder = get_or_create_recorder(directory=self._record_dir, mode='record.mode.interventions')
+        self._recorder = get_or_create_recorder(mode='record.mode.interventions',
+                                                directory=self._record_dir,
+                                                vehicle_type=self._vehicle,
+                                                vehicle_config=self._config)
         self._errors = _errors
 
     @staticmethod
