@@ -14,6 +14,7 @@ import numpy as np
 from Equation import Expression
 from scipy.special import softmax
 from six.moves import range
+from sklearn.metrics.pairwise import cosine_distances
 
 from byodr.utils import timestamp, Configurable, Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_collector
@@ -44,7 +45,7 @@ class RouteMemory(object):
         self._code_points = None
         # Image id index to features.
         self._code_book = None
-        self._code_diagonal = None
+        # self._code_diagonal = None
         self._destination_keys = None
         self._destination_values = None
 
@@ -64,7 +65,7 @@ class RouteMemory(object):
         self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
         self._code_book = None if coordinates is None else np.array(coordinates)
-        self._code_diagonal = None if self._code_book is None else np.diag(np.dot(self._code_book, self._code_book.T))
+        # self._code_diagonal = None if self._code_book is None else np.diag(cosine_distances(self._code_book, self._code_book))
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
         self._evidence_reset()
@@ -83,8 +84,8 @@ class RouteMemory(object):
 
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
-        _dot_product = np.dot(self._code_book, np.reshape(features, [1, -1]).T).flatten()
-        _errors = np.clip(abs(_dot_product - self._code_diagonal), 0, 1)
+        _distances = cosine_distances(self._code_book, np.reshape(features, [1, -1])).flatten()
+        _errors = _distances  # np.clip((_distances - self._code_diagonal) ** 2, 0, 1)
         self._beliefs *= _p_out * np.exp(-np.e * _errors)
         self._evidence = np.minimum(self._evidence, _errors)
 

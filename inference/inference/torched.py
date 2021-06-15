@@ -64,12 +64,6 @@ class TRTDriver(object):
         self.model_directories = [user_directory, internal_directory]
         self._lock = multiprocessing.Lock()
         self._zero_vector = np.zeros(shape=(75,), dtype=np.float32)
-        # self._rt_options = {'device_id': str(gpu_id), 'trt_max_workspace_size': str(1 << 25), 'trt_fp16_enable': 'True'}
-        # self._im_mean, self._im_std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
-        # self._img_transform = transforms.Compose([
-        #     transforms.ToTensor(),
-        #     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        # ])
         self._sess = None
         self._onnx_file = None
 
@@ -90,12 +84,8 @@ class TRTDriver(object):
         self._sess = None
         self._onnx_file = None
 
-    def _img_prepare(self, image):
-        # return self._img_transform(image).cpu().numpy()
-        # mean, std = self._im_mean, self._im_std
-        # image = hwc_to_chw(image) / 255.
-        # for channel in range(3):
-        #     image[channel] = (image[channel] - mean[channel]) / std[channel]
+    @staticmethod
+    def _img_prepare(image):
         return hwc_to_chw(image)
 
     def will_compile(self):

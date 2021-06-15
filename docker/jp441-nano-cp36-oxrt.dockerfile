@@ -78,3 +78,4 @@ RUN python3 -m pip install "scipy==1.5.2" && \
   python3 -m pip install "pytest==6.1.2" && \
   rm -rf /root/.cache
 
+RUN python3 -m pip install "scikit-learn==0.24.2"
