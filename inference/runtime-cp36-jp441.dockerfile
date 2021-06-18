@@ -1,4 +1,4 @@
-FROM centipede2donald/nvidia-jetson:jp441-nano-cp36-oxrt-2
+FROM centipede2donald/nvidia-jetson:jp441-nano-cp36-oxrt-3
 
 COPY ./common common/
 COPY ./inference app/
