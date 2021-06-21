@@ -58,14 +58,15 @@ class RouteMemory(object):
     def set_threshold(self, value):
         self._recognition_threshold = value
 
-    def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
+    def reset(self, n_points=0, code_points=None, source_coordinates=None, goal_coordinates=None, keys=None, values=None):
         self._navigation_point = None
         self._tracking = None
         self._num_points = n_points
         self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
-        self._code_book = None if coordinates is None else np.array(coordinates)
-        self._code_diagonal = None if self._code_book is None else np.diag(cosine_distances(self._code_book, self._code_book))
+        # The goal coordinates or navigation coordinates depend on the route and stay unchanged.
+        self._code_book = None if goal_coordinates is None else np.array(goal_coordinates)
+        self._code_diagonal = None if self._code_book is None else np.diag(cosine_distances(goal_coordinates, source_coordinates))
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
         self._evidence_reset()
@@ -84,8 +85,9 @@ class RouteMemory(object):
 
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
+        # The features are those of the source coordinates.
         _distances = cosine_distances(self._code_book, np.reshape(features, [1, -1])).flatten()
-        _errors = np.clip((_distances - self._code_diagonal) ** 2, 0, 1)
+        _errors = np.clip(abs(_distances - self._code_diagonal), 0, 1)
         self._beliefs *= _p_out * np.exp(-np.e * _errors)
         self._evidence = np.minimum(self._evidence, _errors)
 
@@ -158,14 +160,15 @@ class Navigator(object):
                     num_points = len(self._store)
                     if num_points > 0:
                         _images = self._store.list_all_images()
-                        _codes, _coordinates, _keys, _values = [], [], [], []
+                        _codes, _source_coordinates, _goal_coordinates, _keys, _values = [], [], [], [], []
                         for im_id in range(len(_images)):
                             _codes.append(self._store.get_image_navigation_point_id(im_id))
-                            _c, _k, _v = self._pull_image_features(_images[im_id])
-                            _coordinates.append(_c)
+                            _sc, _gc, _k, _v = self._pull_image_features(_images[im_id])
+                            _source_coordinates.append(_sc)
+                            _goal_coordinates.append(_gc)
                             _keys.append(_k)
                             _values.append(_v)
-                        self._memory.reset(num_points, _codes, _coordinates, _keys, _values)
+                        self._memory.reset(num_points, _codes, _source_coordinates, _goal_coordinates, _keys, _values)
 
     def _check_state(self, route=None):
         if route is None:
