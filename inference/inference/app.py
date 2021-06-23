@@ -45,7 +45,7 @@ class RouteMemory(object):
         self._code_points = None
         # Image id index to features.
         self._code_book = None
-        self._code_diagonal = None
+        self._cosine_diagonal = None
         self._destination_keys = None
         self._destination_values = None
 
@@ -66,7 +66,7 @@ class RouteMemory(object):
         self._code_points = None if code_points is None else np.array(code_points)
         # The goal coordinates or navigation coordinates depend on the route and stay unchanged.
         self._code_book = None if goal_coordinates is None else np.array(goal_coordinates)
-        self._code_diagonal = None if self._code_book is None else np.diag(cosine_distances(goal_coordinates, source_coordinates))
+        self._cosine_diagonal = None if self._code_book is None else np.diag(cosine_distances(goal_coordinates, source_coordinates))
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
         self._evidence_reset()
@@ -74,6 +74,10 @@ class RouteMemory(object):
 
     def is_open(self):
         return self._code_book is not None
+
+    def _distances(self, features):
+        features = np.reshape(features, [1, -1])
+        return np.clip(abs(cosine_distances(self._code_book, features).flatten() - self._cosine_diagonal), 0, 1)
 
     def match(self, features, query):
         code_points = self._code_points
@@ -86,8 +90,7 @@ class RouteMemory(object):
         # The beliefs incorporate local information through the network probabilities.
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         # The features are those of the source coordinates.
-        _distances = cosine_distances(self._code_book, np.reshape(features, [1, -1])).flatten()
-        _errors = np.clip(abs(_distances - self._code_diagonal), 0, 1)
+        _errors = self._distances(features)
         self._beliefs *= _p_out * np.exp(-np.e * _errors)
         self._evidence = np.minimum(self._evidence, _errors)
 
