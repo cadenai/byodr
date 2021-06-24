@@ -41,20 +41,20 @@ def _newest_file(paths, pattern):
     return match
 
 
-def _maneuver_index(turn='general.fallback'):
-    _options = {'general.fallback': 0, 'intersection.left': 1, 'intersection.ahead': 2, 'intersection.right': 3}
-    return _options[turn]
-
-
-def _index_maneuver(index=0):
-    _options = {0: 'general.fallback', 1: 'intersection.left', 2: 'intersection.ahead', 3: 'intersection.right'}
-    return _options[index]
-
-
-def maneuver_intention(turn='general.fallback', dtype=np.float32):
-    command = np.zeros(4, dtype=dtype)
-    command[_maneuver_index(turn=turn)] = 1
-    return command
+# def _maneuver_index(turn='general.fallback'):
+#     _options = {'general.fallback': 0, 'intersection.left': 1, 'intersection.ahead': 2, 'intersection.right': 3}
+#     return _options[turn]
+#
+#
+# def _index_maneuver(index=0):
+#     _options = {0: 'general.fallback', 1: 'intersection.left', 2: 'intersection.ahead', 3: 'intersection.right'}
+#     return _options[index]
+#
+#
+# def maneuver_intention(turn='general.fallback', dtype=np.float32):
+#     command = np.zeros(4, dtype=dtype)
+#     command[_maneuver_index(turn=turn)] = 1
+#     return command
 
 
 class TRTDriver(object):
@@ -74,9 +74,11 @@ class TRTDriver(object):
             return
 
         logger.info("Located optimized graph '{}'.".format(rt_file))
-        self._sess = ort.InferenceSession(rt_file)
+        self._sess = ort.InferenceSession(rt_file,
+                                          providers=["CUDAExecutionProvider"],
+                                          provider_options=[{'device_id': str(self._gpu_id)}])
         # self._sess.set_providers(['CPUExecutionProvider'])
-        self._sess.set_providers(["CUDAExecutionProvider"], [{'device_id': str(self._gpu_id)}])
+        # self._sess.set_providers(["CUDAExecutionProvider"], [{'device_id': str(self._gpu_id)}])
         self._onnx_file = rt_file
 
     def _deactivate(self):
@@ -110,12 +112,12 @@ class TRTDriver(object):
         _coord_source, _coord_goal, _key, _value = _out[6], _out[7], _out[9], _out[10]
         return _coord_source, _coord_goal, _key, _value
 
-    def forward(self, dave_image, alex_image, maneuver_command=maneuver_intention(), destination=None):
+    def forward(self, dave_image, alex_image, maneuver_command=0, destination=None):
         _out = self._forward_all(dave_image, alex_image, maneuver_command, destination)
         _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query, _key, _value = _out
         return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _query
 
-    def _forward_all(self, dave_image, alex_image, maneuver_command=maneuver_intention(), destination=None):
+    def _forward_all(self, dave_image, alex_image, maneuver_command=0, destination=None):
         with self._lock:
             assert dave_image.dtype == np.uint8 and alex_image.dtype == np.uint8, "Expected np.uint8 images."
             assert self._sess is not None, "There is no session - run activation prior to calling this method."
@@ -123,7 +125,7 @@ class TRTDriver(object):
             _feed = {
                 'input/dave_image': np.array([self._img_prepare(dave_image)], dtype=np.uint8),
                 'input/alex_image': np.array([self._img_prepare(alex_image)], dtype=np.uint8),
-                'input/maneuver_command': np.array([maneuver_command], dtype=np.float32),
+                'input/maneuver_command': np.array([[maneuver_command]], dtype=np.float32),
                 'input/current_destination': np.array([destination], dtype=np.float32)
             }
             _out = [x.flatten() for x in self._sess.run(None, _feed)]

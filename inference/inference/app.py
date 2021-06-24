@@ -21,7 +21,7 @@ from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_co
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.option import parse_option, PropertyError
 from .image import get_registered_function
-from .torched import DynamicMomentum, TRTDriver, maneuver_intention
+from .torched import DynamicMomentum, TRTDriver
 
 if sys.version_info > (3,):
     from configparser import ConfigParser as SafeConfigParser
@@ -201,7 +201,6 @@ class Navigator(object):
             self._store.load_routes()
             self._memory.reset()
             self._memory.set_threshold(recognition_threshold)
-            self._gumbel = None
             self._destination = None
 
     def forward(self, image, route=None):
@@ -209,9 +208,8 @@ class Navigator(object):
         self._check_state(route)
         _dave_img = self._fn_dave_image(image)
         _alex_img = self._fn_alex_image(image)
-        _gumbel = self._gumbel
         _destination = self._destination
-        _command = maneuver_intention() if _gumbel is None else _gumbel
+        _command = 0 if _destination is None else 1
         _out = self._network.forward(dave_image=_dave_img,
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
@@ -227,10 +225,8 @@ class Navigator(object):
             if _acquired:
                 self._lock.release()
 
-        self._gumbel = None if _destination is None else gumbel_out
         self._destination = _destination
-
-        return action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, _command
+        return action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, gumbel_out
 
     def quit(self):
         # Store and network are thread-safe.
