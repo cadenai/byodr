@@ -214,12 +214,13 @@ class Navigator(object):
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
                                      destination=_destination)
-        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, coord_out, query_out = _out
+        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, coord_source, coord_goal, query_out = _out
 
         nav_point_id, nav_image_id, nav_distance, _destination = None, None, None, None
         _acquired = self._lock.acquire(False)
         try:
             if _acquired and self._store.is_open() and self._memory.is_open():
+                coord_out = coord_source
                 nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coord_out, query_out)
         finally:
             if _acquired:

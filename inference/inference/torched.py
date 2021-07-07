@@ -115,7 +115,7 @@ class TRTDriver(object):
     def forward(self, dave_image, alex_image, maneuver_command=0, destination=None):
         _out = self._forward_all(dave_image, alex_image, maneuver_command, destination)
         _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query, _key, _value = _out
-        return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _query
+        return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query
 
     def _forward_all(self, dave_image, alex_image, maneuver_command=0, destination=None):
         with self._lock:
