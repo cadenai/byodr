@@ -50,9 +50,6 @@ class RouteMemory(object):
     def _evidence_reset(self):
         self._evidence = np.ones(self._num_codes, dtype=np.float32)
 
-    def _belief_reset(self):
-        self._beliefs = np.zeros(self._num_codes, dtype=np.float32)
-
     def set_threshold(self, value):
         self._recognition_threshold = value
 
@@ -66,7 +63,6 @@ class RouteMemory(object):
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
         self._evidence_reset()
-        self._belief_reset()
 
     def is_open(self):
         return self._code_book is not None
