@@ -39,13 +39,11 @@ class RouteMemory(object):
         self._navigation_point = None
         # Image is locked in when threshold reached.
         self._tracking = None
-        self._beliefs = None
         self._evidence = None
         # Image id index to navigation point id.
         self._code_points = None
         # Image id index to features.
         self._code_book = None
-        self._cosine_diagonal = None
         self._destination_keys = None
         self._destination_values = None
 
@@ -64,9 +62,7 @@ class RouteMemory(object):
         self._num_points = n_points
         self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
-        # The goal coordinates or navigation coordinates depend on the route and stay unchanged.
-        self._code_book = None if goal_coordinates is None else np.array(goal_coordinates)
-        self._cosine_diagonal = None if self._code_book is None else np.diag(cosine_distances(goal_coordinates, source_coordinates))
+        self._code_book = None if goal_coordinates is None else np.concatenate([source_coordinates, goal_coordinates], axis=-1)
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
         self._evidence_reset()
@@ -76,13 +72,11 @@ class RouteMemory(object):
         return self._code_book is not None
 
     def _distances(self, features):
-        features = np.reshape(features, [1, -1])
-        return np.clip(abs(cosine_distances(self._code_book, features).flatten() - self._cosine_diagonal), 0, 1)
+        # return np.clip(abs(cosine_distances(self._code_book, np.reshape(features, [1, -1])).flatten() - self._cosine_diagonal), 0, 1)
+        return cosine_distances(self._code_book, np.reshape(features, [1, -1])).flatten()
 
     def match(self, features, query):
         code_points = self._code_points
-        _uniform_prior = 1. / self._num_codes
-        self._beliefs = np.maximum(_uniform_prior, self._beliefs)
         _before_match = self._navigation_point is None
         _point, _previous, _next = (-1, -1, -1) if _before_match else self._navigation_point
         _threshold = self._recognition_threshold
@@ -91,7 +85,7 @@ class RouteMemory(object):
         _p_out = softmax(np.matmul(query.reshape([1, -1]), self._destination_keys.T)).flatten()
         # The features are those of the source coordinates.
         _errors = self._distances(features)
-        self._beliefs *= _p_out * np.exp(-np.e * _errors)
+        _beliefs = _p_out * np.exp(-np.e * _errors)
         self._evidence = np.minimum(self._evidence, _errors)
 
         # Select the destination from the next expected navigation point.
@@ -100,7 +94,7 @@ class RouteMemory(object):
             _image = _errors.argmin() if _before_match else np.where(code_points == _next, _errors, 2).argmin()
 
         # Allow for a better match in case it is tracking the wrong image.
-        _competitor = np.where(np.logical_or.reduce([code_points == _point, code_points == _previous]), -1, self._beliefs).argmax()
+        _competitor = np.where(np.logical_or.reduce([code_points == _point, code_points == _previous]), -1, _beliefs).argmax()
 
         _match = None
         image_evidence = self._evidence[_image]
@@ -220,7 +214,7 @@ class Navigator(object):
         _acquired = self._lock.acquire(False)
         try:
             if _acquired and self._store.is_open() and self._memory.is_open():
-                coord_out = coord_source
+                coord_out = np.concatenate([coord_source, coord_goal], axis=-1)
                 nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coord_out, query_out)
         finally:
             if _acquired:
