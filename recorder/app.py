@@ -6,17 +6,17 @@ import logging
 import os
 import threading
 import time
-from ConfigParser import SafeConfigParser
 from datetime import datetime
 
 import cv2
 import numpy as np
+from ConfigParser import SafeConfigParser
+from store import Event
 
 from byodr.utils import Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
-from store import Event
 
 logger = logging.getLogger(__name__)
 
@@ -169,8 +169,14 @@ class EventHandler(threading.Thread):
             _mask = os.umask(000)
             os.makedirs(_directory, mode=0o775)
             os.umask(_mask)
-        fname = os.path.join(_directory, _now.strftime('%Y%b%dT%H%M_%S%s')) + '.jpg'
-        cv2.imwrite(fname, event.image)
+        latitude = event.x_coordinate
+        longitude = event.y_coordinate
+        fname = "{}_lat{}_long{}.jpg".format(_now.strftime('%Y%b%dT%H%M%S'),
+                                             str(latitude)[:8].replace('.', '_'),
+                                             str(longitude)[:8].replace('.', '_'))
+        cv2.imwrite(os.path.join(_directory, fname), event.image)
+        with open(os.path.join(_directory, 'photo.log'), 'a+') as f:
+            f.write("{} {} latitude {} longitude {}\r\n".format(event.timestamp, fname, latitude, longitude))
 
     def run(self):
         while not self._quit_event.is_set():
@@ -184,7 +190,8 @@ class EventHandler(threading.Thread):
                 if event is not None:
                     self._save_photo(event)
                 # Allow other threads access to cpu.
-                time.sleep(1e-3)
+                else:
+                    time.sleep(1e-3)
             except IndexError:
                 pass
 
