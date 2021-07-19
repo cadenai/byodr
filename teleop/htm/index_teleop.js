@@ -212,6 +212,7 @@ var log_controller = {
     command_ctl: null,
     recorders: {551: 'driving', 594: 'interventions'},
     server_message_listeners: [],
+    in_debug: 0,
 
     add_server_message_listener: function(cb) {
         this.server_message_listeners.push(cb);
@@ -256,7 +257,7 @@ log_controller.start_socket = function() {
             var el_pilot_throttle = $('span#pilot_throttle');
             var el_inference_surprise = $('span#inference_surprise');
             var el_inference_critic = $('span#inference_critic');
-            var el_inference_penalty = $('span#inference_penalty');
+            var el_inference_brake_critic = $('span#inference_brake_critic');
             var el_inference_obstacle = $('span#inference_obstacle');
             var el_inference_fps = $('span#inference_fps');
             var el_alpha_speed = $('div#alpha_speed_value');
@@ -266,18 +267,35 @@ log_controller.start_socket = function() {
             var el_steering_wheel = $('img#steeringWheel');
             var el_turn_arrow = $('img#arrow');
             var el_autopilot_status = $('#autopilot_status');
+            var el_navigation_geo_lat = $('span#navigation_geo_lat');
+            var el_navigation_geo_long = $('span#navigation_geo_long');
+            var el_navigation_heading = $('span#navigation_heading');
+            var el_navigation_match_distance = $('span#navigation_match_image_distance');
+            var el_navigation_current_command = $('span#navigation_current_command');
+            var el_navigation_direction = $('span#navigation_direction');
+
             //
             var command = JSON.parse(evt.data);
             view.notify_server_message_listeners(command);
             el_pilot_steering.text(Math.abs(command.ste).toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
+
+            el_navigation_geo_lat.text(command.geo_lat.toFixed(6));
+            el_navigation_geo_long.text(command.geo_long.toFixed(6));
+            el_navigation_heading.text(command.geo_head.toFixed(2));
+
+            const _debug = view.in_debug;
             // It may be the inference service is not yet available.
-            if (command.debug1 != undefined) {
-                el_inference_penalty.text(command.debug1.toFixed(2));
-                el_inference_obstacle.text(command.debug2.toFixed(2));
-                el_inference_surprise.text(command.debug4.toFixed(2));
-                el_inference_critic.text(command.debug5.toFixed(2));
-                el_inference_fps.text(command.debug7.toFixed(0));
+            if (command.inf_surprise != undefined) {
+                el_inference_brake_critic.text(command.inf_brake_critic.toFixed(2));
+                el_inference_obstacle.text(command.inf_brake.toFixed(2));
+                el_inference_surprise.text(command.inf_surprise.toFixed(3));
+                el_inference_critic.text(command.inf_critic.toFixed(3));
+                el_inference_fps.text(command.inf_hz.toFixed(0));
+                const column_id = _debug? 1 : 0;
+                el_navigation_match_distance.text(command.nav_distance[column_id].toFixed(3));
+                el_navigation_current_command.text(command.nav_command.toFixed(2));
+                el_navigation_direction.text(command.nav_direction.toFixed(3));
             }
             // el_state_recorder.text(view.str_recorder(command.rec_mod, command.rec_act));
             // speed is the desired speed
@@ -309,7 +327,7 @@ log_controller.start_socket = function() {
                 }
             }
             //
-            var total_penalty = command.debug3;
+            var total_penalty = command.inf_penalty;
             var can_continue = total_penalty < 1;
             var str_command_ctl = command.ctl + '_' + can_continue;
             if (view.command_ctl != str_command_ctl) {
@@ -348,13 +366,13 @@ log_controller.stop_socket = function() {
 
 page_utils.add_toggle_debug_values_listener(function(collapse) {
     if (collapse) {
-        $("p#p_inference_penalty").invisible();
-        $("p#p_inference_obstacle").invisible();
-        $("p#p_inference_fps").invisible();
+        log_controller.in_debug = 0;
+        $("div#debug_drive_values").invisible();
+        $("div#pilot_drive_values").removeClass('expanded');
     } else {
-        $("p#p_inference_penalty").visible();
-        $("p#p_inference_obstacle").visible();
-        $("p#p_inference_fps").visible();
+        log_controller.in_debug = 1;
+        $("div#debug_drive_values").visible();
+        $("div#pilot_drive_values").addClass('expanded');
     }
 });
 

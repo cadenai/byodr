@@ -8,7 +8,6 @@ class NavigatorController {
         this.el_image_height = null;
         this.el_route = null;
         this.el_point = null;
-        this.el_debug_match_distance = null;
         this.el_route_select_prev = null;
         this.el_route_select_next = null;
         this.matched_image_id = null;
@@ -79,8 +78,6 @@ class NavigatorController {
         this.el_image_height = this.el_image.height();
         this.el_route = $('span#navigation_route_name');
         this.el_point = $('span#navigation_point_name');
-        this.el_debug_match_distance = $('span#navigation_match_image_distance');
-        this.el_debug_current_command = $('span#navigation_current_command');
         this.el_route_select_prev = $('span#navigation_route_sel_prev');
         this.el_route_select_next = $('span#navigation_route_sel_next');
         this.schedule_navigation_image_update();
@@ -100,7 +97,7 @@ class NavigatorController {
     on_message(message) {
         if (this.active) {
             // Show the current navigation values when in debug.
-            const _debug = this.el_debug_match_distance.is_visible();
+            const _debug = this.in_debug;
             const column_id = _debug? 1 : 0;
             const image_id = message.nav_image[column_id];
             const backend_active = message.nav_active;
@@ -113,8 +110,6 @@ class NavigatorController {
             }
             if (backend_active) {
                 this.el_point.text(message.nav_point);
-                this.el_debug_match_distance.text(message.nav_distance[column_id].toFixed(3));
-                this.el_debug_current_command.text(message.nav_command.toFixed(3));
             }
         }
     }
@@ -140,15 +135,9 @@ navigator_controller.update_visibility = function () {
     if (navigator_controller.routes.length < 1) {
         $('div#navigation_image_container').invisible();
         $('div#navigation_route_container').invisible();
-        $('div#navigation_debug_container').invisible();
     } else {
         $('div#navigation_image_container').visible();
         $('div#navigation_route_container').visible();
-        if (navigator_controller.in_debug) {
-            $('div#navigation_debug_container').visible();
-        } else {
-            $('div#navigation_debug_container').invisible();
-        }
     }
 }
 

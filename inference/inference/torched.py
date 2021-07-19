@@ -87,7 +87,11 @@ class TRTDriver(object):
         self._onnx_file = None
 
     @staticmethod
-    def _img_prepare(image):
+    def _dave_prepare(image):
+        return hwc_to_chw(image)
+
+    @staticmethod
+    def _alex_prepare(image):
         return hwc_to_chw(image)
 
     def will_compile(self):
@@ -109,13 +113,13 @@ class TRTDriver(object):
 
     def features(self, dave_image, alex_image):
         _out = self._forward_all(dave_image, alex_image)
-        _coord_source, _coord_goal, _key, _value = _out[6], _out[7], _out[9], _out[10]
-        return _coord_source, _coord_goal, _key, _value
+        coord_source, coord_goal, key, value = _out[7], _out[8], _out[10], _out[11]
+        return coord_source, coord_goal, key, value
 
     def forward(self, dave_image, alex_image, maneuver_command=0, destination=None):
         _out = self._forward_all(dave_image, alex_image, maneuver_command, destination)
-        _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query, _key, _value = _out
-        return _action, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query
+        steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query, key, value = _out
+        return steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query
 
     def _forward_all(self, dave_image, alex_image, maneuver_command=0, destination=None):
         with self._lock:
@@ -123,11 +127,11 @@ class TRTDriver(object):
             assert self._sess is not None, "There is no session - run activation prior to calling this method."
             destination = self._zero_vector if destination is None else destination
             _feed = {
-                'input/dave_image': np.array([self._img_prepare(dave_image)], dtype=np.uint8),
-                'input/alex_image': np.array([self._img_prepare(alex_image)], dtype=np.uint8),
+                'input/dave_image': np.array([self._dave_prepare(dave_image)], dtype=np.uint8),
+                'input/alex_image': np.array([self._alex_prepare(alex_image)], dtype=np.uint8),
                 'input/maneuver_command': np.array([[maneuver_command]], dtype=np.float32),
                 'input/current_destination': np.array([destination], dtype=np.float32)
             }
             _out = [x.flatten() for x in self._sess.run(None, _feed)]
-            _steering, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query, _key, _value = _out
-            return _steering, _critic, _surprise, _gumbel, _brake, _br_critic, _coord_source, _coord_goal, _query, _key, _value
+            steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query, key, value = _out
+            return steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query, key, value

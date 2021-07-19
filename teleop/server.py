@@ -8,11 +8,11 @@ import os
 import threading
 import time
 import traceback
-from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
 import tornado
+from ConfigParser import SafeConfigParser
 from tornado import web, websocket
 
 from byodr.utils import timestamp
@@ -128,35 +128,37 @@ class MessageServerSocket(websocket.WebSocketHandler):
             speed_scale = 1. if pilot is None else float(pilot.get('speed_scale', 1))
             pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
             pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
-            pilot_match_sim = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
+            pilot_match_distance = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
             pilot_match_point = '' if pilot is None else pilot.get('navigation_match_point', '')
             inference_current_image = -1 if inference is None else inference.get('navigation_image', -1)
-            inference_current_sim = 1 if inference is None else inference.get('navigation_distance', 1)
-            inference_command = 0 if inference is None else inference.get('navigation_command', 0)
+            inference_current_distance = -1 if inference is None else inference.get('navigation_distance', -1)
+            inference_command = -1 if inference is None else inference.get('navigation_command', -1)
+            inference_direction = 0 if inference is None else inference.get('navigation_direction', 0)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
-                'debug1': 0 if inference is None else inference.get('brake_critic_out'),
-                'debug2': 0 if inference is None else inference.get('obstacle'),
-                'debug3': 0 if inference is None else inference.get('penalty'),
-                'debug4': 0 if inference is None else inference.get('surprise_out'),
-                'debug5': 0 if inference is None else inference.get('critic_out'),
-                'debug6': 0,
-                'debug7': 0 if inference is None else inference.get('_fps'),
+                'inf_brake_critic': 0 if inference is None else inference.get('brake_critic_out'),
+                'inf_brake': 0 if inference is None else inference.get('obstacle'),
+                'inf_penalty': 0 if inference is None else inference.get('penalty'),
+                'inf_surprise': 0 if inference is None else inference.get('surprise_out'),
+                'inf_critic': 0 if inference is None else inference.get('critic_out'),
+                'inf_hz': 0 if inference is None else inference.get('_fps'),
                 'rec_act': False if recorder is None else recorder.get('active'),
                 'rec_mod': self._translate_recorder(recorder),
                 'ste': 0 if pilot is None else pilot.get('steering'),
                 'thr': 0 if pilot is None else pilot.get('throttle'),
                 'vel_y': 0 if vehicle is None else vehicle.get('velocity') * speed_scale,
-                'x': 0 if vehicle is None else vehicle.get('x_coordinate'),
-                'y': 0 if vehicle is None else vehicle.get('y_coordinate'),
+                'geo_lat': 0 if vehicle is None else vehicle.get('latitude_geo'),
+                'geo_long': 0 if vehicle is None else vehicle.get('longitude_geo'),
+                'geo_head': 0 if vehicle is None else vehicle.get('heading'),
                 'speed': 0 if pilot is None else pilot.get('desired_speed') * speed_scale,
                 'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'nav_active': pilot_navigation_active,
                 'nav_point': pilot_match_point,
                 'nav_image': [pilot_match_image, inference_current_image],
-                'nav_distance': [pilot_match_sim, inference_current_sim],
+                'nav_distance': [pilot_match_distance, inference_current_distance],
                 'nav_command': inference_command,
+                'nav_direction': inference_direction,
                 'turn': None if pilot is None else pilot.get('instruction')
             }
             self.write_message(json.dumps(response))

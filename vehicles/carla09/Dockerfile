@@ -11,6 +11,8 @@ WORKDIR /app
 
 RUN python -m easy_install --no-deps /PythonAPI/carla/dist/carla-0.9.9-py2.7-linux-x86_64.egg
 
+RUN pip install geographiclib
+
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 CMD ["python", "app.py"]

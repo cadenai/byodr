@@ -204,20 +204,20 @@ class Navigator(object):
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
                                      destination=_destination)
-        action_out, critic_out, surprise_out, gumbel_out, brake_out, brake_critic_out, coord_source, coord_goal, query_out = _out
+        action, critic, surprise, command, direction, brake, brake_critic, coord_source, coord_goal, query = _out
 
         nav_point_id, nav_image_id, nav_distance, _destination = None, None, None, None
         _acquired = self._lock.acquire(False)
         try:
             if _acquired and self._store.is_open() and self._memory.is_open():
                 coord_out = np.concatenate([coord_source, coord_goal], axis=-1)
-                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coord_out, query_out)
+                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coord_out, query)
         finally:
             if _acquired:
                 self._lock.release()
 
         self._destination = _destination
-        return action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, gumbel_out
+        return action, critic, surprise, brake, brake_critic, nav_point_id, nav_image_id, nav_distance, command, direction
 
     def quit(self):
         # Store and network are thread-safe.
@@ -304,34 +304,35 @@ class TFRunner(Configurable):
 
     def forward(self, image, route=None):
         _out = self._navigator.forward(image, route)
-        action_out, critic_out, surprise_out, brake_out, brake_critic_out, nav_point_id, nav_image_id, nav_distance, _command = _out
+        action, critic, surprise, brake, brake_critic, nav_point_id, nav_image_id, nav_distance, command, direction = _out
 
         _corridor_penalty = max(0,
                                 self._fn_corridor_penalty(
-                                    surprise=(max(0, self._fn_corridor_norm(surprise_out) + self._corridor_shift)),
-                                    critic=(max(0, self._fn_corridor_norm(critic_out) + self._corridor_shift)))
+                                    surprise=(max(0, self._fn_corridor_norm(surprise) + self._corridor_shift)),
+                                    critic=(max(0, self._fn_corridor_norm(critic) + self._corridor_shift)))
                                 )
 
         # Penalties to decrease desired speed.
-        _obstacle_penalty = self._fn_obstacle_norm(brake_out) + max(0, brake_critic_out + self._obstruction_shift)
+        _obstacle_penalty = self._fn_obstacle_norm(brake) + max(0, brake_critic + self._obstruction_shift)
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
-        _command_index = int(np.argmax(_command))
+        _command_index = int(np.argmax(command))
 
         return dict(time=timestamp(),
-                    action=float(self._dnn_steering(action_out)),
+                    action=float(self._dnn_steering(action)),
                     corridor=float(self._debug_filter.calculate(_corridor_penalty)),
-                    surprise_out=float(surprise_out),
-                    critic_out=float(critic_out),
-                    brake_critic_out=float(brake_critic_out),
+                    surprise_out=float(surprise),
+                    critic_out=float(critic),
+                    brake_critic_out=float(brake_critic),
                     dagger=int(0),
-                    obstacle=float(brake_out),
+                    obstacle=float(brake),
                     penalty=float(_total_penalty),
                     internal=[float(0)],
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),
                     navigation_distance=float(1 if nav_distance is None else nav_distance),
-                    navigation_command=float(_command_index + _command[_command_index] - 1e-3)
+                    navigation_command=float(_command_index + command[_command_index] - 0.05),
+                    navigation_direction=float(direction)
                     )
 
 

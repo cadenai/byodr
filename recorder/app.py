@@ -34,8 +34,8 @@ def to_event(ts, blob, vehicle, image):
         heading=vehicle.get('heading'),
         throttle=blob.get('throttle'),
         command=blob.get('instruction'),
-        x_coordinate=vehicle.get('x_coordinate'),
-        y_coordinate=vehicle.get('y_coordinate'),
+        x_coordinate=vehicle.get('latitude_geo'),
+        y_coordinate=vehicle.get('longitude_geo'),
         inference_brake=blob.get('inference_brake')
     )
     event.save_event = blob.get('save_event')

@@ -30,10 +30,6 @@
           float: left;
         }
 
-        div#column {
-          float: left;
-        }
-
         .message {
           color: #000;
           font-family: Verdana;
@@ -96,6 +92,19 @@
           padding: 10px 0 0 0;
         }
 
+        div#pilot_drive_values {
+          margin: 30px 0 1px 50px;
+          cursor: zoom-in;
+        }
+        div#pilot_drive_values.expanded {
+          cursor: zoom-out;
+        }
+
+        div#debug_drive_values {
+          margin: 100px 0 0 10px;
+          cursor: zoom-out;
+        }
+
         div.debug_values {
           color: white;
           font-family: "Lucida Console";
@@ -106,16 +115,17 @@
           margin-block-end: 0;
           text-align: right;
         }
-        div#debug_drive_values {
-          margin: 1px 0 1px 50px;
-          cursor: zoom-in;
-        }
-        div#debug_drive_values.expanded {
-          cursor: zoom-out;
-        }
         div#debug_video_values {
           margin: 20px 0 0 10px;
           min-width: 40px;
+        }
+
+        table#debug_values_table {
+          color: white;
+          font-family: "Lucida Console";
+          font-size: 10px;
+          line-height: 0.8;
+          text-indent: 5;
         }
 
         div#stream_links {
@@ -206,9 +216,6 @@
         span#navigation_route_sel_next {
             cursor: pointer;
         }
-        div#navigation_debug_container {
-            margin: 20px 0 0 10px;
-        }
 
         div#viewport_container {
         }
@@ -254,14 +261,14 @@
 	<script src="http-live-player.js?v=0.45.0"></script>
 	<script src="index_utils.js?v=0.45.0"></script>
 	<script src="index_gamepad.js?v=0.47.4"></script>
-	<script src="index_navigator.js?v=0.46.1"></script>
-	<script src="index_teleop.js?v=0.47.3"></script>
+	<script src="index_navigator.js?v=0.48.0"></script>
+	<script src="index_teleop.js?v=0.48.0"></script>
 	<script src="index_mjpeg.js?v=0.45.0"></script>
 	<script src="index_h264.js?v=0.45.3"></script>
 </head>
 <body>
 <div id="container" class="centered">
-    <div id="column">
+    <div id="column1" class="left">
         <div id="message_box" class="message"></div>
         <div id="bar">
             <div id="home_menu" class="left" title="Settings">
@@ -299,20 +306,9 @@
                     <div id="beta_speed_label">km/h</div>
                 </div>
             </div>
-            <div id="debug_drive_values" class="right debug_values" title="Toggle debug values">
-                <p id="p_inference_fps" style="visibility: hidden;"><span id="inference_fps">0</span>&nbsp;fps</p>
-                <p id="p_inference_penalty" style="visibility: hidden;">
-                    <span id="inference_surprise">0</span>&nbsp;<span id="inference_critic">0</span>
-                </p>
-                <p id="p_inference_obstacle" style="visibility: hidden;">
-                    <span id="inference_penalty">0</span>&nbsp;<span id="inference_obstacle">0</span>
-                </p>
+            <div id="pilot_drive_values" class="right debug_values" title="Toggle debug values">
                 <p><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
-            </div>
-            <div id="navigation_debug_container" class="right debug_values" style="visibility: hidden;">
-                <p><span id="navigation_match_image_distance">1</span></p>
-                <p><span id="navigation_current_command">0</span></p>
             </div>
             <div id="navigation_image_container" class="right"
                  title="Start or pause the route"
@@ -332,16 +328,32 @@
         </div>
         <div id="viewport_container"></div>
     </div>
+    <div id="column2" class="right">
+        <div id="debug_drive_values" class="right debug_values" style="visibility: hidden;" title="Toggle debug values">
+            <table id="debug_values_table">
+                <tr><td>ips</td><td><span id="inference_fps">0</span></td></tr>
+                <tr><td>mu</td><td><span id="inference_surprise">0</span></td></tr>
+                <tr><td>cri</td><td><span id="inference_critic">0</span></td></tr>
+                <tr><td>bcr</td><td><span id="inference_brake_critic">0</span></td></tr>
+                <tr><td>bra</td><td><span id="inference_obstacle">0</span></td></tr>
+                <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+                <tr><td>lat</td><td><span id="navigation_geo_lat">0</span></td></tr>
+                <tr><td>lon</td><td><span id="navigation_geo_long">0</span></td></tr>
+                <tr><td>bea</td><td><span id="navigation_heading">0</span></td></tr>
+                <tr><td>nd</td><td><span id="navigation_match_image_distance">0</span></td></tr>
+                <tr><td>nc</td><td><span id="navigation_current_command">0</span>&nbsp;<span id="navigation_direction">0</span></td></tr>
+            </table>
+        </div>
+    </div>
 </div>
 <script type="text/javascript">
-$("div#debug_drive_values").click(function() {
-    const collapse = $(this).hasClass('expanded');
+$("div#pilot_drive_values").click(function() {
+    const collapse = $("div#debug_drive_values").is_visible();
     page_utils.notify_toggle_debug_values_listeners(collapse);
-    if (collapse) {
-        $(this).removeClass('expanded');
-    } else {
-        $(this).addClass('expanded');
-    }
+});
+
+$("div#debug_drive_values").click(function() {
+    page_utils.notify_toggle_debug_values_listeners(true);
 });
 
 function mjpeg_refresh_page_values() {

@@ -1,3 +1,4 @@
+import collections
 import logging
 import math
 import multiprocessing
@@ -7,6 +8,7 @@ import time
 import carla
 import numpy as np
 from carla import Transform, Location, Rotation
+from geographiclib.geodesic import Geodesic
 
 from byodr.utils import timestamp, Configurable
 from byodr.utils.option import parse_option
@@ -28,9 +30,8 @@ class CarlaHandler(Configurable):
         self._traffic_manager = None
         self._actor = None
         self._sensors = []
+        self._track_position = collections.deque(maxlen=1)
         self._actor_lock = multiprocessing.Lock()
-        self._actor_last_location = None
-        self._actor_distance_traveled = 0.
         self._spawn_index = 1
         self._vehicle_tick = None
         self._in_carla_autopilot = False
@@ -67,9 +68,7 @@ class CarlaHandler(Configurable):
         return _errors
 
     def _reset_agent_travel(self):
-        logger.info("Actor distance traveled is {:8.3f}.".format(self._actor_distance_traveled))
-        self._actor_distance_traveled = 0.
-        self._actor_last_location = None
+        self._track_position.clear()
 
     def _destroy(self):
         if self._actor is not None and self._actor.is_alive:
@@ -141,10 +140,10 @@ class CarlaHandler(Configurable):
 
     def _position(self):
         location = None if self._actor is None else self._actor.get_location()
-        return (-1, -1) if location is None else (location.x, location.y)
+        return (None, None) if location is None else (location, self._world.get_map().transform_to_geolocation(location))
 
-    def _heading(self):
-        return 0 if self._actor is None else self._actor.get_transform().rotation.yaw
+    # def _heading(self):
+    #     return 0 if self._actor is None else self._actor.get_transform().rotation.yaw
 
     def _velocity(self):
         return 0 if self._actor is None else self._carla_vel()
@@ -189,15 +188,23 @@ class CarlaHandler(Configurable):
             self._change_weather_time = time.time() + self._rand_weather_seconds
 
     def state(self):
-        x, y = self._position()
+        p_location, p_geo, bearing = (None, None, 0) if len(self._track_position) < 1 else self._track_position[-1]
+        c_location, c_geo = self._position()
+        if None not in (p_geo, c_geo):
+            # noinspection PyUnresolvedReferences
+            _g = Geodesic.WGS84.Inverse(p_geo.latitude, p_geo.longitude, c_geo.latitude, c_geo.longitude)
+            _distance = _g['s12']  # Meters.
+            if _distance > 1e-2:
+                bearing = _g['azi1']
+        self._track_position.append((c_location, c_geo, bearing))
         ap_active, ap_steering, ap_throttle = False, 0, 0
         if self._actor is not None and self._actor.is_alive and self._in_carla_autopilot:
             ap_active = True
             ap_steering = self._actor.get_control().steer
             ap_throttle = self._actor.get_control().throttle
-        return dict(x_coordinate=x,
-                    y_coordinate=y,
-                    heading=self._heading(),
+        return dict(latitude_geo=c_geo.latitude,
+                    longitude_geo=c_geo.longitude,
+                    heading=bearing,
                     velocity=self._velocity(),
                     auto_active=ap_active,
                     auto_steering=ap_steering,
@@ -208,11 +215,6 @@ class CarlaHandler(Configurable):
         if self._actor is not None and self._actor.is_alive:
             with self._actor_lock:
                 self._set_weather()
-                location = self._actor.get_location()
-                if self._actor_last_location is not None:
-                    _x, _y = self._actor_last_location
-                    self._actor_distance_traveled += math.sqrt((location.x - _x) ** 2 + (location.y - _y) ** 2)
-                self._actor_last_location = (location.x, location.y)
 
     def noop(self):
         self._drive(steering=0, throttle=0)
