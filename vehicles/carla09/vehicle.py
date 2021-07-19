@@ -1,4 +1,3 @@
-import collections
 import logging
 import math
 import multiprocessing
@@ -8,9 +7,9 @@ import time
 import carla
 import numpy as np
 from carla import Transform, Location, Rotation
-from geographiclib.geodesic import Geodesic
 
 from byodr.utils import timestamp, Configurable
+from byodr.utils.location import GeoTracker
 from byodr.utils.option import parse_option
 
 logger = logging.getLogger(__name__)
@@ -30,7 +29,7 @@ class CarlaHandler(Configurable):
         self._traffic_manager = None
         self._actor = None
         self._sensors = []
-        self._track_position = collections.deque(maxlen=1)
+        self._geo_tracker = GeoTracker()
         self._actor_lock = multiprocessing.Lock()
         self._spawn_index = 1
         self._vehicle_tick = None
@@ -68,7 +67,7 @@ class CarlaHandler(Configurable):
         return _errors
 
     def _reset_agent_travel(self):
-        self._track_position.clear()
+        self._geo_tracker.clear()
 
     def _destroy(self):
         if self._actor is not None and self._actor.is_alive:
@@ -138,9 +137,9 @@ class CarlaHandler(Configurable):
         velocity = self._actor.get_velocity()
         return math.sqrt(velocity.x ** 2 + velocity.y ** 2 + velocity.z ** 2)
 
-    def _position(self):
+    def _location(self):
         location = None if self._actor is None else self._actor.get_location()
-        return (None, None) if location is None else (location, self._world.get_map().transform_to_geolocation(location))
+        return None if location is None else self._world.get_map().transform_to_geolocation(location)
 
     # def _heading(self):
     #     return 0 if self._actor is None else self._actor.get_transform().rotation.yaw
@@ -187,23 +186,20 @@ class CarlaHandler(Configurable):
             self._world.set_weather(getattr(carla.WeatherParameters, preset))
             self._change_weather_time = time.time() + self._rand_weather_seconds
 
+    def _track(self):
+        c_geo = self._location()
+        latitude, longitude = (None, None) if c_geo is None else (c_geo.latitude, c_geo.longitude)
+        return self._geo_tracker.track((latitude, longitude))
+
     def state(self):
-        p_location, p_geo, bearing = (None, None, 0) if len(self._track_position) < 1 else self._track_position[-1]
-        c_location, c_geo = self._position()
-        if None not in (p_geo, c_geo):
-            # noinspection PyUnresolvedReferences
-            _g = Geodesic.WGS84.Inverse(p_geo.latitude, p_geo.longitude, c_geo.latitude, c_geo.longitude)
-            _distance = _g['s12']  # Meters.
-            if _distance > 1e-2:
-                bearing = _g['azi1']
-        self._track_position.append((c_location, c_geo, bearing))
         ap_active, ap_steering, ap_throttle = False, 0, 0
         if self._actor is not None and self._actor.is_alive and self._in_carla_autopilot:
             ap_active = True
             ap_steering = self._actor.get_control().steer
             ap_throttle = self._actor.get_control().throttle
-        return dict(latitude_geo=c_geo.latitude,
-                    longitude_geo=c_geo.longitude,
+        latitude, longitude, bearing = self._track()
+        return dict(latitude_geo=latitude,
+                    longitude_geo=longitude,
                     heading=bearing,
                     velocity=self._velocity(),
                     auto_active=ap_active,

@@ -1,5 +1,4 @@
 import argparse
-import collections
 import glob
 import logging
 import os
@@ -7,11 +6,11 @@ import shutil
 
 from ConfigParser import SafeConfigParser
 from core import GpsPollerThread, GstSource, PTZCamera
-from geographiclib.geodesic import Geodesic
 
 from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector
+from byodr.utils.location import GeoTracker
 from byodr.utils.option import parse_option, hash_dict
 
 logger = logging.getLogger(__name__)
@@ -22,8 +21,13 @@ class Platform(Configurable):
     def __init__(self):
         super(Platform, self).__init__()
         self._gps_poller = GpsPollerThread()
-        self._track_position = collections.deque(maxlen=1)
+        self._geo_tracker = GeoTracker()
         self._velocity = 0
+
+    def _track(self):
+        latitude, longitude = self._gps_poller.get_latitude(), self._gps_poller.get_longitude()
+        position = None if None in (latitude, longitude) else (latitude, longitude)
+        return self._geo_tracker.track(position)
 
     def state(self, c_teleop):
         # The platform currently does not contain a speedometer.
@@ -33,17 +37,9 @@ class Platform(Configurable):
         if c_teleop:
             y_vel = c_teleop.get('throttle', 0)
             self._velocity = y_vel
-        c_latitude, c_longitude = self._gps_poller.get_latitude(), self._gps_poller.get_longitude()
-        p_latitude, p_longitude, bearing = (None, None, 0) if len(self._track_position) < 1 else self._track_position[-1]
-        if None not in (p_latitude, c_latitude):
-            # noinspection PyUnresolvedReferences
-            _g = Geodesic.WGS84.Inverse(p_latitude, p_longitude, c_latitude, c_longitude)
-            _distance = _g['s12']  # Meters.
-            if _distance > 1e-2:
-                bearing = _g['azi1']
-        self._track_position.append((c_latitude, c_longitude, bearing))
-        return dict(latitude_geo=c_latitude,
-                    longitude_geo=c_longitude,
+        latitude, longitude, bearing = self._track()
+        return dict(latitude_geo=latitude,
+                    longitude_geo=longitude,
                     heading=bearing,
                     velocity=y_vel,
                     time=timestamp())
