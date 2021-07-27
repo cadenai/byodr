@@ -173,8 +173,7 @@ mjpeg_page_controller.init([front_camera_frame_controller, rear_camera_frame_con
 document.addEventListener("DOMContentLoaded", function() {
     rear_camera_preview = document.createElement("img");
     rear_camera_preview.id = 'mjpeg_rear_camera_preview_image';
-    rear_camera_preview.style.cssText = 'cursor: pointer;';
-    rear_camera_preview.classList.add("preview_img");
+    // rear_camera_preview.classList.add("active");
     document.getElementById('preview_container').appendChild(rear_camera_preview);
 
     rear_camera_container = document.createElement("div");
@@ -184,6 +183,9 @@ document.addEventListener("DOMContentLoaded", function() {
     rear_camera_main.id = 'mjpeg_rear_camera_main_image';
     rear_camera_container.appendChild(rear_camera_main);
     document.getElementById('viewport_container').appendChild(rear_camera_container);
+
+    // $('div#mjpeg_rear_camera_main_container').draggable({containment: "#container"});
+    $('img#mjpeg_rear_camera_main_image').resizable({containment: "#viewport_container"});
 
     function mjpeg_rear_camera_main_image_show() {
         $(rear_camera_container).fadeIn('fast');
@@ -234,7 +236,6 @@ if (page_utils.get_stream_type() == 'mjpeg') {
         front_camera_container.id = 'mjpeg_front_camera_main_container';
         front_camera_main = document.createElement("img");
         front_camera_main.id = 'mjpeg_front_camera_main_image';
-        front_camera_main.style.cssText = 'width: 100% !important;';
         front_camera_container.appendChild(front_camera_main);
         document.getElementById('viewport_container').appendChild(front_camera_container);
 
@@ -293,18 +294,4 @@ function mjpeg_stop_all() {
     if (page_utils.get_stream_type() == 'mjpeg' && front_camera != undefined && front_camera.socket != undefined) {
         front_camera.stop_socket();
     }
-}
-
-function mjpeg_refresh_page_values() {
-    $('span#mjpeg_quality_val').text(mjpeg_page_controller.get_max_quality());
-}
-
-function mjpeg_caret_up() {
-    mjpeg_page_controller.increase_quality();
-    mjpeg_refresh_page_values();
-}
-
-function mjpeg_caret_down() {
-    mjpeg_page_controller.decrease_quality();
-    mjpeg_refresh_page_values();
 }

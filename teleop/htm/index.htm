@@ -4,259 +4,105 @@
     <title>Teleop</title>
     <link rel="stylesheet" href="jquery/jquery-ui-1.12.1.min.css">
     <style type="text/css">
-        html {
-          height: 100%;
-          background-image: linear-gradient(to top, white, black);
-        }
+html {
+  height: 100%;
+  background-image: linear-gradient(to top, white, black);
+}
+body {
+  /* background-color: black; */
+  /* color: white; */
+}
 
-        body {
-          /* background-color: black; */
-          /* color: white; */
-        }
+#main_container {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  margin-right: -50%;
+  transform: translate(-50%, 0);
+}
 
-        .centered {
-          position: absolute;
-          top: 0;
-          left: 50%;
-          margin-right: -50%;
-          transform: translate(-50%, 0);
-        }
+#message_box {
+  color: #000;
+  background-color: #ffffcc;
+  font-family: Verdana;
+  font-size; 13px;
+  border: 1px solid #ccc;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  padding: 10px;
+}
 
-        .right {
-          float: right;
-        }
+#horizontal_bar {
+  overflow: hidden;
+  text-align: center;
+  color: white;
+  font-family: Verdana;
+}
 
-        .left {
-          float: left;
-        }
+div.speed_value {
+  display: inline-block;
+  font-size: 8px;
+}
 
-        .message {
-          color: #000;
-          font-family: Verdana;
-          font-size; 13px;
-          border: 1px solid #ccc;
-          margin-top: 16px;
-          margin-bottom: 16px;
-          padding: 10px;
-        }
+div.debug_values {
+  color: white;
+  font-family: "Lucida Console";
+  font-size: 10px;
+}
+div.debug_values > p {
+  margin-block-start: 0;
+  margin-block-end: 0;
+  text-align: right;
+}
 
-        .warning_message {
-          background-color: #ffffcc;
-        }
+#debug_values_table {
+  color: white;
+  font-family: "Lucida Console";
+  font-size: 10px;
+  line-height: 0.8;
+  text-indent: 5;
+}
 
-        .error_message {
-          background-color: #ffffcc;
-        }
+div#stream_links > a {
+    font-family: "Lucida Console";
+    font-size: 16px;
+}
+div#stream_links > a:link, a:visited {
+    text-decoration: none;
+}
+div#stream_links > a:hover {
+    color: blue;
+}
+div#stream_links > a.inactive {
+    color: white;
+}
+div#stream_links > a:hover, a:active, a.active {
+    color: lightblue;
+}
 
-        div#bar {
-          overflow: hidden;
-          text-align: center;
-          color: white;
-          font-family: Verdana;
-        }
+div#mjpeg_stream_controls > img {
+    cursor: pointer;
+    background: white;
+    width: 15px;
+    height: 15px;
+}
 
-        div#dashboard {
-            margin: 0 0 0 20%;
-        }
+img.preview_img {
+    width: 80px;
+    height: 45px;
+    border-radius: 3px;
+    border: 1px solid grey;
+}
 
-        img#arrow {
-          padding-top: 10px;
-        }
-
-        div#alpha_speed {
-          display: inline-block;
-          font-size: 8px;
-          padding: 5px 10px 0 20px;
-        }
-
-        div#beta_speed {
-          display: inline-block;
-          font-size: 8px;
-          padding: 10px 10px 0 10px;
-        }
-
-        div#alpha_speed_value {
-          font-size: 30px;
-        }
-
-        div#beta_speed_value {
-          font-size: 30px;
-        }
-
-        div#beta_speed_label {
-          font-size: 8px;
-        }
-
-        img#steeringWheel {
-          transform: scale(0.8);
-          padding: 10px 0 0 0;
-        }
-
-        div#pilot_drive_values {
-          margin: 30px 0 1px 50px;
-          cursor: zoom-in;
-        }
-        div#pilot_drive_values.expanded {
-          cursor: zoom-out;
-        }
-
-        div#debug_drive_values {
-          margin: 100px 0 0 10px;
-          cursor: zoom-out;
-        }
-
-        div.debug_values {
-          color: white;
-          font-family: "Lucida Console";
-          font-size: 10px;
-        }
-        div.debug_values > p {
-          margin-block-start: 0;
-          margin-block-end: 0;
-          text-align: right;
-        }
-        div#debug_video_values {
-          margin: 20px 0 0 10px;
-          min-width: 40px;
-        }
-
-        table#debug_values_table {
-          color: white;
-          font-family: "Lucida Console";
-          font-size: 10px;
-          line-height: 0.8;
-          text-indent: 5;
-        }
-
-        div#stream_links {
-          padding-top: 20px;
-          text-align: left;
-        }
-        div#stream_links > a {
-            font-family: "Lucida Console";
-            font-size: 16px;
-        }
-        div#stream_links > a:link, a:visited {
-            text-decoration: none;
-        }
-        div#stream_links > a:hover {
-            color: blue;
-        }
-        div#stream_links > a.inactive {
-            color: white;
-        }
-        div#stream_links > a:hover, a:active, a.active {
-            color: lightblue;
-        }
-        div#mjpeg_stream_controls {
-            padding: 37px 0 0 20px;
-            font-family: "Lucida Console";
-            font-size: 15px;
-        }
-        div#mjpeg_stream_controls > img {
-            cursor: pointer;
-            background: white;
-            width: 15px;
-            height: 15px;
-        }
-        div#mjpeg_stream_controls > img#caret_up {
-            transform: rotate(180deg);
-        }
-        div#mjpeg_stream_controls > img#caret_down {
-            margin-left: 3px;
-        }
-        span#autopilot_status {
-            display: inline-block;
-            width: 45px;
-        }
-        div#home_menu {
-        }
-        img#home_menu_icon {
-            margin: 10px 0 0 0;
-            width: 50px;
-            height: 50px;
-        }
-
-        div#preview_container {
-            margin: 15px 0 5px 5px;
-        }
-        div#preview_container img {
-            width: 80px;
-            height: 45px;
-            border-radius: 3px;
-            border: 1px solid grey;
-        }
-        div#preview_container img.active {
-        }
-
-        div#navigation_route_container {
-            margin: 15px 20px 0 0;
-            font-family: "Lucida Console";
-            font-size: 15px;
-        }
-        div#navigation_route_container > p {
-          margin-block-start: 0;
-          margin-block-end: 0;
-          text-align: center;
-        }
-
-        div#navigation_image_container {
-            cursor: pointer;
-            margin: 15px 0 5px 5px;
-        }
-        div#navigation_image_container img {
-            width: 80px;
-            height: 45px;
-            border-radius: 3px;
-            border: 1px solid grey;
-        }
-        span#navigation_route_sel_prev {
-            cursor: pointer;
-        }
-        span#navigation_route_sel_next {
-            cursor: pointer;
-        }
-
-        div#viewport_container {
-        }
-
-        canvas#h264_front_camera_main_image {
-            width: 1280px;
-            height: 720px;
-            border-radius: 5px;
-            border: 1px solid grey;
-        }
-        canvas#h264_front_camera_main_image.selected {
-            border: 2px solid cyan;
-        }
-        div#mjpeg_rear_camera_main_container {
-        }
-        img#mjpeg_rear_camera_main_image {
-            width: 1280px;
-            height: 240px;
-            border-radius: 5px;
-            border: 1px solid grey;
-        }
-        img#mjpeg_rear_camera_main_image.selected {
-            border: 2px solid cyan;
-        }
-        img#mjpeg_rear_camera_preview_image {
-            cursor: pointer;
-        }
-        div#mjpeg_front_camera_main_container {
-        }
-        img#mjpeg_front_camera_main_image {
-            width: 1280px;
-            height: 720px;
-            border-radius: 5px;
-            border: 1px solid grey;
-        }
-        img#mjpeg_front_camera_main_image.selected {
-            border: 2px solid cyan;
-        }
+div#navigation_route_container > p {
+  margin-block-start: 0;
+  margin-block-end: 0;
+  text-align: center;
+}
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
+    <script src="jmuxer/jmuxer-21.07.min.js"></script>
     <script src="performance-polyfill.js?v=0.45.0"></script>
 	<script src="http-live-player.js?v=0.45.0"></script>
 	<script src="index_utils.js?v=0.45.0"></script>
@@ -264,17 +110,22 @@
 	<script src="index_navigator.js?v=0.48.0"></script>
 	<script src="index_teleop.js?v=0.48.0"></script>
 	<script src="index_mjpeg.js?v=0.45.0"></script>
-	<script src="index_h264.js?v=0.45.3"></script>
 </head>
 <body>
-<div id="container" class="centered">
-    <div id="column1" class="left">
-        <div id="message_box" class="message"></div>
-        <div id="bar">
-            <div id="home_menu" class="left" title="Settings">
-                <a href="/user_options.htm?v=0.45.0"><img id="home_menu_icon" src='index-menu.png?v=0.45.0'/></a>
+<div id="main_container">
+    <div style="float: left;">
+        <div id="message_box"></div>
+        <div id="horizontal_bar">
+            <div id="home_menu"
+                 style="float: left;"
+                 title="Settings">
+                <a href="/user_options.htm?v=0.45.0">
+                    <img id="home_menu_icon"
+                         src='index-menu.png?v=0.45.0'
+                         style="margin: 10px 0 0 0; width: 50px; height: 50px;"/>
+                </a>
             </div>
-            <div id="stream_links" class="left">
+            <div id="stream_links" style="float: left; padding-top: 20px; text-align: left;">
                 <a id="video_stream_h264" href="#"
                    title="Display the main camera video-stream"
                    onclick="page_utils.set_stream_type('h264'); location.reload();">h264</a><br/>
@@ -282,54 +133,73 @@
                    title="Display the main camera motion jpeg stream (attempt manual latency control) "
                    onclick="page_utils.set_stream_type('mjpeg'); location.reload();">mjpeg</a>
             </div>
-            <div id="mjpeg_stream_controls" class="left">
+            <div id="mjpeg_stream_controls"
+                 style="float: left; padding: 37px 0 0 20px; font-family: 'Lucida Console'; font-size: 15px;">
                 <span id="mjpeg_quality_val">0</span>
-                <img id="caret_down" src='caret.png?v=0.45.0' title="Decrease motion jpeg quality" onclick="mjpeg_caret_down();"/>
-                <img id="caret_up" src='caret.png?v=0.45.0' title="Increase motion jpeg quality" onclick="mjpeg_caret_up();"/>
+                <img id="caret_down" src='caret.png?v=0.45.0'
+                     style="margin-left: 3px;"
+                     title="Decrease motion jpeg quality"
+                     onclick="mjpeg_caret_down();"/>
+                <img id="caret_up" src='caret.png?v=0.45.0'
+                     style="transform: rotate(180deg);"
+                     title="Increase motion jpeg quality"
+                     onclick="mjpeg_caret_up();"/>
             </div>
-            <div id="preview_container" class="left" title="Toggle the rear camera display">
+            <div id="preview_container"
+                 style="float: left; margin: 15px 0 5px 5px;"
+                 title="Toggle the rear camera display">
             </div>
-            <div id="debug_video_values" class="left debug_values">
-                <p id="p_rear_camera_framerate" style="visibility: hidden;"><span id="rear_camera_framerate">0</span>&nbsp;rear&nbsp;</p>
-                <p id="p_front_camera_framerate" style="visibility: hidden;"><span id="front_camera_framerate">0</span>&nbsp;front</p>
-            </div>
-            <div id="dashboard" class="left">
-                <span id="autopilot_status"></span>
-                <img id="arrow"/>
-                <div id="alpha_speed">
-                    <div id="alpha_speed_value">0</div>
+            <div id="dashboard" style="float: left; margin: 0 0 0 20%;">
+                <span id="autopilot_status" style="display: inline-block; width: 45px;"></span>
+                <img id="arrow" style="padding-top: 10px;"/>
+                <div id="alpha_speed" class="speed_value" style="padding: 5px 10px 0 20px;">
+                    <div id="alpha_speed_value" style="font-size: 30px;">0</div>
                     <div id="alpha_speed_label"></div>
                 </div>
-                <img id="steeringWheel"/>
-                <div id="beta_speed">
-                    <div id="beta_speed_value">0</div>
+                <img id="steeringWheel" style="transform: scale(0.8); padding: 10px 0 0 0;"/>
+                <div id="beta_speed"
+                     class="speed_value"
+                     style="padding: 10px 10px 0 10px;">
+                    <div id="beta_speed_value" style="font-size: 30px;">0</div>
                     <div id="beta_speed_label">km/h</div>
                 </div>
             </div>
-            <div id="pilot_drive_values" class="right debug_values" title="Toggle debug values">
+            <div id="pilot_drive_values"
+                 class="debug_values"
+                 style="float: right; margin: 30px 0 1px 50px; cursor: zoom-in;"
+                 onclick="page_utils.notify_toggle_debug_values_listeners($('div#debug_drive_values').is_visible());"
+                 title="Toggle debug values">
                 <p><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
-            <div id="navigation_image_container" class="right"
+            <div id="navigation_image_container"
                  title="Start or pause the route"
-                 style="visibility: hidden;">
-                <img id="navigation_image"/>
+                 style="float: right; visibility: hidden; cursor: pointer; margin: 15px 0 5px 5px;">
+                <img id="navigation_image" class="preview_img"/>
             </div>
-            <div id="navigation_route_container" class="right"
+            <div id="navigation_route_container"
                  title="Navigation points and their images will be displayed when matched"
-                 style="visibility: hidden;">
+                 style="float:right; visibility: hidden; margin: 15px 20px 0 0; font-family: 'Lucida Console'; font-size: 15px;">
                 <p>
-                    <span id="navigation_route_sel_prev" title="Select the previous route, if any">&lt;</span>
+                    <span id="navigation_route_sel_prev"
+                          style="cursor: pointer;"
+                          title="Select the previous route, if any">&lt;</span>
                     <span id="navigation_route_name"></span>
-                    <span id="navigation_route_sel_next" title="Select the next route, if any">&gt;</span>
+                    <span id="navigation_route_sel_next"
+                          style="cursor: pointer;"
+                          title="Select the next route, if any">&gt;</span>
                 </p>
                 <p><span id="navigation_point_name"></span></p>
             </div>
         </div>
-        <div id="viewport_container"></div>
+        <div id="viewport_container" style="width: calc(90vw - 0px);"></div>
     </div>
-    <div id="column2" class="right">
-        <div id="debug_drive_values" class="right debug_values" style="visibility: hidden;" title="Toggle debug values">
+    <div style="float: right;">
+        <div id="debug_drive_values"
+             class="debug_values"
+             style="float: right; visibility: hidden; margin: 100px 0 0 10px; cursor: zoom-out;"
+             onclick="page_utils.notify_toggle_debug_values_listeners(true);"
+             title="Toggle debug values">
             <table id="debug_values_table">
                 <tr><td>ips</td><td><span id="inference_fps">0</span></td></tr>
                 <tr><td>mu</td><td><span id="inference_surprise">0</span></td></tr>
@@ -347,39 +217,16 @@
     </div>
 </div>
 <script type="text/javascript">
-$("div#pilot_drive_values").click(function() {
-    const collapse = $("div#debug_drive_values").is_visible();
-    page_utils.notify_toggle_debug_values_listeners(collapse);
-});
-
-$("div#debug_drive_values").click(function() {
-    page_utils.notify_toggle_debug_values_listeners(true);
-});
-
-function mjpeg_refresh_page_values() {
-    $('span#mjpeg_quality_val').text(mjpeg_page_controller.get_max_quality());
-}
-
-function mjpeg_caret_up() {
-    mjpeg_page_controller.increase_quality();
-    mjpeg_refresh_page_values();
-}
-
-function mjpeg_caret_down() {
-    mjpeg_page_controller.decrease_quality();
-    mjpeg_refresh_page_values();
-}
 function start_all_handlers() {
     navigator_start_all();
     teleop_start_all();
     mjpeg_start_all();
-    h264_start_all();
 }
+
 function stop_all_handlers() {
     navigator_stop_all();
     teleop_stop_all();
     mjpeg_stop_all();
-    h264_stop_all();
 }
 
 // Set the name of the hidden property and the change event for visibility

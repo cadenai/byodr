@@ -368,11 +368,11 @@ page_utils.add_toggle_debug_values_listener(function(collapse) {
     if (collapse) {
         log_controller.in_debug = 0;
         $("div#debug_drive_values").invisible();
-        $("div#pilot_drive_values").css({'cursor': 'zoom-in'});
+        $("div#pilot_drive_values").removeClass('expanded');
     } else {
         log_controller.in_debug = 1;
         $("div#debug_drive_values").visible();
-        $("div#pilot_drive_values").css({'cursor': 'zoom-out'});
+        $("div#pilot_drive_values").addClass('expanded');
     }
 });
 

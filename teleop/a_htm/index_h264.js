@@ -24,6 +24,8 @@ if (page_utils.get_stream_type() == 'h264') {
             if (this.el_canvas == undefined) {
                 this.el_canvas = document.createElement("canvas");
                 this.el_canvas.id = 'h264_front_camera_main_image';
+                this.el_canvas.width = 1280;
+                this.el_canvas.height = 720;
                 el_parent.appendChild(this.el_canvas)
             }
         },
