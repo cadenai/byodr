@@ -22,6 +22,7 @@ if (page_utils.get_stream_type() == 'h264') {
 
         init: function(el_parent) {
             if (this.el_canvas == undefined) {
+                // The live-player must be told the video dimensions with the canvas width and height attributes.
                 this.el_canvas = document.createElement("canvas");
                 this.el_canvas.id = 'h264_camera_main_image';
                 this.el_canvas.width = 640;
