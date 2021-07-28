@@ -22,6 +22,7 @@ services:
       dockerfile: vehicles/carla09/Dockerfile
     image: centipede2donald/byodr-ce:carla-099
     restart: 'no'
+    network_mode: host
     volumes:
       - ./common:/common
       - ./vehicles/carla09:/app

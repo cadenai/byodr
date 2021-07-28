@@ -45,7 +45,7 @@ class CarlaHandler(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         _remote = parse_option('host.location', str, 'localhost', _errors, **kwargs)
-        _img_wh = parse_option('camera.image.shape', str, errors=_errors, **kwargs)
+        _img_wh = parse_option('camera.image.input.shape', str, errors=_errors, **kwargs)
         carla_host, carla_port = _remote, 2000
         if ':' in carla_host:
             host, port = carla_host.split(':')

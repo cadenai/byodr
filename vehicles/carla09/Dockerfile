@@ -13,6 +13,8 @@ RUN python -m easy_install --no-deps /PythonAPI/carla/dist/carla-0.9.9-py2.7-lin
 
 RUN pip install geographiclib
 
+RUN pip install "tornado==4.5.3"
+
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
 CMD ["python", "app.py"]
