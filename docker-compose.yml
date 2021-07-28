@@ -47,6 +47,7 @@ services:
     container_name: byodr_httpd
     restart: always
     network_mode: host
+    command: ["/usr/sbin/haproxy", "-f", "/config/haproxy.conf"]
     stop_signal: SIGKILL
     depends_on:
       - "teleop"
