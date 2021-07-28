@@ -176,6 +176,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
     _display_resolutions = collections.OrderedDict()
     _display_resolutions['CGA'] = (320, 200)
     _display_resolutions['QVGA'] = (320, 240)
+    _display_resolutions['WQVGA'] = (400, 240)
     _display_resolutions['HVGA'] = (480, 320)
     _display_resolutions['VGA'] = (640, 480)
     _display_resolutions['SVGA'] = (800, 600)
@@ -204,7 +205,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
             request = json.loads(message)
             quality = int(request.get('quality', 90))
             camera = request.get('camera', 'front').strip().lower()
-            display = request.get('display', 'HVGA').strip().upper()
+            display = request.get('display', 'WQVGA').strip().upper()
             img = self._capture_front() if camera == 'front' else self._capture_rear()
             if img is None:
                 # Always send something to the client is able to resume polling.

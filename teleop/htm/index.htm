@@ -47,7 +47,7 @@ div.speed_value {
 div.debug_values {
   color: white;
   font-family: "Lucida Console";
-  font-size: 10px;
+  font-size: 11px;
 }
 div.debug_values > p {
   margin-block-start: 0;
@@ -58,7 +58,7 @@ div.debug_values > p {
 #debug_values_table {
   color: white;
   font-family: "Lucida Console";
-  font-size: 10px;
+  font-size: 11px;
   line-height: 0.8;
   text-indent: 5;
 }
@@ -88,10 +88,13 @@ div#mjpeg_stream_controls > img {
 }
 
 img.preview_img {
-    width: 80px;
-    height: 45px;
+    width: 90px;
+    height: 50px;
     border-radius: 3px;
     border: 1px solid grey;
+}
+img.preview_img.active {
+    border: 1px solid cyan;
 }
 
 div#navigation_route_container > p {
@@ -134,20 +137,21 @@ div#navigation_route_container > p {
                    onclick="page_utils.set_stream_type('mjpeg'); location.reload();">mjpeg</a>
             </div>
             <div id="mjpeg_stream_controls"
-                 style="float: left; padding: 37px 0 0 20px; font-family: 'Lucida Console'; font-size: 15px;">
+                 style="float: left; padding: 38px 0 0 10px; font-family: 'Lucida Console'; font-size: 15px;">
                 <span id="mjpeg_quality_val">0</span>
                 <img id="caret_down" src='caret.png?v=0.45.0'
-                     style="margin-left: 3px;"
                      title="Decrease motion jpeg quality"
-                     onclick="mjpeg_caret_down();"/>
+                     onclick="mjpeg_page_controller.caret_down();"/>
                 <img id="caret_up" src='caret.png?v=0.45.0'
                      style="transform: rotate(180deg);"
                      title="Increase motion jpeg quality"
-                     onclick="mjpeg_caret_up();"/>
+                     onclick="mjpeg_page_controller.caret_up();"/>
             </div>
             <div id="preview_container"
-                 style="float: left; margin: 15px 0 5px 5px;"
-                 title="Toggle the rear camera display">
+                 style="float: left; margin: 5px 0 5px 5px;"
+                 title="Show this camera on the main display">
+                <img id="mjpeg_front_camera_preview_image" class="preview_img active">
+                <img id="mjpeg_rear_camera_preview_image" class="preview_img" style="margin-left: 3px;">
             </div>
             <div id="dashboard" style="float: left; margin: 0 0 0 20%;">
                 <span id="autopilot_status" style="display: inline-block; width: 45px;"></span>
@@ -174,7 +178,7 @@ div#navigation_route_container > p {
             </div>
             <div id="navigation_image_container"
                  title="Start or pause the route"
-                 style="float: right; visibility: hidden; cursor: pointer; margin: 15px 0 5px 5px;">
+                 style="float: right; visibility: hidden; cursor: pointer; margin: 5px 0 5px 5px;">
                 <img id="navigation_image" class="preview_img"/>
             </div>
             <div id="navigation_route_container"
@@ -192,7 +196,7 @@ div#navigation_route_container > p {
                 <p><span id="navigation_point_name"></span></p>
             </div>
         </div>
-        <div id="viewport_container" style="width: calc(90vw - 0px);"></div>
+        <div id="viewport_container" style="width: calc(90vw - 0px); height: calc(90vh - 0px);"></div>
     </div>
     <div style="float: right;">
         <div id="debug_drive_values"
@@ -201,6 +205,8 @@ div#navigation_route_container > p {
              onclick="page_utils.notify_toggle_debug_values_listeners(true);"
              title="Toggle debug values">
             <table id="debug_values_table">
+                <tr><td>mjp</td><td><span id="front_camera_framerate">0</span>&nbsp;<span id="rear_camera_framerate">0</span></td></tr>
+                <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
                 <tr><td>ips</td><td><span id="inference_fps">0</span></td></tr>
                 <tr><td>mu</td><td><span id="inference_surprise">0</span></td></tr>
                 <tr><td>cri</td><td><span id="inference_critic">0</span></td></tr>
@@ -259,7 +265,7 @@ $(function () {
         $('a#video_stream_mjpeg').addClass('inactive');
         $('a#video_stream_h264').addClass('active');
     }
-    mjpeg_refresh_page_values();
+    mjpeg_page_controller.refresh_page_values();
     document.addEventListener(visibilityChange, handleVisibilityChange, false);
     window.addEventListener('focus', start_all_handlers);
     window.addEventListener('blur', stop_all_handlers);

@@ -8,10 +8,23 @@ var teleop_screen = {
     c_msg_connection_lost: "Connection lost - please wait or refresh the page.",
     c_msg_controller_err: "Controller not detected - please press a button on the device.",
     c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
+    active_camera: 'front',
+    camera_activation_listeners: [],
     selectable_cameras: ['none', 'front', 'rear'],
     selected_camera: 'none',
     camera_selection_listeners: [],
     camera_cycle_timer: null,
+
+    add_camera_activation_listener: function(cb) {
+        this.camera_activation_listeners.push(cb);
+    },
+
+    activate_camera: function(name) {
+        this.active_camera = name;
+        this.camera_activation_listeners.forEach(function(cb) {
+            cb(name);
+        });
+    },
 
     add_camera_selection_listener: function(cb) {
         this.camera_selection_listeners.push(cb);
