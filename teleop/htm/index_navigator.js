@@ -84,7 +84,7 @@ class NavigatorController {
         this.el_point.text('');
     }
     schedule_navigation_image_update() {
-        var image_src = this.backend_active? 'icon_pause.png?v=0.45.0' : 'icon_play.png?v=0.45.0';
+        var image_src = this.backend_active? 'icon_pause.png?v=0.50.0' : 'icon_play.png?v=0.50.0';
         if (this.backend_active && !this.in_mouse_over) {
             const image_id = this.matched_image_id;
             const route = this.selected_route;

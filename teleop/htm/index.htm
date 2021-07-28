@@ -27,8 +27,8 @@ body {
   font-family: Verdana;
   font-size; 13px;
   border: 1px solid #ccc;
-  margin-top: 16px;
-  margin-bottom: 16px;
+  margin-top: 10px;
+  margin-bottom: 10px;
   padding: 10px;
 }
 
@@ -105,14 +105,16 @@ div#navigation_route_container > p {
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
-    <script src="jmuxer/jmuxer-21.07.min.js"></script>
-    <script src="performance-polyfill.js?v=0.45.0"></script>
-	<script src="http-live-player.js?v=0.45.0"></script>
-	<script src="index_utils.js?v=0.45.0"></script>
-	<script src="index_gamepad.js?v=0.47.4"></script>
-	<script src="index_navigator.js?v=0.48.0"></script>
-	<script src="index_teleop.js?v=0.48.0"></script>
-	<script src="index_mjpeg.js?v=0.45.0"></script>
+    <!-- <script src="jmuxer/jmuxer-21.07.min.js"></script>-->
+    <script src="live-player/http-live-player.js?v=0.50.0"></script>
+    <script src="performance-polyfill.js?v=0.50.0"></script>
+	<script src="http-live-player.js?v=0.50.0"></script>
+	<script src="index_utils.js?v=0.50.0"></script>
+	<script src="index_gamepad.js?v=0.50.0"></script>
+	<script src="index_navigator.js?v=0.50.0"></script>
+	<script src="index_teleop.js?v=0.50.0"></script>
+	<script src="index_mjpeg.js?v=0.50.0"></script>
+	<script src="index_video_hlp.js?v=0.50.0"></script>
 </head>
 <body>
 <div id="main_container">
@@ -122,9 +124,9 @@ div#navigation_route_container > p {
             <div id="home_menu"
                  style="float: left;"
                  title="Settings">
-                <a href="/user_options.htm?v=0.45.0">
+                <a href="/user_options.htm?v=0.50.0">
                     <img id="home_menu_icon"
-                         src='index-menu.png?v=0.45.0'
+                         src='index-menu.png?v=0.50.0'
                          style="margin: 10px 0 0 0; width: 50px; height: 50px;"/>
                 </a>
             </div>
@@ -139,10 +141,10 @@ div#navigation_route_container > p {
             <div id="mjpeg_stream_controls"
                  style="float: left; padding: 38px 0 0 10px; font-family: 'Lucida Console'; font-size: 15px;">
                 <span id="mjpeg_quality_val">0</span>
-                <img id="caret_down" src='caret.png?v=0.45.0'
+                <img id="caret_down" src='caret.png?v=0.50.0'
                      title="Decrease motion jpeg quality"
                      onclick="mjpeg_page_controller.caret_down();"/>
-                <img id="caret_up" src='caret.png?v=0.45.0'
+                <img id="caret_up" src='caret.png?v=0.50.0'
                      style="transform: rotate(180deg);"
                      title="Increase motion jpeg quality"
                      onclick="mjpeg_page_controller.caret_up();"/>
@@ -227,12 +229,14 @@ function start_all_handlers() {
     navigator_start_all();
     teleop_start_all();
     mjpeg_start_all();
+    h264_start_all();
 }
 
 function stop_all_handlers() {
     navigator_stop_all();
     teleop_stop_all();
     mjpeg_stop_all();
+    h264_stop_all();
 }
 
 // Set the name of the hidden property and the change event for visibility

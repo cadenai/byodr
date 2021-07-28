@@ -205,7 +205,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
             request = json.loads(message)
             quality = int(request.get('quality', 90))
             camera = request.get('camera', 'front').strip().lower()
-            display = request.get('display', 'WQVGA').strip().upper()
+            display = request.get('display', '_original_').strip().upper()
             img = self._capture_front() if camera == 'front' else self._capture_rear()
             if img is None:
                 # Always send something to the client is able to resume polling.

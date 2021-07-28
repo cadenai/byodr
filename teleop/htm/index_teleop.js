@@ -89,23 +89,30 @@ var teleop_screen = {
         c_msg_connection_lost = teleop_screen.c_msg_connection_lost;
         c_msg_controller_err = teleop_screen.c_msg_controller_err;
         c_msg_teleop_view_only = teleop_screen.c_msg_teleop_view_only;
+        var show_message = false;
         var message_box = $('div#message_box');
+        var viewport_container = $('div#viewport_container');
         if (!is_connection_ok) {
             message_box.text(c_msg_connection_lost);
             message_box.removeClass();
             message_box.addClass('message error_message');
-            message_box.show();
+            show_message = true;
         } else if (controller_status == 0) {
             message_box.text(c_msg_controller_err);
             message_box.removeClass();
             message_box.addClass('message warning_message');
-            message_box.show();
+            show_message = true;
         } else if (controller_status == 2) {
             message_box.text(c_msg_teleop_view_only);
             message_box.removeClass();
             message_box.addClass('message warning_message');
+            show_message = true;
+        }
+        if (show_message) {
+            viewport_container.height('calc(82vh - 0px)');
             message_box.show();
         } else {
+            viewport_container.height('calc(90vh - 0px)');
             message_box.hide();
         }
         //
@@ -116,7 +123,7 @@ var teleop_screen = {
         }
         //
         if (command.button_left) {
-            setTimeout(function() {$('div#viewport_container').fadeOut(100).fadeIn(100);}, 0);
+            setTimeout(function() {viewport_container.fadeOut(100).fadeIn(100);}, 0);
         }
     }
 }
@@ -326,16 +333,16 @@ log_controller.start_socket = function() {
                 view.command_turn = command.turn;
                 switch(command.turn) {
                     case "intersection.left":
-                        el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.45.0');
+                        el_turn_arrow.attr('src', 'im_arrow_left.png?v=0.50.0');
                         break;
                     case "intersection.right":
-                        el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.45.0');
+                        el_turn_arrow.attr('src', 'im_arrow_right.png?v=0.50.0');
                         break;
                     case "intersection.ahead":
-                        el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.45.0');
+                        el_turn_arrow.attr('src', 'im_arrow_up.png?v=0.50.0');
                         break;
                     default:
-                        el_turn_arrow.attr('src', 'im_arrow_none.png?v=0.45.0');
+                        el_turn_arrow.attr('src', 'im_arrow_none.png?v=0.50.0');
                         break;
                 }
             }
@@ -346,11 +353,11 @@ log_controller.start_socket = function() {
             if (view.command_ctl != str_command_ctl) {
                 view.command_ctl = str_command_ctl;
                 if (can_continue && is_on_autopilot) {
-                    el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.45.0');
+                    el_steering_wheel.attr('src', 'im_wheel_blue.png?v=0.50.0');
                 } else if (can_continue) {
-                    el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.45.0');
+                    el_steering_wheel.attr('src', 'im_wheel_black.png?v=0.50.0');
                 } else {
-                    el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.45.0');
+                    el_steering_wheel.attr('src', 'im_wheel_red.png?v=0.50.0');
                 }
                 if (is_on_autopilot) {
                     el_alpha_speed_label.text('MAX');

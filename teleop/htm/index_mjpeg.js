@@ -3,7 +3,6 @@ class MJPEGFrameController {
         this.actual_fps = 0;
         this.target_fps = 1;
         this.max_jpeg_quality = 50;
-        this.display_resolution = 'WQVGA';
         this.jpeg_quality = 20;
         this.min_jpeg_quality = 25;
         this.request_start = performance.now();
@@ -96,8 +95,8 @@ class CameraController {
         if (socket != undefined && socket.readyState == 1) {
             socket.send(JSON.stringify({
                 camera: _instance.camera_position,
-                quality: _instance.frame_controller.jpeg_quality,
-                display: _instance.frame_controller.display_resolution
+                quality: _instance.frame_controller.jpeg_quality
+                // display: _instance.frame_controller.display_resolution
             }));
         }
     }
