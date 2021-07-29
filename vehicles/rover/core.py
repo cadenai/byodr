@@ -27,6 +27,8 @@ class ConfigurableImageGstSource(Configurable):
         self._name = name
         self._image_publisher = image_publisher
         self._sink = None
+        self._shape = None
+        self._ptz = None
 
     def _close(self):
         if self._sink is not None:
@@ -36,6 +38,12 @@ class ConfigurableImageGstSource(Configurable):
 
     def _publish(self, image):
         self._image_publisher.publish(image)
+
+    def get_shape(self):
+        return self._shape
+
+    def get_ptz(self):
+        return self._ptz
 
     def check(self):
         with self._lock:
@@ -48,15 +56,19 @@ class ConfigurableImageGstSource(Configurable):
     def internal_start(self, **kwargs):
         self._close()
         _errors = []
+        _shape = parse_option(self._name + '.camera.output.shape', str, errors=_errors, **kwargs)
+        _ptz = parse_option(self._name + '.camera.ptz.enabled', int, errors=_errors, **kwargs)
         config = {
             'name': self._name,
             'uri': (parse_option(self._name + '.camera.uri', str, errors=_errors, **kwargs)),
             'ip': (parse_option(self._name + '.camera.ip', str, errors=_errors, **kwargs)),
             'user': (parse_option(self._name + '.camera.user', str, errors=_errors, **kwargs)),
             'password': (parse_option(self._name + '.camera.password', str, errors=_errors, **kwargs)),
-            'shape': (parse_option(self._name + '.camera.output.shape', str, errors=_errors, **kwargs)),
+            'shape': _shape,
             'framerate': (parse_option(self._name + '.camera.decode.rate', int, errors=_errors, **kwargs))
         }
+        self._shape = _shape
+        self._ptz = _ptz
         self._sink = create_rtsp_image_source(**config)
         self._sink.add_listener(self._publish)
         return _errors

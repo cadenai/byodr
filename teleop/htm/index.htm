@@ -39,6 +39,10 @@ body {
   font-family: Verdana;
 }
 
+#viewport_container.selected {
+    border: 1px solid cyan;
+}
+
 div.speed_value {
   display: inline-block;
   font-size: 8px;
@@ -225,6 +229,13 @@ div#navigation_route_container > p {
     </div>
 </div>
 <script type="text/javascript">
+teleop_screen.add_camera_selection_listener(function(is_selected) {
+    $("div#viewport_container").removeClass('selected');
+    if (is_selected) {
+        $("div#viewport_container").addClass('selected');
+    }
+});
+
 function start_all_handlers() {
     navigator_start_all();
     teleop_start_all();

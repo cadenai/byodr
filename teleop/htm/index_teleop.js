@@ -10,8 +10,7 @@ var teleop_screen = {
     c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
     active_camera: 'front',
     camera_activation_listeners: [],
-    selectable_cameras: ['none', 'front', 'rear'],
-    selected_camera: 'none',
+    selected_camera: null,
     camera_selection_listeners: [],
     camera_cycle_timer: null,
 
@@ -21,66 +20,32 @@ var teleop_screen = {
 
     activate_camera: function(name) {
         this.active_camera = name;
-        this.camera_activation_listeners.forEach(function(cb) {
-            cb(name);
-        });
+        this.camera_activation_listeners.forEach(function(cb) {cb(name);});
     },
 
     add_camera_selection_listener: function(cb) {
         this.camera_selection_listeners.push(cb);
     },
 
-    notify_camera_selection_listeners: function(current) {
-        this.camera_selection_listeners.forEach(function(cb) {
-            cb(current);
-        });
-    },
-
-    is_camera_selected: function(name) {
-        return this.selected_camera == name;
-    },
-
-    on_hide_rear_camera: function() {
-        if (this.selectable_cameras.indexOf('rear') != -1) {
-            this.selectable_cameras.pop();
-        }
-        if (this.is_camera_selected('rear')) {
-            this.select_camera('none');
-        }
-    },
-
-    on_show_rear_camera: function() {
-        if (this.selectable_cameras.indexOf('rear') == -1) {
-            this.selectable_cameras.push('rear');
-        }
-    },
-
     select_camera: function(name) {
+        var is_selected = name == this.active_camera;
         this.selected_camera = name;
-        this.notify_camera_selection_listeners(this.selected_camera);
+        this.camera_selection_listeners.forEach(function(cb) {cb(is_selected);});
+    },
+
+    cycle_camera_selection: function(direction) {
+        if (this.selected_camera == this.active_camera) {
+            this.select_camera(null);
+        } else {
+            this.select_camera(this.active_camera);
+        }
+        this.camera_cycle_timer = null;
     },
 
     request_camera_cycle: function(direction) {
         if (this.camera_cycle_timer == undefined) {
-            this.camera_cycle_timer = setTimeout(function() {teleop_screen.cycle_camera_selection(direction);}, 250);
+            this.camera_cycle_timer = setTimeout(function() {teleop_screen.cycle_camera_selection();}, 250);
         }
-    },
-
-    cycle_camera_selection: function(direction) {
-        if (direction == 'clockwise') {
-            idx = this.selectable_cameras.indexOf(this.selected_camera) + 1;
-            if (idx >= this.selectable_cameras.length) {
-                idx = 0;
-            }
-            this.select_camera(this.selectable_cameras[idx]);
-        } else {
-            idx = this.selectable_cameras.indexOf(this.selected_camera) - 1;
-            if (idx < 0) {
-                idx = this.selectable_cameras.length - 1;
-            }
-            this.select_camera(this.selectable_cameras[idx]);
-        }
-        this.camera_cycle_timer = null;
     },
 
     update: function(command) {
@@ -117,9 +82,9 @@ var teleop_screen = {
         }
         //
         if (command.arrow_left) {
-            this.request_camera_cycle('counter_clockwise');
+            this.request_camera_cycle();
         } else if (command.arrow_right) {
-            this.request_camera_cycle('clockwise');
+            this.request_camera_cycle();
         }
         //
         if (command.button_left) {

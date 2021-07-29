@@ -67,6 +67,9 @@ class CarlaRunner(Configurable):
         self._publisher = image_publisher
         self._vehicle = CarlaHandler((lambda img, route: image_publisher.publish(img, route=route)))
 
+    def get_image_shape(self):
+        return self._vehicle.get_image_shape()
+
     def get_process_frequency(self):
         with self._lock:
             return self._process_frequency
@@ -128,9 +131,15 @@ class CarlaApplication(Application):
         self.logger.info(cfg)
         return cfg
 
-    @staticmethod
-    def _capabilities():
-        return {'rear_camera_enabled': 1}
+    def _capabilities(self):
+        # The carla handler uses the same shape dimension for both image sensors.
+        height, width = self._runner.get_image_shape()[:2]
+        return {
+            'video': {
+                'front': {'height': height, 'width': width, 'ptz': 0},
+                'rear': {'height': height, 'width': width, 'ptz': 0}
+            }
+        }
 
     def setup(self):
         if self.active():

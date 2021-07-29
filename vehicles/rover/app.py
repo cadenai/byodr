@@ -69,9 +69,6 @@ class RoverHandler(Configurable):
     def get_patience_micro(self):
         return self._patience_micro
 
-    def is_rear_camera_enabled(self):
-        return self._gst_sources and self._gst_sources[-1].is_enabled()
-
     def is_reconfigured(self, **kwargs):
         return True
 
@@ -99,6 +96,13 @@ class RoverHandler(Configurable):
             item.restart(**kwargs)
             errors.extend(item.get_errors())
         return errors
+
+    def get_video_capabilities(self):
+        front, rear = self._gst_sources
+        return {
+            'front': {'height': front.get_shape()[0], 'width': front.get_shape()[1], 'ptz': front.get_ptz()},
+            'rear': {'height': rear.get_shape()[0], 'width': rear.get_shape()[1], 'ptz': rear.get_ptz()}
+        }
 
     def _cycle_ptz_cameras(self, c_pilot, c_teleop):
         # The front camera ptz function is enabled for teleop direct driving only.
@@ -151,9 +155,8 @@ class RoverApplication(Application):
         self.logger.info(cfg)
         return cfg
 
-    @staticmethod
-    def _capabilities():
-        return {'rear_camera_enabled': 1}
+    def _capabilities(self):
+        return {'video': self._handler.get_video_capabilities()}
 
     def setup(self):
         if self.active():
