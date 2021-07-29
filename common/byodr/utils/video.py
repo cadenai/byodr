@@ -1,31 +1,30 @@
 from __future__ import absolute_import
 
-import json
+import collections
 import logging
-import threading
 import time
-import traceback
 
 import gi
-from tornado import websocket
+import numpy as np
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 
+Gst.init(None)
+
 logger = logging.getLogger(__name__)
 
 
-class GstRawSource(object):
-    def __init__(self, name='raw', boot_time_seconds=20, fn_callback=None, command="videotestsrc ! decodebin ! videoconvert"):
-        self.name = name
-        self.boot_time_seconds = boot_time_seconds
-        self.fn_callback = fn_callback
-        Gst.init(None)
+class RawGstSource(object):
+    def __init__(self, name='app', boot_time_seconds=20, command="videotestsrc ! decodebin ! videoconvert"):
         if 'sink' in command:
             raise AssertionError("Command cannot contain a sink yet, must be added here.")
+        self.name = name
+        self.boot_time_seconds = boot_time_seconds
         self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
+        self._listeners = collections.deque()
+        self._sample_time = None
         self.closed = True
-        self._callback_time = None
         self.video_pipe = None
 
     def _setup(self):
@@ -42,30 +41,38 @@ class GstRawSource(object):
         logger.error(msg)
         self.close()
 
+    def _sample(self, sink):
+        buffer = sink.emit('pull-sample').get_buffer()
+        array = self.convert_buffer(buffer.extract_dup(0, buffer.get_size()))
+        for listen in self._listeners:
+            listen(array)
+        self._sample_time = time.time()
+        return Gst.FlowReturn.OK
+
+    def convert_buffer(self, buffer):
+        return buffer
+
+    def add_listener(self, listener):
+        self._listeners.append(listener)
+
+    def remove_listener(self, listener):
+        self._listeners.remove(listener)
+
     def open(self):
         self._setup()
         self.video_pipe.set_state(Gst.State.PLAYING)
         video_sink = self.video_pipe.get_by_name('sink')
-        video_sink.connect('new-sample', self._callback)
+        video_sink.connect('new-sample', self._sample)
         bus = self.video_pipe.get_bus()
         bus.add_signal_watch()
         bus.connect('message::eos', self._eos)
         bus.connect('message::error', self._error)
         self.closed = False
-        self._callback_time = time.time() + self.boot_time_seconds
+        self._sample_time = time.time() + self.boot_time_seconds
         logger.info("Source {} opened.".format(self.name))
 
-    def _callback(self, sink):
-        sample = sink.emit('pull-sample')
-        buf = sample.get_buffer()
-        # caps = sample.get_caps()
-        if self.fn_callback is not None:
-            self.fn_callback(buf)
-        self._callback_time = time.time()
-        return Gst.FlowReturn.OK
-
     def is_healthy(self, patience):
-        return self._callback_time and time.time() - self._callback_time < patience
+        return self._sample_time and time.time() - self._sample_time < patience
 
     def is_closed(self):
         return self.closed
@@ -86,70 +93,50 @@ class GstRawSource(object):
         logger.info("Source {} closed.".format(self.name))
 
 
-class HttpLivePlayerVideoSocket(websocket.WebSocketHandler):
-    def __init__(self, application, request, **kwargs):
-        super(HttpLivePlayerVideoSocket, self).__init__(application, request, **kwargs)
-        self._lock = threading.Lock()
-        self._streaming = False
+class ImageGstSource(RawGstSource):
+    def __init__(self, name, shape, command):
+        super(ImageGstSource, self).__init__(name=name, command=command)
+        self._shape = shape
 
-    # noinspection PyAttributeOutsideInit
-    def initialize(self, **kwargs):
-        self._video = kwargs.get('video_source')
-
-    def _client(self, _bytes):
-        with self._lock:
-            if self._streaming:
-                self.write_message(_bytes, binary=True)
-
-    # noinspection PyUnusedLocal
-    @staticmethod
-    def check_origin(origin):
-        return True
-
-    def data_received(self, chunk):
-        pass
-
-    # noinspection PyUnusedLocal
-    def open(self, *args, **kwargs):
-        self._video.add_listener(self._client)
-        self.write_message(json.dumps(dict(action='init', width=self._video.get_width(), height=self._video.get_height())))
-
-    def on_close(self):
-        self._video.remove_listener(self._client)
-
-    def on_message(self, message):
-        try:
-            with self._lock:
-                self._streaming = 'REQUESTSTREAM' in message
-                logger.info("On message - streaming = {}.".format(self._streaming))
-        except Exception as e:
-            logger.error("Stream socket@on_message: {} {}".format(e, traceback.format_exc(e)))
-            logger.error("Input message:---\n{}\n---".format(message))
+    def convert_buffer(self, buffer):
+        return np.fromstring(buffer, dtype=np.uint8).reshape(self._shape)
 
 
-class JMuxerVideoStreamSocket(websocket.WebSocketHandler):
-    # noinspection PyAttributeOutsideInit
-    def initialize(self, **kwargs):
-        self._video = kwargs.get('video_source')
+class VideoGstSource(RawGstSource):
+    def __init__(self, name, shape, command):
+        super(VideoGstSource, self).__init__(name=name, command=command)
+        self._shape = shape
 
-    def _client(self, _bytes):
-        self.write_message(_bytes, binary=True)
+    def get_width(self):
+        return self._shape[1]
 
-    # noinspection PyUnusedLocal
-    @staticmethod
-    def check_origin(origin):
-        return True
+    def get_height(self):
+        return self._shape[0]
 
-    def data_received(self, chunk):
-        pass
+    def convert_buffer(self, buffer):
+        return buffer
 
-    # noinspection PyUnusedLocal
-    def open(self, *args, **kwargs):
-        self._video.add_listener(self._client)
 
-    def on_close(self):
-        self._video.remove_listener(self._client)
+def create_rtsp_video_stream_source(name, uri, **kwargs):
+    url = uri.format(**kwargs)
+    width, height = [int(x) for x in kwargs['shape'].split('x')]
+    command = "rtspsrc location={url} " \
+              "latency=0 drop-on-latency=true do-retransmission=false ! queue ! " \
+              "rtph264depay ! h264parse ! queue ! video/x-h264,stream-format=\"byte-stream\" ! queue". \
+        format(**dict(url=url))
+    logger.info("Gst rtsp '{}' url = {}.".format(name, url))
+    return VideoGstSource(name, shape=(height, width, 3), command=command)
 
-    @staticmethod
-    def on_message(message):
-        logger.info("Unexpected message '{}' received.".format(message))
+
+def create_rtsp_image_source(name, uri, **kwargs):
+    url = uri.format(**kwargs)
+    width, height = [int(x) for x in kwargs['shape'].split('x')]
+    framerate = kwargs['framerate']
+    command = "rtspsrc location={url} " \
+              "latency=0 drop-on-latency=true do-retransmission=false ! queue ! " \
+              "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
+              "videorate ! video/x-raw,framerate={framerate}/1 ! " \
+              "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
+        format(**dict(url=url, height=height, width=width, framerate=framerate))
+    logger.info("Gst rtsp '{}' url = {} image shape = {} and decode rate = {}.".format(name, url, (width, height), framerate))
+    return ImageGstSource(name, shape=(height, width, 3), command=command)

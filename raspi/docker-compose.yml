@@ -1,4 +1,6 @@
 version: '2'
+volumes:
+  volume_local_config:
 services:
   pigpiod:
     image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0
@@ -11,7 +13,7 @@ services:
   servos:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: pi_gpio.dockerfile
     image: centipede2donald/byodr-ce:pi_servos
     container_name: servos
     privileged: true
@@ -23,4 +25,32 @@ services:
     command: python servos.py
     environment:
       GPIOZERO_PIN_FACTORY: 'pigpio'
+  stream0:
+    build:
+      context: .
+      dockerfile: pi_gstreamer.dockerfile
+    image: centipede2donald/byodr-ce:pi_stream
+    container_name: stream0
+    privileged: true
+    user: root
+    restart: always
+    network_mode: "host"
+    command: ["python3", "-m", "stream.camera", "--port", "9101", "--config", "/config/camera0.ini"]
+    stop_signal: SIGKILL
+    volumes:
+      - volume_local_config:/config:rw
+  stream1:
+    build:
+      context: .
+      dockerfile: pi_gstreamer.dockerfile
+    image: centipede2donald/byodr-ce:pi_stream
+    container_name: stream1
+    privileged: true
+    user: root
+    restart: always
+    network_mode: "host"
+    command: ["python3", "-m", "stream.camera", "--port", "9102", "--config", "/config/camera1.ini"]
+    stop_signal: SIGKILL
+    volumes:
+      - volume_local_config:/config:rw
 

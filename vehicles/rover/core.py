@@ -1,11 +1,10 @@
-import Queue
 import collections
 import logging
 import multiprocessing
 import threading
 import time
 
-import numpy as np
+import Queue
 import requests
 from pymodbus.client.sync import ModbusTcpClient
 from pymodbus.constants import Endian
@@ -14,12 +13,53 @@ from requests.auth import HTTPDigestAuth
 
 from byodr.utils import Configurable
 from byodr.utils.option import parse_option
-from byodr.utils.video import GstRawSource
+from byodr.utils.video import create_rtsp_image_source
 
 logger = logging.getLogger(__name__)
 
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
+
+
+class ConfigurableImageGstSource(Configurable):
+    def __init__(self, name, image_publisher):
+        super(ConfigurableImageGstSource, self).__init__()
+        self._name = name
+        self._image_publisher = image_publisher
+        self._sink = None
+
+    def _close(self):
+        if self._sink is not None:
+            self._sink.close()
+            self._sink.remove_listener(self._publish)
+            del self._sink
+
+    def _publish(self, image):
+        self._image_publisher.publish(image)
+
+    def check(self):
+        with self._lock:
+            if self._sink is not None:
+                self._sink.check()
+
+    def internal_quit(self, restarting=False):
+        self._close()
+
+    def internal_start(self, **kwargs):
+        self._close()
+        _errors = []
+        config = {
+            'name': self._name,
+            'uri': (parse_option(self._name + '.camera.uri', str, errors=_errors, **kwargs)),
+            'ip': (parse_option(self._name + '.camera.ip', str, errors=_errors, **kwargs)),
+            'user': (parse_option(self._name + '.camera.user', str, errors=_errors, **kwargs)),
+            'password': (parse_option(self._name + '.camera.password', str, errors=_errors, **kwargs)),
+            'shape': (parse_option(self._name + '.camera.output.shape', str, errors=_errors, **kwargs)),
+            'framerate': (parse_option(self._name + '.camera.decode.rate', int, errors=_errors, **kwargs))
+        }
+        self._sink = create_rtsp_image_source(**config)
+        self._sink.add_listener(self._publish)
+        return _errors
 
 
 class CameraPtzThread(threading.Thread):
@@ -71,7 +111,7 @@ class CameraPtzThread(threading.Thread):
         elif operation != prev:
             ret = self._run(operation)
             if ret and ret.status_code != 200:
-                logger.warn("Got status {} on operation {}.".format(ret.status_code, operation))
+                logger.warning("Got status {} on operation {}.".format(ret.status_code, operation))
 
     def _run(self, operation):
         ret = None
@@ -123,9 +163,9 @@ class CameraPtzThread(threading.Thread):
 
 
 class PTZCamera(Configurable):
-    def __init__(self, position):
+    def __init__(self, name):
         super(PTZCamera, self).__init__()
-        self._position = position
+        self._name = name
         self._worker = None
 
     def add(self, command):
@@ -141,16 +181,15 @@ class PTZCamera(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        cam_enabled = parse_option(self._position + '.camera.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
-        ptz_enabled = parse_option(self._position + '.camera.ptz.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
-        if cam_enabled and ptz_enabled:
-            _server = parse_option(self._position + '.camera.ip', str, errors=errors, **kwargs)
-            _user = parse_option(self._position + '.camera.user', str, errors=errors, **kwargs)
-            _password = parse_option(self._position + '.camera.password', str, errors=errors, **kwargs)
-            _protocol = parse_option(self._position + '.camera.ptz.protocol', str, errors=errors, **kwargs)
-            _path = parse_option(self._position + '.camera.ptz.path', str, errors=errors, **kwargs)
-            _flip = parse_option(self._position + '.camera.ptz.flip', str, errors=errors, **kwargs)
-            _speed = parse_option(self._position + '.camera.ptz.speed', float, 1.0, errors=errors, **kwargs)
+        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
+        if ptz_enabled:
+            _server = parse_option(self._name + '.camera.ip', str, errors=errors, **kwargs)
+            _user = parse_option(self._name + '.camera.user', str, errors=errors, **kwargs)
+            _password = parse_option(self._name + '.camera.password', str, errors=errors, **kwargs)
+            _protocol = 'http'
+            _path = '/ISAPI/PTZCtrl/channels/1'
+            _flip = 'tilt'
+            _speed = 1.9
             _flipcode = [1, 1]
             if _flip in ('pan', 'tilt', 'both'):
                 _flipcode[0] = -1 if _flip in ('pan', 'both') else 1
@@ -170,65 +209,6 @@ class PTZCamera(Configurable):
         elif self._worker:
             self._worker.quit()
         return errors
-
-
-class GstSource(Configurable):
-    def __init__(self, position, image_publisher):
-        super(GstSource, self).__init__()
-        self._position = position
-        self._image_publisher = image_publisher
-        self._camera_shape = None
-        self._source = None
-        self._enabled = False
-
-    def _publish(self, _b):
-        if self._camera_shape is not None:
-            self._image_publisher.publish(np.fromstring(_b.extract_dup(0, _b.get_size()), dtype=np.uint8).reshape(self._camera_shape))
-
-    def is_enabled(self):
-        return self._enabled
-
-    def check(self):
-        with self._lock:
-            if self._source:
-                self._source.check()
-
-    def internal_quit(self, restarting=False):
-        if self._source:
-            self._source.close()
-
-    def internal_start(self, **kwargs):
-        _errors = []
-        _server = parse_option(self._position + '.camera.ip', str, errors=_errors, **kwargs)
-        _user = parse_option(self._position + '.camera.user', str, errors=_errors, **kwargs)
-        _password = parse_option(self._position + '.camera.password', str, errors=_errors, **kwargs)
-        _decode_rate = parse_option(self._position + '.camera.decode.rate', int, 20, errors=_errors, **kwargs)
-        _rtsp_port = parse_option(self._position + '.camera.rtsp.port', int, 0, errors=_errors, **kwargs)
-        _rtsp_path = parse_option(self._position + '.camera.image.path', str, errors=_errors, **kwargs)
-        _img_wh = parse_option(self._position + '.camera.image.shape', str, errors=_errors, **kwargs)
-        _shape = [int(x) for x in _img_wh.split('x')]
-        _shape = (_shape[1], _shape[0], 3)
-        self._camera_shape = _shape
-        # Do not use our method - already under lock.
-        if self._source:
-            self._source.close()
-        # The enabled property may change between restarts.
-        _enabled = parse_option(self._position + '.camera.enabled', (lambda v: bool(int(v))), False, _errors, **kwargs)
-        self._enabled = _enabled
-        if _enabled and len(_errors) == 0:
-            _rtsp_url = 'rtsp://{user}:{password}@{ip}:{port}{path}'.format(
-                **dict(user=_user, password=_password, ip=_server, port=_rtsp_port, path=_rtsp_path)
-            )
-            _url = "rtspsrc " \
-                   "location={url} " \
-                   "latency=0 drop-on-latency=true do-retransmission=false ! queue ! " \
-                   "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-                   "videorate ! video/x-raw,framerate={framerate}/1 ! " \
-                   "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
-                format(**dict(url=_rtsp_url, height=_shape[0], width=_shape[1], framerate=_decode_rate))
-            logger.info("Camera stream url = {} image shape = {} decode rate = {}.".format(_rtsp_url, self._camera_shape, _decode_rate))
-            self._source = GstRawSource(name=self._position, fn_callback=self._publish, command=_url)
-        return _errors
 
 
 class GpsPollerThread(threading.Thread):

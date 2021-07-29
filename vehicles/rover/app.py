@@ -5,7 +5,7 @@ import os
 import shutil
 
 from ConfigParser import SafeConfigParser
-from core import GpsPollerThread, GstSource, PTZCamera
+from core import GpsPollerThread, PTZCamera, ConfigurableImageGstSource
 
 from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
@@ -90,11 +90,11 @@ class RoverHandler(Configurable):
         if not self._gst_sources:
             front_camera = ImagePublisher(url='ipc:///byodr/camera_0.sock', topic='aav/camera/0')
             rear_camera = ImagePublisher(url='ipc:///byodr/camera_1.sock', topic='aav/camera/1')
-            self._gst_sources.append(GstSource(position='front', image_publisher=front_camera))
-            self._gst_sources.append(GstSource(position='rear', image_publisher=rear_camera))
+            self._gst_sources.append(ConfigurableImageGstSource('front', image_publisher=front_camera))
+            self._gst_sources.append(ConfigurableImageGstSource('rear', image_publisher=rear_camera))
         if not self._ptz_cameras:
-            self._ptz_cameras.append(PTZCamera(position='front'))
-            self._ptz_cameras.append(PTZCamera(position='rear'))
+            self._ptz_cameras.append(PTZCamera('front'))
+            self._ptz_cameras.append(PTZCamera('rear'))
         for item in self._gst_sources + self._ptz_cameras:
             item.restart(**kwargs)
             errors.extend(item.get_errors())
@@ -151,10 +151,9 @@ class RoverApplication(Application):
         self.logger.info(cfg)
         return cfg
 
-    def _capabilities(self):
-        return {
-            'rear_camera_enabled': 1 if self._handler.is_rear_camera_enabled() else 0
-        }
+    @staticmethod
+    def _capabilities():
+        return {'rear_camera_enabled': 1}
 
     def setup(self):
         if self.active():
