@@ -13,12 +13,26 @@ from requests.auth import HTTPDigestAuth
 
 from byodr.utils import Configurable
 from byodr.utils.option import parse_option
-from byodr.utils.video import create_rtsp_image_source
+from byodr.utils.video import create_image_source
 
 logger = logging.getLogger(__name__)
 
 CH_NONE, CH_THROTTLE, CH_STEERING, CH_BOTH = (0, 1, 2, 3)
 CTL_LAST = 0
+
+gst_commands = {
+    'h264/rtsp':
+        "rtspsrc location=rtsp://{user}:{password}@{ip}:{port}{path} latency=0 drop-on-latency=true do-retransmission=false ! "
+        "queue ! rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! videorate ! videoscale ! "
+        "video/x-raw,width={width},height={height},framerate={framerate}/1,format=BGR ! queue ! appsink",
+    'h264/tcp':
+        "tcpclientsrc host={ip} port={port} ! queue ! gdpdepay ! h264parse ! avdec_h264 ! videoconvert ! videorate ! videoscale ! "
+        "video/x-raw,width={width},height={height},framerate={framerate}/1,format=BGR ! queue ! appsink",
+    'h264/udp':
+        "udpsrc port={port} ! queue ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 ! "
+        "rtph264depay ! avdec_h264 ! videoconvert ! videorate ! videoscale ! "
+        "video/x-raw,width={width},height={height},framerate={framerate}/1,format=BGR ! queue ! appsink"
+}
 
 
 class ConfigurableImageGstSource(Configurable):
@@ -56,21 +70,35 @@ class ConfigurableImageGstSource(Configurable):
     def internal_start(self, **kwargs):
         self._close()
         _errors = []
-        _shape = parse_option(self._name + '.camera.output.shape', str, errors=_errors, **kwargs)
-        _ptz = parse_option(self._name + '.camera.ptz.enabled', int, errors=_errors, **kwargs)
-        config = {
-            'name': self._name,
-            'uri': (parse_option(self._name + '.camera.uri', str, errors=_errors, **kwargs)),
-            'ip': (parse_option(self._name + '.camera.ip', str, errors=_errors, **kwargs)),
-            'user': (parse_option(self._name + '.camera.user', str, errors=_errors, **kwargs)),
-            'password': (parse_option(self._name + '.camera.password', str, errors=_errors, **kwargs)),
-            'shape': _shape,
-            'framerate': (parse_option(self._name + '.camera.decode.rate', int, errors=_errors, **kwargs))
-        }
-        self._shape = _shape
-        self._ptz = _ptz
-        self._sink = create_rtsp_image_source(**config)
+        _type = parse_option(self._name + '.camera.type', str, errors=_errors, **kwargs)
+        assert _type in gst_commands.keys(), "Unrecognized camera type '{}'.".format(_type)
+        framerate = (parse_option(self._name + '.camera.framerate', int, errors=_errors, **kwargs))
+        out_width, out_height = [int(x) for x in parse_option(self._name + '.camera.shape', str, errors=_errors, **kwargs).split('x')]
+        if _type == 'h264/rtsp':
+            config = {
+                'ip': (parse_option(self._name + '.camera.ip', str, errors=_errors, **kwargs)),
+                'port': (parse_option(self._name + '.camera.port', int, errors=_errors, **kwargs)),
+                'user': (parse_option(self._name + '.camera.user', str, errors=_errors, **kwargs)),
+                'password': (parse_option(self._name + '.camera.password', str, errors=_errors, **kwargs)),
+                'path': (parse_option(self._name + '.camera.path', str, errors=_errors, **kwargs)),
+                'height': out_height,
+                'width': out_width,
+                'framerate': framerate
+            }
+        else:
+            _type = 'h264/udp'
+            config = {
+                'port': (parse_option(self._name + '.camera.port', int, errors=_errors, **kwargs)),
+                'height': out_height,
+                'width': out_width,
+                'framerate': framerate
+            }
+        self._shape = (out_height, out_width, 3)
+        self._ptz = parse_option(self._name + '.camera.ptz.enabled', int, errors=_errors, **kwargs)
+        _command = gst_commands.get(_type).format(**config)
+        self._sink = create_image_source(self._name, shape=self._shape, command=_command)
         self._sink.add_listener(self._publish)
+        logger.info("Gst '{}' command={}".format(self._name, _command))
         return _errors
 
 
