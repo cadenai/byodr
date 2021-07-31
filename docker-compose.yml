@@ -103,6 +103,7 @@ services:
     restart: always
     command: ["python", "app.py", "--name", "vehicle"]
     privileged: true  # NvMedia device creation for omx decoder.
+    network_mode: host
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
