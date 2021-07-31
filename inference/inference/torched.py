@@ -63,7 +63,7 @@ class TRTDriver(object):
         self._rt_compile = runtime_compilation
         self.model_directories = [user_directory, internal_directory]
         self._lock = multiprocessing.Lock()
-        self._zero_vector = np.zeros(shape=(75,), dtype=np.float32)
+        self._zero_vector = np.zeros(shape=(150,), dtype=np.float32)
         self._sess = None
         self._onnx_file = None
 
