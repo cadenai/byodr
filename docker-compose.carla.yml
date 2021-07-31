@@ -13,6 +13,8 @@ services:
       - ./common:/common
       - ./rosnode:/app
   vehicle:
+    # Need extra cpu resources to run the h264 encoder sockets.
+    cpuset: "0-4"
     build:
       context: .
       dockerfile: vehicles/carla09/Dockerfile
