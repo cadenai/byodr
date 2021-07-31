@@ -8,9 +8,9 @@ var teleop_screen = {
     c_msg_connection_lost: "Connection lost - please wait or refresh the page.",
     c_msg_controller_err: "Controller not detected - please press a button on the device.",
     c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
-    active_camera: 'front',
+    active_camera: 'front',  // The active camera is rendered on the main display.
     camera_activation_listeners: [],
-    selected_camera: null,
+    selected_camera: null,  // Select a camera for ptz control.
     camera_selection_listeners: [],
     camera_cycle_timer: null,
 
@@ -20,6 +20,7 @@ var teleop_screen = {
 
     activate_camera: function(name) {
         this.active_camera = name;
+        this.select_camera(null);
         this.camera_activation_listeners.forEach(function(cb) {cb(name);});
     },
 
@@ -262,7 +263,7 @@ log_controller.start_socket = function() {
             //
             var command = JSON.parse(evt.data);
             view.notify_server_message_listeners(command);
-            el_pilot_steering.text(Math.abs(command.ste).toFixed(3));
+            el_pilot_steering.text(command.ste.toFixed(3));
             el_pilot_throttle.text(command.thr.toFixed(3));
 
             el_navigation_geo_lat.text(command.geo_lat.toFixed(6));

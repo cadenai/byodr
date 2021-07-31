@@ -118,7 +118,7 @@ div#navigation_route_container > p {
 	<script src="index_utils.js?v=0.50.0"></script>
 	<script src="index_gamepad.js?v=0.50.0"></script>
 	<script src="index_navigator.js?v=0.50.0"></script>
-	<script src="index_teleop.js?v=0.50.0"></script>
+	<script src="index_teleop.js?v=0.50.1"></script>
 	<script src="index_mjpeg.js?v=0.50.0"></script>
 	<script src="index_video_hlp.js?v=0.50.0"></script>
 </head>
@@ -181,8 +181,8 @@ div#navigation_route_container > p {
                  style="float: right; margin: 30px 0 1px 50px; cursor: zoom-in;"
                  onclick="page_utils.notify_toggle_debug_values_listeners($('div#debug_drive_values').is_visible());"
                  title="Toggle debug values">
-                <p><span id="pilot_steering">0</span>&nbsp;ste</p>
-                <p><span id="pilot_throttle">0</span>&nbsp;thr</p>
+                <p style="min-width: 50px;"><span id="pilot_steering">0</span>&nbsp;ste</p>
+                <p style="min-width: 50px;"><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
             <div id="navigation_image_container"
                  title="Start or pause the route"
@@ -225,7 +225,8 @@ div#navigation_route_container > p {
                 <tr><td>lon</td><td><span id="navigation_geo_long">0</span></td></tr>
                 <tr><td>bea</td><td><span id="navigation_heading">0</span></td></tr>
                 <tr><td>nd</td><td><span id="navigation_match_image_distance">0</span></td></tr>
-                <tr><td>nc</td><td><span id="navigation_current_command">0</span>&nbsp;<span id="navigation_direction">0</span></td></tr>
+                <tr><td>nc</td><td><span id="navigation_current_command">0</span></td></tr>
+                <tr><td>&nbsp;</td><td><span id="navigation_direction">0</span></td></tr>
             </table>
         </div>
     </div>
