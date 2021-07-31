@@ -614,7 +614,7 @@ class DriverManager(Configurable):
         if r_action in ('halt', 'resume'):
             self._navigator.set_override_request(c_external)
         elif r_action is not None:
-            logger.warn("Illegal override request {}".format(c_external))
+            logger.warning("Illegal override request {}".format(c_external))
 
     def process_navigation(self, c_teleop, c_inference):
         # This runs at the service process frequency.
