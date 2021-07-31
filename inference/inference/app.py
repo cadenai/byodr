@@ -245,6 +245,7 @@ class TFRunner(Configurable):
         self._debug_filter = None
         self._corridor_shift = 0
         self._obstruction_shift = 0
+        self._obstruction_scale = 1
         self._fn_obstacle_norm = None
         self._fn_corridor_norm = None
         self._fn_corridor_penalty = None
@@ -275,6 +276,7 @@ class TFRunner(Configurable):
 
         self._corridor_shift = parse_option('driver.dnn.steer.corridor.shift', float, 0, _errors, **kwargs)
         self._obstruction_shift = parse_option('driver.dnn.obstacle.corridor.shift', float, 0, _errors, **kwargs)
+        self._obstruction_scale = parse_option('driver.dnn.obstacle.corridor.scale', float, 1, _errors, **kwargs)
 
         _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
 
@@ -313,7 +315,7 @@ class TFRunner(Configurable):
                                 )
 
         # Penalties to decrease desired speed.
-        _obstacle_penalty = self._fn_obstacle_norm(brake) + max(0, brake_critic + self._obstruction_shift)
+        _obstacle_penalty = self._fn_obstacle_norm(brake) + max(0, brake_critic + self._obstruction_shift) * self._obstruction_scale
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
 
         _command_index = int(np.argmax(command))
@@ -363,8 +365,9 @@ class InferenceApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        # Ignore the end user config directory. Overrides come last.
-        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(self._user_models, '*.ini')]
+        # Ignore the teleop managed configuration use a location not accessible via the ui. Overrides come last.
+        _override = os.path.join(self._config_dir, 'inference')
+        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(_override, '*.ini')]
         cfg = dict(parser.items('inference'))
         logger.info(cfg)
         return cfg
@@ -461,8 +464,6 @@ def main():
     application.teleop = lambda: teleop.get()
     application.pilot = lambda: pilot.get()
     application.ipc_chatter = lambda: ipc_chatter.get()
-
-    # recompilation = RecompilationThread(application)
 
     threads = [teleop, pilot, ipc_chatter, application.camera, application.ipc_server]
     if quit_event.is_set():
