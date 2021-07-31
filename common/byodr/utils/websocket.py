@@ -30,7 +30,10 @@ class HttpLivePlayerVideoSocket(websocket.WebSocketHandler):
     def _push(self, _bytes):
         with self._lock:
             if self._streaming:
-                self.write_message(_bytes, binary=True)
+                try:
+                    self.write_message(_bytes, binary=True)
+                except websocket.WebSocketClosedError:
+                    pass
 
     def _client(self, _bytes):
         self._io_loop.add_callback(lambda: self._push(_bytes))
@@ -68,7 +71,10 @@ class JMuxerVideoStreamSocket(websocket.WebSocketHandler):
         self._io_loop = kwargs.get('io_loop')
 
     def _push(self, _bytes):
-        self.write_message(_bytes, binary=True)
+        try:
+            self.write_message(_bytes, binary=True)
+        except websocket.WebSocketClosedError:
+            pass
 
     def _client(self, _bytes):
         self._io_loop.add_callback(lambda: self._push(_bytes))

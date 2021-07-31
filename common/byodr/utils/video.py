@@ -16,12 +16,11 @@ logger = logging.getLogger(__name__)
 
 
 class RawGstSource(object):
-    def __init__(self, name='app', boot_time_seconds=20, command="videotestsrc ! decodebin ! videoconvert"):
-        if 'sink' in command:
-            raise AssertionError("Command cannot contain a sink yet, must be added here.")
+    def __init__(self, name='app', boot_time_seconds=20, command="videotestsrc ! decodebin ! videoconvert ! appsink"):
+        assert 'appsink' in command, "Need the appsink present in the gst command."
         self.name = name
         self.boot_time_seconds = boot_time_seconds
-        self.command = command + " ! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true"
+        self.command = command.replace("appsink", "appsink name=sink emit-signals=true sync=false async=false max-buffers=1 drop=true")
         self._listeners = collections.deque()
         self._sample_time = None
         self.closed = True
@@ -93,19 +92,11 @@ class RawGstSource(object):
         logger.info("Source {} closed.".format(self.name))
 
 
-class ImageGstSource(RawGstSource):
-    def __init__(self, name, shape, command):
-        super(ImageGstSource, self).__init__(name=name, command=command)
+class GstStreamSource(RawGstSource):
+    def __init__(self, name, shape, command, fn_convert=(lambda x: x)):
+        super(GstStreamSource, self).__init__(name=name, command=command)
         self._shape = shape
-
-    def convert_buffer(self, buffer):
-        return np.fromstring(buffer, dtype=np.uint8).reshape(self._shape)
-
-
-class VideoGstSource(RawGstSource):
-    def __init__(self, name, shape, command):
-        super(VideoGstSource, self).__init__(name=name, command=command)
-        self._shape = shape
+        self._fn_convert = fn_convert
 
     def get_width(self):
         return self._shape[1]
@@ -114,29 +105,12 @@ class VideoGstSource(RawGstSource):
         return self._shape[0]
 
     def convert_buffer(self, buffer):
-        return buffer
+        return self._fn_convert(buffer)
 
 
-def create_rtsp_video_stream_source(name, uri, **kwargs):
-    url = uri.format(**kwargs)
-    width, height = [int(x) for x in kwargs['shape'].split('x')]
-    command = "rtspsrc location={url} " \
-              "latency=0 drop-on-latency=true do-retransmission=false ! queue ! " \
-              "rtph264depay ! h264parse ! queue ! video/x-h264,stream-format=\"byte-stream\" ! queue". \
-        format(**dict(url=url))
-    logger.info("Gst rtsp '{}' url = {}.".format(name, url))
-    return VideoGstSource(name, shape=(height, width, 3), command=command)
+def create_image_source(name, shape, command):
+    return GstStreamSource(name, shape, command, fn_convert=(lambda buffer: np.fromstring(buffer, dtype=np.uint8).reshape(shape)))
 
 
-def create_rtsp_image_source(name, uri, **kwargs):
-    url = uri.format(**kwargs)
-    width, height = [int(x) for x in kwargs['shape'].split('x')]
-    framerate = kwargs['framerate']
-    command = "rtspsrc location={url} " \
-              "latency=0 drop-on-latency=true do-retransmission=false ! queue ! " \
-              "rtph264depay ! h264parse ! queue ! avdec_h264 ! videoconvert ! " \
-              "videorate ! video/x-raw,framerate={framerate}/1 ! " \
-              "videoscale ! video/x-raw,width={width},height={height},format=BGR ! queue". \
-        format(**dict(url=url, height=height, width=width, framerate=framerate))
-    logger.info("Gst rtsp '{}' url = {} image shape = {} and decode rate = {}.".format(name, url, (width, height), framerate))
-    return ImageGstSource(name, shape=(height, width, 3), command=command)
+def create_video_source(name, shape, command):
+    return GstStreamSource(name, shape, command)
