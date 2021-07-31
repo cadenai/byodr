@@ -99,19 +99,21 @@ class NumpyImageVideoSource(Configurable):
         self._close()
         _errors = []
         input_width, input_height = parse_width_height('camera.image.input.shape', _errors, **kwargs)
+        bitrate = parse_option(self._name + '.video.encoding.bitrate', int, errors=_errors, **kwargs)
         self._stream_width, self._stream_height = parse_width_height(self._name + '.video.output.shape', _errors, **kwargs)
         if len(_errors) == 0:
             _args = dict(input_width=input_width,
                          input_height=input_height,
+                         bitrate=bitrate,
                          stream_width=self._stream_width,
                          stream_height=self._stream_height)
             command = "appsrc name=source emit-signals=True is-live=True " \
                       "caps=video/x-raw,format=BGR,width={input_width},height={input_height} ! " \
                       "videoconvert ! queue ! " \
                       "videoscale ! video/x-raw,width={stream_width},height={stream_height} ! " \
-                      "queue ! x264enc speed-preset=ultrafast tune=zerolatency ! " \
+                      "queue ! x264enc bframes=0 bitrate={bitrate} b-adapt=0 tune=zerolatency key-int-max=60 ! " \
                       "video/x-h264,profile=baseline,stream-format=\"byte-stream\" ! queue ! " \
-                      "appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true".format(**_args)
+                      "appsink name=sink emit-signals=true sync=false async=false max-buffers=1 drop=true".format(**_args)
             pipeline = Gst.parse_launch(command)
             loop = GObject.MainLoop()
             bus = pipeline.get_bus()
@@ -123,7 +125,7 @@ class NumpyImageVideoSource(Configurable):
             src.set_property('format', 'time')
             src.set_property('do-timestamp', True)
             _caps = "video/x-raw,format=BGR,width={input_width},height={input_height},framerate={fps}/1".format(
-                **dict(input_width=input_width, input_height=input_height, fps=30)
+                **dict(input_width=input_width, input_height=input_height, fps=20)
             )
             video_sink = pipeline.get_by_name('sink')
             video_sink.connect('new-sample', self._publish)

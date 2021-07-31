@@ -204,11 +204,12 @@ def main():
     [t.start() for t in threads]
 
     try:
-        front_app = web.Application([(r"/", HttpLivePlayerVideoSocket, dict(video_source=front_stream, io_loop=io_loop))])
+        class_ref = HttpLivePlayerVideoSocket
+        front_app = web.Application([(r"/", class_ref, dict(video_source=front_stream, io_loop=io_loop))])
         front_server = HTTPServer(front_app, xheaders=True)
         front_server.bind(9101)
         front_server.start()
-        rear_app = web.Application([(r"/", HttpLivePlayerVideoSocket, dict(video_source=rear_stream, io_loop=io_loop))])
+        rear_app = web.Application([(r"/", class_ref, dict(video_source=rear_stream, io_loop=io_loop))])
         rear_server = HTTPServer(rear_app, xheaders=True)
         rear_server.bind(9102)
         rear_server.start()
