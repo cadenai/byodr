@@ -53,7 +53,7 @@ var page_utils = {
     get_stream_type: function() {
         var stream_type = window.localStorage.getItem('video.stream.type');
         if (stream_type == null) {
-            return 'mjpeg';
+            return 'h264';
         } else {
             return stream_type;
         }

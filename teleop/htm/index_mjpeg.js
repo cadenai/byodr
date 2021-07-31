@@ -127,7 +127,9 @@ class CameraController {
         if (this.socket != undefined) {
             this.socket.attempt_reconnect = false;
             if (this.socket.readyState < 2) {
-                this.socket.close();
+                try {
+                    this.socket.close();
+                } catch(err) {}
             }
         }
         this.socket = null;

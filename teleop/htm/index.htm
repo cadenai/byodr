@@ -96,9 +96,11 @@ img.preview_img {
     height: 50px;
     border-radius: 3px;
     border: 1px solid grey;
+    cursor: pointer;
 }
 img.preview_img.active {
     border: 1px solid cyan;
+    cursor: auto;
 }
 
 div#navigation_route_container > p {
@@ -109,7 +111,7 @@ div#navigation_route_container > p {
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
-    <!-- <script src="jmuxer/jmuxer-21.07.min.js"></script>-->
+<!--     <script src="jmuxer/jmuxer-21.07.min.js"></script>-->
     <script src="live-player/http-live-player.js?v=0.50.0"></script>
     <script src="performance-polyfill.js?v=0.50.0"></script>
 	<script src="http-live-player.js?v=0.50.0"></script>
@@ -184,7 +186,7 @@ div#navigation_route_container > p {
             </div>
             <div id="navigation_image_container"
                  title="Start or pause the route"
-                 style="float: right; visibility: hidden; cursor: pointer; margin: 5px 0 5px 5px;">
+                 style="float: right; visibility: hidden; margin: 5px 0 5px 5px;">
                 <img id="navigation_image" class="preview_img"/>
             </div>
             <div id="navigation_route_container"
