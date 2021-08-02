@@ -6,6 +6,7 @@ if (page_utils.get_stream_type() == 'h264') {
             this.attempt_reconnect = true;
         }
         onopen(player) {
+            canvas_controller.replace(player.canvas);
             player.playStream();
         }
         onclose(player) {
@@ -23,16 +24,20 @@ if (page_utils.get_stream_type() == 'h264') {
         init: function(el_parent) {
             this.el_parent = el_parent;
         },
-        open: function() {
-            this.el_canvas = document.getElementById(this.el_canvas_id);
+        replace: function(canvas) {
             if (this.el_canvas != undefined) {
                 this.el_canvas.remove();
             }
+            this.el_canvas = canvas;
+            this.el_parent.appendChild(this.el_canvas);
+        },
+        create: function() {
+            canvas = document.getElementById(this.el_canvas_id);
             // The canvas dimensions are set by the player.
-            this.el_canvas = document.createElement("canvas");
-            this.el_canvas.id = this.el_canvas_id;
-            this.el_canvas.style.cssText = 'width: 100% !important; height: 100% !important;';
-            this.el_parent.appendChild(this.el_canvas)
+            canvas = document.createElement("canvas");
+            canvas.id = this.el_canvas_id;
+            canvas.style.cssText = 'width: 100% !important; height: 100% !important;';
+            return canvas;
         }
     }
 
@@ -44,9 +49,8 @@ if (page_utils.get_stream_type() == 'h264') {
             const port = camera_position == 'front' ? 9001 : 9002;
             const ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
             const uri = ws_protocol + document.location.hostname + ':' + port;
-            canvas_controller.open();
             this.socket = new CameraSocketResumer(uri, 100);
-            this.wsavc = new WSAvcPlayer(canvas_controller.el_canvas, "webgl", this.socket);
+            this.wsavc = new WSAvcPlayer(canvas_controller.create(), "webgl", this.socket);
             this.wsavc.connect(uri);
         },
         stop: function() {
