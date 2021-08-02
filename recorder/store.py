@@ -1,3 +1,4 @@
+import gc
 import io
 import logging
 import multiprocessing
@@ -148,10 +149,10 @@ image-shape-hwc: "{image_shape}"
                     archive.writestr('meta-inf/manifest.mf', ZipDataSource.MF_TEMPLATE.format(
                         **dict(num_entries=len(self._data), uuid_node=hex(uuid.getnode()), image_shape=_image_shape_str)
                     ))
-            # Reset anyway.
-            self._running = False
-            self._session = None
-            self._data = None
+                self._running = False
+                self._session = None
+                self._data = None
+                gc.collect()
 
     def create_event(self, event):
         from cv2 import imencode

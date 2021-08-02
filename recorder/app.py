@@ -59,7 +59,7 @@ class ImageEventLog(object):
     Select the closest data to the image by timestamp.
     """
 
-    def __init__(self, buffer_size=int(5e3), window_ms=30):
+    def __init__(self, buffer_size=int(1e4), window_ms=30):
         self._micro = window_ms * 1e3
         self._observed = None
         self._events = collections.deque(maxlen=buffer_size)
