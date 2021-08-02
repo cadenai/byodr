@@ -4430,7 +4430,7 @@ var WSAvcPlayer = new Class({
     this.ws.binaryType = "arraybuffer";
 
     this.ws.onopen = () => {
-      log("Connected to " + url);
+      // console.log("Connected to " + url);
       if (this.ws_callback != undefined) {
         this.ws_callback.onopen(this);
       }
@@ -4498,7 +4498,7 @@ var WSAvcPlayer = new Class({
   },
 
   cmd : function(cmd){
-    log("Incoming request", cmd);
+    console.log("Incoming request", cmd);
 
     if(cmd.action == "init") {
       this.initCanvas(cmd.width, cmd.height);

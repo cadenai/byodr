@@ -15,28 +15,38 @@ if (page_utils.get_stream_type() == 'h264') {
         }
     }
 
-    var camera_controller = {
+    var canvas_controller = {
+        el_parent: null,
+        el_canvas_id: 'h264_camera_main_image',
         el_canvas: null,
+
+        init: function(el_parent) {
+            this.el_parent = el_parent;
+        },
+        open: function() {
+            this.el_canvas = document.getElementById(this.el_canvas_id);
+            if (this.el_canvas != undefined) {
+                this.el_canvas.remove();
+            }
+            // The canvas dimensions are set by the player.
+            this.el_canvas = document.createElement("canvas");
+            this.el_canvas.id = this.el_canvas_id;
+            this.el_canvas.style.cssText = 'width: 100% !important; height: 100% !important;';
+            this.el_parent.appendChild(this.el_canvas)
+        }
+    }
+
+    var camera_controller = {
         wsavc: null,
         socket: null,
 
-        init: function(el_parent) {
-            if (this.el_canvas == undefined) {
-                // The live-player must be told the video dimensions with the canvas width and height attributes.
-                this.el_canvas = document.createElement("canvas");
-                this.el_canvas.id = 'h264_camera_main_image';
-                this.el_canvas.width = 640;
-                this.el_canvas.height = 480;
-                this.el_canvas.style.cssText = 'width: 100% !important; height: 100% !important;';
-                el_parent.appendChild(this.el_canvas)
-            }
-        },
         start: function(camera_position) {
             const port = camera_position == 'front' ? 9001 : 9002;
             const ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
             const uri = ws_protocol + document.location.hostname + ':' + port;
+            canvas_controller.open();
             this.socket = new CameraSocketResumer(uri, 100);
-            this.wsavc = new WSAvcPlayer(this.el_canvas, "webgl", this.socket);
+            this.wsavc = new WSAvcPlayer(canvas_controller.el_canvas, "webgl", this.socket);
             this.wsavc.connect(uri);
         },
         stop: function() {
@@ -57,9 +67,10 @@ if (page_utils.get_stream_type() == 'h264') {
 }
 
 function h264_start_all() {
-    if (page_utils.get_stream_type() == 'h264' && camera_controller != undefined && camera_controller.socket == undefined) {
-        camera_controller.init(document.getElementById('viewport_container'));
-        camera_controller.start(teleop_screen.active_camera);
+    if (page_utils.get_stream_type() == 'h264' && camera_controller != undefined && canvas_controller != undefined
+        && camera_controller.socket == undefined) {
+            canvas_controller.init(document.getElementById('viewport_container'));
+            camera_controller.start(teleop_screen.active_camera);
     }
 }
 

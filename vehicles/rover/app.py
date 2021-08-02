@@ -98,10 +98,11 @@ class RoverHandler(Configurable):
         return errors
 
     def get_video_capabilities(self):
+        # The video dimensions are determined by the websocket services.
         front, rear = self._gst_sources
         return {
-            'front': {'height': front.get_shape()[0], 'width': front.get_shape()[1], 'ptz': front.get_ptz()},
-            'rear': {'height': rear.get_shape()[0], 'width': rear.get_shape()[1], 'ptz': rear.get_ptz()}
+            'front': {'ptz': front.get_ptz()},
+            'rear': {'ptz': rear.get_ptz()}
         }
 
     def _cycle_ptz_cameras(self, c_pilot, c_teleop):

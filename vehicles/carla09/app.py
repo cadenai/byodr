@@ -131,13 +131,13 @@ class CarlaApplication(Application):
         self.logger.info(cfg)
         return cfg
 
-    def _capabilities(self):
-        # The carla handler uses the same shape dimension for both image sensors.
-        height, width = self._runner.get_image_shape()[:2]
+    @staticmethod
+    def _capabilities():
+        # The video dimensions are determined by the websocket services.
         return {
             'video': {
-                'front': {'height': height, 'width': width, 'ptz': 0},
-                'rear': {'height': height, 'width': width, 'ptz': 0}
+                'front': {'ptz': 0},
+                'rear': {'ptz': 0}
             }
         }
 
