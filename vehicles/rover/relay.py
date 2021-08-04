@@ -2,6 +2,7 @@ import argparse
 import glob
 import logging
 import os
+
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application, timestamp
@@ -32,6 +33,7 @@ class StatusReceiverThreadFactory(object):
         self._topic = topic
 
     def create(self, master_uri):
+        # noinspection PyTypeChecker
         return ReceiverThread(url=('{}:5555'.format(master_uri)), topic=b'' + self._topic)
 
 
@@ -65,7 +67,7 @@ class MonitorApplication(Application):
     def _send_config(self, data):
         if self._pi_client is not None and data is not None:
             self._pi_client.call(dict(time=timestamp(),
-                                      method='ras/servo/config',
+                                      method='ras/driver/config',
                                       data=data))
 
     def _send_drive(self, throttle=0., steering=0., reverse_gear=False, wakeup=False):
@@ -99,7 +101,7 @@ class MonitorApplication(Application):
 
     def setup(self):
         if self.active():
-            _hash = hash_dict(**(self._config()))
+            _hash = hash_dict(**self._config())
             if _hash != self._config_hash:
                 self._config_hash = _hash
                 self._reboot()
@@ -113,25 +115,11 @@ class MonitorApplication(Application):
         _config = self._config()
         _process_frequency = parse_option('clock.hz', int, 10, errors, **_config)
         _master_uri = parse_option('ras.master.uri', str, 'none', errors, **_config)
-        servo_steer = dict(pin=parse_option('ras.servo.steering.pin.nr', int, 0, errors, **_config),
-                           min_pw=parse_option('ras.servo.steering.min_pulse_width.ms', float, 0, errors, **_config),
-                           max_pw=parse_option('ras.servo.steering.max_pulse_width.ms', float, 0, errors, **_config),
-                           frame=parse_option('ras.servo.steering.frame_width.ms', float, 0, errors, **_config))
-        servo_motor = dict(pin=parse_option('ras.servo.motor.pin.nr', int, 0, errors, **_config),
-                           min_pw=parse_option('ras.servo.motor.min_pulse_width.ms', float, 0, errors, **_config),
-                           max_pw=parse_option('ras.servo.motor.max_pulse_width.ms', float, 0, errors, **_config),
-                           frame=parse_option('ras.servo.motor.frame_width.ms', float, 0, errors, **_config))
-        conf_steering = dict(scale=parse_option('ras.steering.domain.scale', float, 0, errors, **_config))
-        conf_throttle = dict(reverse=parse_option('ras.throttle.reverse.gear', int, 0, errors, **_config),
-                             forward_shift=parse_option('ras.throttle.domain.forward.shift', float, 0, errors, **_config),
-                             backward_shift=parse_option('ras.throttle.domain.backward.shift', float, 0, errors, **_config),
-                             scale=parse_option('ras.throttle.domain.scale', float, 0, errors, **_config))
+        _steering_offset = parse_option('ras.driver.steering.offset', float, 0.0, errors, **_config)
+        _motor_scale = parse_option('ras.driver.motor.scale', float, 1.0, errors, **_config)
         self.set_hz(_process_frequency)
         self._patience_micro = parse_option('patience.ms', int, 200, errors, **_config) * 1000.
-        self._servo_config = dict(steer_servo=servo_steer,
-                                  motor_servo=servo_motor,
-                                  steering_config=conf_steering,
-                                  throttle_config=conf_throttle)
+        self._servo_config = dict(steering_offset=_steering_offset, motor_scale=_motor_scale)
         self._pi_client = self._client_factory.create(_master_uri)
         self._status = self._status_factory.create(_master_uri)
         self._status.add_listener(self._on_receive)

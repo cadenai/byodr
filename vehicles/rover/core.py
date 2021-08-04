@@ -47,8 +47,11 @@ class ConfigurableImageGstSource(Configurable):
     def _close(self):
         if self._sink is not None:
             self._sink.close()
-            self._sink.remove_listener(self._publish)
-            del self._sink
+            try:
+                self._sink.remove_listener(self._publish)
+            except ValueError:
+                # ValueError: deque.remove(x): x not in deque
+                pass
 
     def _publish(self, image):
         self._image_publisher.publish(image)
