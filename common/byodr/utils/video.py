@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import collections
 import logging
+import threading
 import time
 
 import gi
@@ -22,6 +23,7 @@ class RawGstSource(object):
         self.boot_time_seconds = boot_time_seconds
         self.command = command.replace("appsink", "appsink name=sink emit-signals=true sync=false async=false max-buffers=1 drop=true")
         self._listeners = collections.deque()
+        self._listeners_lock = threading.Lock()
         self._sample_time = None
         self.closed = True
         self.video_pipe = None
@@ -43,8 +45,9 @@ class RawGstSource(object):
     def _sample(self, sink):
         buffer = sink.emit('pull-sample').get_buffer()
         array = self.convert_buffer(buffer.extract_dup(0, buffer.get_size()))
-        for listen in self._listeners:
-            listen(array)
+        with self._listeners_lock:
+            for listen in self._listeners:
+                listen(array)
         self._sample_time = time.time()
         return Gst.FlowReturn.OK
 
@@ -52,10 +55,12 @@ class RawGstSource(object):
         return buffer
 
     def add_listener(self, listener):
-        self._listeners.append(listener)
+        with self._listeners_lock:
+            self._listeners.append(listener)
 
     def remove_listener(self, listener):
-        self._listeners.remove(listener)
+        with self._listeners_lock:
+            self._listeners.remove(listener)
 
     def open(self):
         self._setup()
