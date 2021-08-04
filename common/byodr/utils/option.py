@@ -18,6 +18,7 @@ def _parse(key, fn_type=(lambda x: x), **kwargs):
 
 
 def parse_option(key, fn_type=(lambda x: x), default_value=None, errors=None, **kwargs):
+    errors = [] if errors is None else errors
     try:
         return _parse(key, fn_type=fn_type, **kwargs)
     except PropertyError as pe:
