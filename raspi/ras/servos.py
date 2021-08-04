@@ -4,6 +4,7 @@ import argparse
 import collections
 import logging
 import os
+import threading
 from abc import ABCMeta, abstractmethod
 from configparser import ConfigParser as SafeConfigParser
 
@@ -169,40 +170,61 @@ class ODriveDriver(AbstractDriver):
         super().__init__(relay)
         # Our relay is expected to be wired on the o-drive supply line.
         self._relay.close()
+        # Must not block in our methods to ensure the communication protocol remains timely and responsive.
+        self._drive_lock = threading.Lock()
         self._steering_offset = 0
         self._motor_scale = 1
         self._odrive = None
+        logger.info(kwargs)
 
     def _setup(self):
-        self._odrive = odrive.find_any(timeout=30)
-        assert self._odrive is not None
-        self._odrive.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-        self._odrive.axis1.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-        logger.info("Setup drive - bus voltage is " + str(self._odrive.vbus_voltage) + "V")
+        with self._drive_lock:
+            if self._odrive is None:
+                try:
+                    # Blocks until a TimeoutError which is a RuntimeError that would causes a process restart.
+                    self._odrive = odrive.find_any(timeout=10)  # seconds
+                    self._odrive.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                    self._odrive.axis1.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                    logger.info("Setup drive - bus voltage is " + str(self._odrive.vbus_voltage) + "V")
+                except TimeoutError:
+                    logger.info("Timeout exceeded on o-drive find.")
 
     def relay_ok(self):
-        logger.info("Received relay ok.")
+        pass
 
     def relay_violated(self):
-        logger.info("Received relay violation.")
+        pass
 
     def set_configuration(self, config):
-        if self._odrive is None:
-            self._setup()
         if config is not None:
             logger.info("Received configuration {}.".format(config))
+            threading.Thread(target=self._setup).start()
             self._steering_offset = max(-1, min(1, config.get('steering_offset')))
             self._motor_scale = max(0, config.get('motor_scale'))
 
     def is_configured(self):
-        return self._odrive is not None
+        if self._drive_lock.acquire(blocking=False):
+            try:
+                return self._odrive is not None
+            finally:
+                self._drive_lock.release()
+        return True
 
     def drive(self, steering, throttle):
-        pass
+        if self._drive_lock.acquire(blocking=False):
+            try:
+                pass
+            finally:
+                self._drive_lock.release()
 
     def quit(self):
-        self._odrive.axis0.requested_state = AXIS_STATE_IDLE
-        self._odrive.axis1.requested_state = AXIS_STATE_IDLE
+        if self._drive_lock.acquire(blocking=False):
+            try:
+                if self._odrive is not None:
+                    self._odrive.axis0.requested_state = AXIS_STATE_IDLE
+                    self._odrive.axis1.requested_state = AXIS_STATE_IDLE
+            finally:
+                self._drive_lock.release()
 
 
 class MainApplication(Application):
