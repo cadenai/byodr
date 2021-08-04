@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+
 import argparse
 import asyncio
 import logging
@@ -74,39 +76,38 @@ def create_stream(config_file):
     parser = SafeConfigParser()
     parser.read(config_file)
     kwargs = dict(parser.items('camera'))
-    _errors = []
     name = os.path.basename(os.path.splitext(config_file)[0])
-    _type = parse_option('camera.type', str, errors=_errors, **kwargs)
-    assert _type in gst_commands.keys(), "Unrecognized camera type '{}'.".format(_type)
+    _type = parse_option('camera.type', str, **kwargs)
+    assert _type in list(gst_commands.keys()), "Unrecognized camera type '{}'.".format(_type)
     if _type == 'h264/rtsp':
-        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, errors=_errors, **kwargs).split('x')]
+        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, **kwargs).split('x')]
         config = {
-            'ip': (parse_option('camera.ip', str, errors=_errors, **kwargs)),
-            'port': (parse_option('camera.port', int, errors=_errors, **kwargs)),
-            'user': (parse_option('camera.user', str, errors=_errors, **kwargs)),
-            'password': (parse_option('camera.password', str, errors=_errors, **kwargs)),
-            'path': (parse_option('camera.path', str, errors=_errors, **kwargs))
+            'ip': (parse_option('camera.ip', str, **kwargs)),
+            'port': (parse_option('camera.port', int, **kwargs)),
+            'user': (parse_option('camera.user', str, **kwargs)),
+            'password': (parse_option('camera.password', str, **kwargs)),
+            'path': (parse_option('camera.path', str, **kwargs))
         }
     else:
         _type = 'raw/usb/h264/udp'
-        src_width, src_height = [int(x) for x in parse_option('camera.source.shape', str, errors=_errors, **kwargs).split('x')]
-        udp_width, udp_height = [int(x) for x in parse_option('camera.udp.shape', str, errors=_errors, **kwargs).split('x')]
-        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, errors=_errors, **kwargs).split('x')]
+        src_width, src_height = [int(x) for x in parse_option('camera.source.shape', str, **kwargs).split('x')]
+        udp_width, udp_height = [int(x) for x in parse_option('camera.udp.shape', str, **kwargs).split('x')]
+        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, **kwargs).split('x')]
         config = {
-            'uri': (parse_option('camera.uri', str, errors=_errors, **kwargs)),
+            'uri': (parse_option('camera.uri', str, **kwargs)),
             'src_width': src_width,
             'src_height': src_height,
             'udp_width': udp_width,
             'udp_height': udp_height,
-            'udp_bitrate': (parse_option('camera.udp.bitrate', int, errors=_errors, **kwargs)),
-            'udp_host': (parse_option('camera.udp.host', str, errors=_errors, **kwargs)),
-            'udp_port': (parse_option('camera.udp.port', int, errors=_errors, **kwargs)),
+            'udp_bitrate': (parse_option('camera.udp.bitrate', int, **kwargs)),
+            'udp_host': (parse_option('camera.udp.host', str, **kwargs)),
+            'udp_port': (parse_option('camera.udp.port', int, **kwargs)),
             'out_width': out_width,
             'out_height': out_height,
-            'out_bitrate': (parse_option('camera.output.bitrate', int, errors=_errors, **kwargs))
+            'out_bitrate': (parse_option('camera.output.bitrate', int, **kwargs))
         }
     _command = gst_commands.get(_type).format(**config)
-    _socket_ref = parse_option('camera.output.class', str, errors=_errors, **kwargs)
+    _socket_ref = parse_option('camera.output.class', str, **kwargs)
     logger.info("Socket '{}' ref '{}' gst command={}".format(name, _socket_ref, _command))
     return create_video_source(name, shape=(out_height, out_width, 3), command=_command), _socket_ref
 
