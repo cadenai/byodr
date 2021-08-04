@@ -1,6 +1,6 @@
 # Must be run from directory root so the python common directory is included in the build context.
-# docker build -f docker/pi-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0 .
-# docker buildx build --platform linux/arm64 -f docker/pi-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0 .
+# docker build -f docker/pi-cp27-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0 .
+# docker buildx build --platform linux/arm64 -f docker/pi-cp27-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.14.0 .
 
 FROM raspbian/stretch
 
