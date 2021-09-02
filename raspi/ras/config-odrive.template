@@ -4,4 +4,4 @@ drive.type = odrive
 drive.axes.mount.order = normal
 drive.axis0.mount.direction = reverse
 drive.axis1.mount.direction = forward
-drive.steering.effect = 0.8
+drive.steering.effect = 1.0

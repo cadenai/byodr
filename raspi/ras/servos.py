@@ -181,7 +181,7 @@ class ODriveDriver(AbstractDriver):
         self._drive_lock = threading.Lock()
         self._steering_offset = 0
         self._motor_scale = 1
-        self._steering_effect = max(0., min(1., float(kwargs.get('drive.steering.effect', 0))))
+        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 0)))
         self._axes_ordered = kwargs.get('drive.axes.mount.order') == 'normal'
         self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction') == 'forward' else -1
         self._axis1_multiplier = 1 if kwargs.get('drive.axis1.mount.direction') == 'forward' else -1
@@ -223,7 +223,11 @@ class ODriveDriver(AbstractDriver):
         pass
 
     def relay_violated(self):
-        self.drive(0, 0)
+        # noinspection PyBroadException
+        try:
+            self.drive(0, 0)
+        except Exception as e:
+            logger.warning(e)
 
     def set_configuration(self, config):
         if self.configuration_check(config):
@@ -246,11 +250,11 @@ class ODriveDriver(AbstractDriver):
                 # Scale down throttle for one wheel, the other retains its value.
                 steering = min(1., max(-1., steering + self._steering_offset))
                 throttle = min(1., max(-1., throttle))
-                effect = 1 - abs(steering) * self._steering_effect
+                effect = 1 - min(1., abs(steering) * self._steering_effect)
                 left = throttle if steering >= 0 else throttle * effect
                 right = throttle if steering < 0 else throttle * effect
-                a = left if self._axes_ordered else right
-                b = right if self._axes_ordered else left
+                a = right if self._axes_ordered else left
+                b = left if self._axes_ordered else right
                 self._drive.axis0.controller.input_vel = a * self._axis0_multiplier * self._motor_scale
                 self._drive.axis1.controller.input_vel = b * self._axis1_multiplier * self._motor_scale
             except AttributeError:

@@ -6,7 +6,6 @@ import logging
 import os
 import sys
 import threading
-from functools import partial
 
 import cv2
 import numpy as np
@@ -233,6 +232,17 @@ def _norm_scale(v, min_=0., max_=1.):
     return abs(max(0., v - min_) / (max_ - min_))
 
 
+def _build_expression(key, errors, **kwargs):
+    _expression = lambda x, y: 100
+    _equation = parse_option(key, str, "e ** (surprise + loss)", errors, **kwargs)
+    try:
+        _expression = Expression(_equation)
+        _expression(surprise=0, loss=0)
+    except (TypeError, IndexError, ZeroDivisionError) as te:
+        errors.append(PropertyError(key, str(te)))
+    return _expression
+
+
 class TFRunner(Configurable):
     def __init__(self, navigator):
         super(TFRunner, self).__init__()
@@ -243,12 +253,8 @@ class TFRunner(Configurable):
         self._steering_scale_right = 1
         self._penalty_filter = None
         self._debug_filter = None
-        self._corridor_shift = 0
-        self._obstruction_shift = 0
-        self._obstruction_scale = 1
-        self._fn_obstacle_norm = None
-        self._fn_corridor_norm = None
-        self._fn_corridor_penalty = None
+        self._fn_steer_mu = None
+        self._fn_brake_mu = None
 
     def get_gpu(self):
         return self._gpu_id
@@ -273,23 +279,8 @@ class TFRunner(Configurable):
         _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 0, _errors, **kwargs)
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
         self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
-
-        self._corridor_shift = parse_option('driver.dnn.steer.corridor.shift', float, 0, _errors, **kwargs)
-        self._obstruction_shift = parse_option('driver.dnn.obstacle.corridor.shift', float, 0, _errors, **kwargs)
-        self._obstruction_scale = parse_option('driver.dnn.obstacle.corridor.scale', float, 1, _errors, **kwargs)
-
-        _brake_scale_max = parse_option('driver.dnn.obstacle.scale.max', float, 1e-6, _errors, **kwargs)
-
-        _corridor_equation_key = 'driver.dnn.steer.corridor.equation'
-        _corridor_penalty_eq = parse_option(_corridor_equation_key, str, "e ** (critic + surprise)", _errors, **kwargs)
-        try:
-            self._fn_corridor_penalty = Expression(_corridor_penalty_eq)
-            self._fn_corridor_penalty(surprise=0, critic=0)
-        except (TypeError, IndexError, ZeroDivisionError) as te:
-            _errors.append(PropertyError(_corridor_equation_key, str(te)))
-            self._fn_corridor_penalty = lambda surprise, critic: 100
-        self._fn_obstacle_norm = partial(_norm_scale, min_=0, max_=_brake_scale_max)
-        self._fn_corridor_norm = (lambda v: v)
+        self._fn_steer_mu = _build_expression('driver.dnn.steer.mu.equation', _errors, **kwargs)
+        self._fn_brake_mu = _build_expression('driver.dnn.brake.mu.equation', _errors, **kwargs)
         _fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
         _fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
         _nav_threshold = parse_option('navigator.point.recognition.threshold', float, 0, _errors, **kwargs)
@@ -307,22 +298,13 @@ class TFRunner(Configurable):
     def forward(self, image, route=None):
         _out = self._navigator.forward(image, route)
         action, critic, surprise, brake, brake_critic, nav_point_id, nav_image_id, nav_distance, command, direction = _out
-
-        _corridor_penalty = max(0,
-                                self._fn_corridor_penalty(
-                                    surprise=(max(0, self._fn_corridor_norm(surprise) + self._corridor_shift)),
-                                    critic=(max(0, self._fn_corridor_norm(critic) + self._corridor_shift)))
-                                )
-
-        # Penalties to decrease desired speed.
-        _obstacle_penalty = self._fn_obstacle_norm(brake) + max(0, brake_critic + self._obstruction_shift) * self._obstruction_scale
-        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_corridor_penalty + _obstacle_penalty)))
-
         _command_index = int(np.argmax(command))
-
+        _steer_penalty = max(0, self._fn_steer_mu(surprise=max(0, surprise), loss=abs(surprise - critic)))
+        _obstacle_penalty = max(0, self._fn_brake_mu(surprise=max(0, brake), loss=max(0, brake_critic)))
+        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_steer_penalty + _obstacle_penalty)))
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action)),
-                    corridor=float(self._debug_filter.calculate(_corridor_penalty)),
+                    corridor=float(self._debug_filter.calculate(_steer_penalty)),
                     surprise_out=float(surprise),
                     critic_out=float(critic),
                     brake_critic_out=float(brake_critic),
