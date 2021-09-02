@@ -52,6 +52,13 @@ class AbstractDriver(six.with_metaclass(ABCMeta, object)):
     def __init__(self, relay):
         self._relay = relay
 
+    @staticmethod
+    def configuration_check(config):
+        version_ok = config is not None and config.get('app_version', -1) == 2
+        if config is not None and not version_ok:
+            logger.warning("Received incompatible application version - configuration aborted.")
+        return version_ok
+
     @abstractmethod
     def relay_ok(self):
         raise NotImplementedError()
@@ -140,7 +147,7 @@ class GPIODriver(AbstractDriver):
         self._relay.open()
 
     def set_configuration(self, config):
-        if config is not None:
+        if self.configuration_check(config):
             logger.info("Received configuration {}.".format(config))
             _steer_servo_config = self._steer_servo_config
             _motor_servo_config = self._motor_servo_config
@@ -174,18 +181,41 @@ class ODriveDriver(AbstractDriver):
         self._drive_lock = threading.Lock()
         self._steering_offset = 0
         self._motor_scale = 1
-        self._odrive = None
+        self._steering_effect = max(0., min(1., float(kwargs.get('drive.steering.effect', 0))))
+        self._axes_ordered = kwargs.get('drive.axes.mount.order') == 'normal'
+        self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction') == 'forward' else -1
+        self._axis1_multiplier = 1 if kwargs.get('drive.axis1.mount.direction') == 'forward' else -1
+        self._drive = None
         logger.info(kwargs)
+
+    def _drive_check(self):
+        if self._drive.axis0.error == 0 and self._drive.axis1.error == 0:
+            return True
+        else:
+            # Collect the error codes and report on them.
+            m = {
+                'axis0.controller': self._drive.axis0.controller.error,
+                'axis0.encoder': self._drive.axis0.encoder.error,
+                'axis0.motor': self._drive.axis0.motor.error,
+                'axis1.controller': self._drive.axis1.controller.error,
+                'axis1.encoder': self._drive.axis1.encoder.error,
+                'axis1.motor': self._drive.axis1.motor.error
+            }
+            logger.warning(m)
+            return False
+
+    def _live(self):
+        return self._drive is not None and hasattr(self._drive, 'axis0') and hasattr(self._drive, 'axis1') and self._drive_check()
 
     def _setup(self):
         with self._drive_lock:
-            if self._odrive is None:
+            if not self._live():
                 try:
-                    # Blocks until a TimeoutError which is a RuntimeError that would causes a process restart.
-                    self._odrive = odrive.find_any(timeout=10)  # seconds
-                    self._odrive.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-                    self._odrive.axis1.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-                    logger.info("Setup drive - bus voltage is " + str(self._odrive.vbus_voltage) + "V")
+                    # Blocks until a TimeoutError which is a RuntimeError that would cause a process restart.
+                    self._drive = odrive.find_any(timeout=5)  # seconds
+                    self._drive.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                    self._drive.axis1.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
+                    logger.info("Setup drive - bus voltage is " + str(self._drive.vbus_voltage) + "V")
                 except TimeoutError:
                     logger.info("Timeout exceeded on o-drive find.")
 
@@ -193,19 +223,19 @@ class ODriveDriver(AbstractDriver):
         pass
 
     def relay_violated(self):
-        pass
+        self.drive(0, 0)
 
     def set_configuration(self, config):
-        if config is not None:
+        if self.configuration_check(config):
             logger.info("Received configuration {}.".format(config))
             threading.Thread(target=self._setup).start()
-            self._steering_offset = max(-1, min(1, config.get('steering_offset')))
-            self._motor_scale = max(0, config.get('motor_scale'))
+            self._steering_offset = max(-1., min(1., config.get('steering_offset')))
+            self._motor_scale = max(0., config.get('motor_scale'))
 
     def is_configured(self):
         if self._drive_lock.acquire(blocking=False):
             try:
-                return self._odrive is not None
+                return self._live()
             finally:
                 self._drive_lock.release()
         return True
@@ -213,6 +243,17 @@ class ODriveDriver(AbstractDriver):
     def drive(self, steering, throttle):
         if self._drive_lock.acquire(blocking=False):
             try:
+                # Scale down throttle for one wheel, the other retains its value.
+                steering = min(1., max(-1., steering + self._steering_offset))
+                throttle = min(1., max(-1., throttle))
+                effect = 1 - abs(steering) * self._steering_effect
+                left = throttle if steering >= 0 else throttle * effect
+                right = throttle if steering < 0 else throttle * effect
+                a = left if self._axes_ordered else right
+                b = right if self._axes_ordered else left
+                self._drive.axis0.controller.input_vel = a * self._axis0_multiplier * self._motor_scale
+                self._drive.axis1.controller.input_vel = b * self._axis1_multiplier * self._motor_scale
+            except AttributeError:
                 pass
             finally:
                 self._drive_lock.release()
@@ -220,9 +261,9 @@ class ODriveDriver(AbstractDriver):
     def quit(self):
         if self._drive_lock.acquire(blocking=False):
             try:
-                if self._odrive is not None:
-                    self._odrive.axis0.requested_state = AXIS_STATE_IDLE
-                    self._odrive.axis1.requested_state = AXIS_STATE_IDLE
+                if self._live():
+                    self._drive.axis0.requested_state = AXIS_STATE_IDLE
+                    self._drive.axis1.requested_state = AXIS_STATE_IDLE
             finally:
                 self._drive_lock.release()
 
@@ -297,17 +338,17 @@ def main():
     parser = SafeConfigParser()
     parser.read(config_file)
     kwargs = dict(parser.items('driver'))
-    driver_type = parse_option('driver.type', str, **kwargs)
+    drive_type = parse_option('drive.type', str, **kwargs)
 
     relay = SearchUsbRelayFactory().get_relay()
     assert relay.is_attached(), "The device is not attached."
 
-    if driver_type == 'gpio':
+    if drive_type == 'gpio':
         driver = GPIODriver(relay, **kwargs)
-    elif driver_type == 'odrive':
+    elif drive_type == 'odrive':
         driver = ODriveDriver(relay, **kwargs)
     else:
-        raise AssertionError("Unknown driver type '{}'.".format(driver_type))
+        raise AssertionError("Unknown drive type '{}'.".format(drive_type))
 
     try:
         application = MainApplication(chassis=driver, hz=25)

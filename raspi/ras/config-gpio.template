@@ -1,5 +1,5 @@
 [driver]
-driver.type = gpio
+drive.type = gpio
 
 servo.motor.pin.nr = 12
 servo.motor.min_pulse_width.ms = 0.5

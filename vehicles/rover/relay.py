@@ -119,7 +119,7 @@ class MonitorApplication(Application):
         _motor_scale = parse_option('ras.driver.motor.scale', float, 1.0, errors, **_config)
         self.set_hz(_process_frequency)
         self._patience_micro = parse_option('patience.ms', int, 200, errors, **_config) * 1000.
-        self._servo_config = dict(steering_offset=_steering_offset, motor_scale=_motor_scale)
+        self._servo_config = dict(app_version=2, steering_offset=_steering_offset, motor_scale=_motor_scale)
         self._pi_client = self._client_factory.create(_master_uri)
         self._status = self._status_factory.create(_master_uri)
         self._status.add_listener(self._on_receive)
