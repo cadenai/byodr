@@ -8,10 +8,10 @@ import threading
 from abc import ABCMeta, abstractmethod
 from configparser import ConfigParser as SafeConfigParser
 
-import odrive
+# import odrive
 import six
 from gpiozero import AngularServo
-from odrive.enums import AXIS_STATE_CLOSED_LOOP_CONTROL, AXIS_STATE_IDLE
+# from odrive.enums import AXIS_STATE_CLOSED_LOOP_CONTROL, AXIS_STATE_IDLE
 
 from byodr.utils import timestamp, Application
 from byodr.utils.ipc import JSONPublisher, JSONServerThread
