@@ -1,4 +1,4 @@
-FROM centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.20.0
+FROM centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.22.0
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 

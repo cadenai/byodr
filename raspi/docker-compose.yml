@@ -3,7 +3,7 @@ volumes:
   volume_local_config:
 services:
   pigpiod:
-    image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.20.0
+    image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.22.0
     container_name: pigpiod
     privileged: true
     user: root
@@ -27,6 +27,21 @@ services:
       GPIOZERO_PIN_FACTORY: 'pigpio'
     volumes:
 #      - /dev/bus/usb:/dev/bus/usb  # not allowed by balena os
+#      - /dev:/dev  # not allowed by balena os
+      - volume_local_config:/config:rw
+  odometry:
+    image: centipede2donald/byodr-ce:pi_servos
+    container_name: odometry
+    privileged: true
+    user: root
+    restart: always
+    depends_on:
+      - "pigpiod"
+    network_mode: "host"
+    command: ["python3", "-m", "ras.odometry", "--config", "/config/driver.ini"]
+    environment:
+      GPIOZERO_PIN_FACTORY: 'pigpio'
+    volumes:
       - volume_local_config:/config:rw
   stream0:
     build:
