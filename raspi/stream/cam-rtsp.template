@@ -1,9 +1,3 @@
 [camera]
 camera.type = h264/rtsp
 camera.ip = 192.168.1.64
-camera.port = 554
-camera.user = user1
-camera.password = HaikuPlot876
-camera.path = /Streaming/Channels/103
-camera.output.shape = 640x480
-camera.output.class = http-live

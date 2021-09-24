@@ -62,7 +62,7 @@ gst_commands = {
     #     "omxh264enc target-bitrate={bitrate} control-rate=1 ! "
     #     "queue ! video/x-h264,profile=baseline,stream-format=\"byte-stream\" ! queue ! appsink",
     'raw/usb/h264/udp':
-        "v4l2src device={uri} ! video/x-raw,width={src_width},height={src_height} ! tee name=t "
+        "v4l2src device={uri} ! video/x-raw,width={src_width},height={src_height} ! videoflip method={video_flip} ! tee name=t "
         "t. ! queue ! videoconvert ! videoscale ! video/x-raw,width={udp_width},height={udp_height} ! queue ! "
         "omxh264enc target-bitrate={udp_bitrate} control-rate=1 interval-intraframes=50 ! queue ! "
         "video/x-h264, profile=baseline ! rtph264pay ! udpsink host={udp_host} port={udp_port} sync=false async=false "
@@ -80,34 +80,35 @@ def create_stream(config_file):
     _type = parse_option('camera.type', str, **kwargs)
     assert _type in list(gst_commands.keys()), "Unrecognized camera type '{}'.".format(_type)
     if _type == 'h264/rtsp':
-        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, **kwargs).split('x')]
+        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, '640x480', **kwargs).split('x')]
         config = {
-            'ip': (parse_option('camera.ip', str, **kwargs)),
-            'port': (parse_option('camera.port', int, **kwargs)),
-            'user': (parse_option('camera.user', str, **kwargs)),
-            'password': (parse_option('camera.password', str, **kwargs)),
-            'path': (parse_option('camera.path', str, **kwargs))
+            'ip': (parse_option('camera.ip', str, '192.168.1.64', **kwargs)),
+            'port': (parse_option('camera.port', int, 554, **kwargs)),
+            'user': (parse_option('camera.user', str, 'user1', **kwargs)),
+            'password': (parse_option('camera.password', str, 'HaikuPlot876', **kwargs)),
+            'path': (parse_option('camera.path', str, '/Streaming/Channels/103', **kwargs))
         }
     else:
         _type = 'raw/usb/h264/udp'
-        src_width, src_height = [int(x) for x in parse_option('camera.source.shape', str, **kwargs).split('x')]
-        udp_width, udp_height = [int(x) for x in parse_option('camera.udp.shape', str, **kwargs).split('x')]
-        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, **kwargs).split('x')]
+        src_width, src_height = [int(x) for x in parse_option('camera.source.shape', str, '640x480', **kwargs).split('x')]
+        udp_width, udp_height = [int(x) for x in parse_option('camera.udp.shape', str, '320x240', **kwargs).split('x')]
+        out_width, out_height = [int(x) for x in parse_option('camera.output.shape', str, '480x320', **kwargs).split('x')]
         config = {
-            'uri': (parse_option('camera.uri', str, **kwargs)),
+            'uri': (parse_option('camera.uri', str, '/dev/video0', **kwargs)),
             'src_width': src_width,
             'src_height': src_height,
+            'video_flip': (parse_option('camera.flip.method', str, 'none', **kwargs)),
             'udp_width': udp_width,
             'udp_height': udp_height,
-            'udp_bitrate': (parse_option('camera.udp.bitrate', int, **kwargs)),
-            'udp_host': (parse_option('camera.udp.host', str, **kwargs)),
-            'udp_port': (parse_option('camera.udp.port', int, **kwargs)),
+            'udp_bitrate': (parse_option('camera.udp.bitrate', int, 1024000, **kwargs)),
+            'udp_host': (parse_option('camera.udp.host', str, '192.168.1.100', **kwargs)),
+            'udp_port': (parse_option('camera.udp.port', int, 5000, **kwargs)),
             'out_width': out_width,
             'out_height': out_height,
-            'out_bitrate': (parse_option('camera.output.bitrate', int, **kwargs))
+            'out_bitrate': (parse_option('camera.output.bitrate', int, 1024000, **kwargs))
         }
     _command = gst_commands.get(_type).format(**config)
-    _socket_ref = parse_option('camera.output.class', str, **kwargs)
+    _socket_ref = parse_option('camera.output.class', str, 'http-live', **kwargs)
     logger.info("Socket '{}' ref '{}' gst command={}".format(name, _socket_ref, _command))
     return create_video_source(name, shape=(out_height, out_width, 3), command=_command), _socket_ref
 
@@ -145,7 +146,7 @@ def main():
         [t.join() for t in threads]
     else:
         while not quit_event.is_set():
-            time.sleep(.2)
+            time.sleep(1)
 
 
 if __name__ == "__main__":
