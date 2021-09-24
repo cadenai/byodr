@@ -12,8 +12,8 @@ class PropertyError(ValueError):
 
 def _parse(key, fn_type=(lambda x: x), **kwargs):
     try:
-        return fn_type(kwargs.get(key))
-    except (ValueError, TypeError) as e:
+        return fn_type(kwargs[key])
+    except (KeyError, ValueError, TypeError) as e:
         raise PropertyError(key, str(e))
 
 
