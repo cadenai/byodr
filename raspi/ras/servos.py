@@ -8,10 +8,9 @@ import threading
 from abc import ABCMeta, abstractmethod
 from configparser import ConfigParser as SafeConfigParser
 
-# import odrive
+import serial
 import six
 from gpiozero import AngularServo
-# from odrive.enums import AXIS_STATE_CLOSED_LOOP_CONTROL, AXIS_STATE_IDLE
 
 from byodr.utils import timestamp, Application
 from byodr.utils.ipc import JSONPublisher, JSONServerThread
@@ -89,19 +88,19 @@ class GPIODriver(AbstractDriver):
         super().__init__(relay)
         # Our relay is expected to be wired on the motor power line.
         self._relay.open()
-        self._steer_servo_config = dict(pin=parse_option('servo.steering.pin.nr', int, 0, **kwargs),
-                                        min_pw=parse_option('servo.steering.min_pulse_width.ms', float, 0, **kwargs),
-                                        max_pw=parse_option('servo.steering.max_pulse_width.ms', float, 0, **kwargs),
-                                        frame=parse_option('servo.steering.frame_width.ms', float, 0, **kwargs))
-        self._motor_servo_config = dict(pin=parse_option('servo.motor.pin.nr', int, 0, **kwargs),
-                                        min_pw=parse_option('servo.motor.min_pulse_width.ms', float, 0, **kwargs),
-                                        max_pw=parse_option('servo.motor.max_pulse_width.ms', float, 0, **kwargs),
-                                        frame=parse_option('servo.motor.frame_width.ms', float, 0, **kwargs))
-        self._steering_config = dict(scale=parse_option('steering.domain.scale', float, 0, **kwargs))
-        self._throttle_config = dict(reverse=parse_option('throttle.reverse.gear', int, 0, **kwargs),
-                                     forward_shift=parse_option('throttle.domain.forward.shift', float, 0, **kwargs),
-                                     backward_shift=parse_option('throttle.domain.backward.shift', float, 0, **kwargs),
-                                     scale=parse_option('throttle.domain.scale', float, 0, **kwargs))
+        self._steer_servo_config = dict(pin=parse_option('servo.steering.pin.nr', int, 13, **kwargs),
+                                        min_pw=parse_option('servo.steering.min_pulse_width.ms', float, 0.5, **kwargs),
+                                        max_pw=parse_option('servo.steering.max_pulse_width.ms', float, 2.5, **kwargs),
+                                        frame=parse_option('servo.steering.frame_width.ms', float, 20.0, **kwargs))
+        self._motor_servo_config = dict(pin=parse_option('servo.motor.pin.nr', int, 12, **kwargs),
+                                        min_pw=parse_option('servo.motor.min_pulse_width.ms', float, 0.5, **kwargs),
+                                        max_pw=parse_option('servo.motor.max_pulse_width.ms', float, 2.5, **kwargs),
+                                        frame=parse_option('servo.motor.frame_width.ms', float, 20.0, **kwargs))
+        self._steering_config = dict(scale=parse_option('steering.domain.scale', float, 1.0, **kwargs))
+        self._throttle_config = dict(reverse=parse_option('throttle.reverse.gear', int, 0.0, **kwargs),
+                                     forward_shift=parse_option('throttle.domain.forward.shift', float, 0.0, **kwargs),
+                                     backward_shift=parse_option('throttle.domain.backward.shift', float, 0.0, **kwargs),
+                                     scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
         self._steer_servo = None
         self._motor_servo = None
 
@@ -172,7 +171,7 @@ class GPIODriver(AbstractDriver):
             self._motor_servo.close()
 
 
-class ODriveDriver(AbstractDriver):
+class ODriveSerialDriver(AbstractDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
         # Our relay is expected to be wired on the o-drive supply line.
@@ -181,43 +180,52 @@ class ODriveDriver(AbstractDriver):
         self._drive_lock = threading.Lock()
         self._steering_offset = 0
         self._motor_scale = 1
-        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 0)))
-        self._axes_ordered = kwargs.get('drive.axes.mount.order') == 'normal'
-        self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction') == 'forward' else -1
-        self._axis1_multiplier = 1 if kwargs.get('drive.axis1.mount.direction') == 'forward' else -1
+        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 1.0)))
+        self._axes_ordered = kwargs.get('drive.axes.mount.order', 'normal') == 'normal'
+        self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction', 'reverse') == 'forward' else -1
+        self._axis1_multiplier = 1 if kwargs.get('drive.axis1.mount.direction', 'forward') == 'forward' else -1
         self._drive = None
         logger.info(kwargs)
 
+    def _serial_read(self, cmd):
+        self._drive.write(cmd)
+        return self._drive.readline()
+
     def _drive_check(self):
-        if self._drive.axis0.error == 0 and self._drive.axis1.error == 0:
-            return True
-        else:
-            # Collect the error codes and report on them.
-            m = {
-                'axis0.controller': self._drive.axis0.controller.error,
-                'axis0.encoder': self._drive.axis0.encoder.error,
-                'axis0.motor': self._drive.axis0.motor.error,
-                'axis1.controller': self._drive.axis1.controller.error,
-                'axis1.encoder': self._drive.axis1.encoder.error,
-                'axis1.motor': self._drive.axis1.motor.error
-            }
-            logger.warning(m)
+        try:
+            _open = self._drive.isOpen()
+            if _open:
+                if int(self._serial_read(b'r axis0.error\n'), 16) == 13 and int(self._serial_read(b'r axis1.error\n'), 16) == 13:
+                    return True
+                else:
+                    # Collect the error codes and report on them.
+                    m = {
+                        'axis0.controller': self._serial_read(b'r axis0.controller.error\n'),
+                        'axis0.encoder': self._serial_read(b'r axis0.encoder.error\n'),
+                        'axis0.motor': self._serial_read(b'r axis0.motor.error\n'),
+                        'axis1.controller': self._serial_read(b'r axis1.controller.error\n'),
+                        'axis1.encoder': self._serial_read(b'r axis1.encoder.error\n'),
+                        'axis1.motor': self._serial_read(b'r axis1.motor.error\n'),
+                    }
+                    logger.warning(m)
+            return False
+        except Exception:
             return False
 
     def _live(self):
-        return self._drive is not None and hasattr(self._drive, 'axis0') and hasattr(self._drive, 'axis1') and self._drive_check()
+        return self._drive is not None and self._drive_check()
 
     def _setup(self):
         with self._drive_lock:
             if not self._live():
                 try:
-                    # Blocks until a TimeoutError which is a RuntimeError that would cause a process restart.
-                    self._drive = odrive.find_any(timeout=5)  # seconds
-                    self._drive.axis0.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-                    self._drive.axis1.requested_state = AXIS_STATE_CLOSED_LOOP_CONTROL
-                    logger.info("Setup drive - bus voltage is " + str(self._drive.vbus_voltage) + "V")
-                except TimeoutError:
-                    logger.info("Timeout exceeded on o-drive find.")
+                    self._drive = serial.Serial('/dev/ttyACM0', 115200, timeout=2)  # seconds
+                    self._drive.write(b'w axis0.requested_state 8\n')
+                    self._drive.write(b'w axis1.requested_state 8\n')
+                    _voltage = float(self._serial_read(b'r vbus_voltage\n'))
+                    logger.info("Setup drive - bus voltage is {:2.3f}V".format(_voltage))
+                except (FileNotFoundError, serial.serialutil.SerialException):
+                    pass
 
     def relay_ok(self):
         pass
@@ -255,8 +263,8 @@ class ODriveDriver(AbstractDriver):
                 right = throttle if steering < 0 else throttle * effect
                 a = right if self._axes_ordered else left
                 b = left if self._axes_ordered else right
-                self._drive.axis0.controller.input_vel = a * self._axis0_multiplier * self._motor_scale
-                self._drive.axis1.controller.input_vel = b * self._axis1_multiplier * self._motor_scale
+                self._drive.write('v 0 {:2.6f}\n'.format(a * self._axis0_multiplier * self._motor_scale).encode())
+                self._drive.write('v 1 {:2.6f}\n'.format(b * self._axis1_multiplier * self._motor_scale).encode())
             except AttributeError:
                 pass
             finally:
@@ -266,10 +274,34 @@ class ODriveDriver(AbstractDriver):
         if self._drive_lock.acquire(blocking=False):
             try:
                 if self._live():
-                    self._drive.axis0.requested_state = AXIS_STATE_IDLE
-                    self._drive.axis1.requested_state = AXIS_STATE_IDLE
+                    self._drive.write(b'w axis0.requested_state 1\n')
+                    self._drive.write(b'w axis1.requested_state 1\n')
             finally:
                 self._drive_lock.release()
+
+
+class NoopDriver(AbstractDriver):
+    def __init__(self, relay):
+        super().__init__(relay)
+        self._relay.close()
+
+    def relay_ok(self):
+        pass
+
+    def relay_violated(self):
+        pass
+
+    def set_configuration(self, config):
+        pass
+
+    def is_configured(self):
+        return True
+
+    def drive(self, steering, throttle):
+        pass
+
+    def quit(self):
+        pass
 
 
 class MainApplication(Application):
@@ -347,12 +379,14 @@ def main():
     relay = SearchUsbRelayFactory().get_relay()
     assert relay.is_attached(), "The device is not attached."
 
-    if drive_type == 'gpio':
+    if drive_type in ('gpio', 'gpio_with_hall'):
         driver = GPIODriver(relay, **kwargs)
     elif drive_type == 'odrive':
-        driver = ODriveDriver(relay, **kwargs)
+        driver = ODriveSerialDriver(relay, **kwargs)
     else:
         raise AssertionError("Unknown drive type '{}'.".format(drive_type))
+
+    # driver = NoopDriver(relay)
 
     try:
         application = MainApplication(chassis=driver, hz=25)

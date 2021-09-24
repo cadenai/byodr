@@ -1,6 +1,5 @@
 [driver]
 drive.type = odrive
-
 drive.axes.mount.order = normal
 drive.axis0.mount.direction = reverse
 drive.axis1.mount.direction = forward

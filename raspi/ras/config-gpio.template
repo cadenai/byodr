@@ -1,18 +1,9 @@
 [driver]
-drive.type = gpio
-
-servo.motor.pin.nr = 12
-servo.motor.min_pulse_width.ms = 0.5
-servo.motor.max_pulse_width.ms = 2.5
-servo.motor.frame_width.ms = 20
-
-servo.steering.pin.nr = 13
-servo.steering.min_pulse_width.ms = 0.5
-servo.steering.max_pulse_width.ms = 2.5
-servo.steering.frame_width.ms = 20
-
-throttle.reverse.gear = -6
+drive.type = gpio_with_hall
 throttle.domain.forward.shift = 0
 throttle.domain.backward.shift = 0
+throttle.reverse.gear = -6
 throttle.domain.scale = 2
-steering.domain.scale = 1
+
+[odometer]
+odometer.debug = 0
