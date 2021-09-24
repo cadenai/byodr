@@ -1,11 +1,11 @@
 # Must be run from directory root so the python common directory is included in the build context.
-# docker build -f docker/pi-gstreamer.dockerfile -t centipede2donald/raspbian-stretch:gst-omx-rpi-0.50.0 .
+# docker build -f docker/pi-cp39-gstreamer.dockerfile -t centipede2donald/raspbian-stretch:gst-omx-rpi-0.50.1 .
 
 FROM mmastrac/gst-omx-rpi
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get --allow-releaseinfo-change update && apt-get install -y \
     nano \
     v4l-utils \
     python3-gi \
