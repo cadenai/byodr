@@ -1,4 +1,5 @@
 import argparse
+import collections
 import glob
 import logging
 import os
@@ -9,7 +10,7 @@ from core import GpsPollerThread, PTZCamera, ConfigurableImageGstSource
 
 from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
-from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector
+from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector, ReceiverThread
 from byodr.utils.location import GeoTracker
 from byodr.utils.option import parse_option, hash_dict
 
@@ -17,12 +18,49 @@ logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 
+class FakeSpeedOdometer(object):
+    def __init__(self):
+        self._value = 0
+
+    def get(self, c_teleop):
+        # Use throttle as the proxy.
+        # The teleop command can be none sometimes on slow connections.
+        self._value = self._value if c_teleop is None else c_teleop.get('throttle', 0)
+        return self._value
+
+    def start(self):
+        pass
+
+    def quit(self):
+        pass
+
+
+class RasSpeedOdometer(object):
+    def __init__(self, master_uri):
+        self._values = collections.deque(maxlen=1)
+        self._status = ReceiverThread(url=('{}:5560'.format(master_uri)), topic=b'ras/sensor/odometer')
+        self._status.add_listener(self._on_receive)
+
+    def _on_receive(self, msg):
+        self._values.append(float(msg.get('velocity')))
+
+    # noinspection PyUnusedLocal
+    def get(self, c_teleop):
+        return self._values[0] if len(self._values) > 0 else 0
+
+    def start(self):
+        self._status.start()
+
+    def quit(self):
+        self._status.quit()
+
+
 class Platform(Configurable):
     def __init__(self):
         super(Platform, self).__init__()
+        self._odometer = FakeSpeedOdometer()
         self._gps_poller = GpsPollerThread()
         self._geo_tracker = GeoTracker()
-        self._velocity = 0
 
     def _track(self):
         latitude, longitude = self._gps_poller.get_latitude(), self._gps_poller.get_longitude()
@@ -30,13 +68,7 @@ class Platform(Configurable):
         return self._geo_tracker.track(position)
 
     def state(self, c_teleop):
-        # The platform currently does not contain a speedometer.
-        # Use throttle as the proxy.
-        y_vel = self._velocity
-        # The teleop command can be none sometimes on slow connections.
-        if c_teleop:
-            y_vel = c_teleop.get('throttle', 0)
-            self._velocity = y_vel
+        y_vel = self._odometer.get(c_teleop)
         latitude, longitude, bearing = self._track()
         return dict(latitude_geo=latitude,
                     longitude_geo=longitude,
@@ -45,13 +77,22 @@ class Platform(Configurable):
                     time=timestamp())
 
     def internal_quit(self, restarting=False):
+        self._odometer.quit()
         if not restarting:
             self._gps_poller.quit()
 
     def internal_start(self, **kwargs):
+        errors = []
+        _speed_enabled = parse_option('ras.odometer.speed.type', int, 0, errors, **kwargs) == 1
+        if _speed_enabled:
+            _master_uri = parse_option('ras.master.uri', str, errors, **kwargs)
+            self._odometer = RasSpeedOdometer(_master_uri)
+        else:
+            self._odometer = FakeSpeedOdometer()
+        self._odometer.start()
         if not self._gps_poller.is_alive():
             self._gps_poller.start()
-        return []
+        return errors
 
 
 class RoverHandler(Configurable):
