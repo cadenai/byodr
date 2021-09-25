@@ -30,7 +30,10 @@ services:
 #      - /dev:/dev  # not allowed by balena os
       - volume_local_config:/config:rw
   odometry:
-    image: centipede2donald/byodr-ce:pi_servos
+    build:
+      context: .
+      dockerfile: pi_gpio.dockerfile
+    image: centipede2donald/byodr-ce:pi_odometry
     container_name: odometry
     privileged: true
     user: root
