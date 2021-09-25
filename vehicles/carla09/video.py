@@ -37,8 +37,8 @@ def bus_message(bus, message, loop):
     return True
 
 
-def parse_width_height(key, errors, **kwargs):
-    return [int(x) for x in parse_option(key, str, errors=errors, **kwargs).split('x')]
+def parse_width_height(key, default_value, errors, **kwargs):
+    return [int(x) for x in parse_option(key, str, default_value, errors=errors, **kwargs).split('x')]
 
 
 class NumpyImageVideoSource(Configurable):
@@ -98,9 +98,9 @@ class NumpyImageVideoSource(Configurable):
         # This method runs under lock.
         self._close()
         _errors = []
-        input_width, input_height = parse_width_height('camera.image.input.shape', _errors, **kwargs)
-        bitrate = parse_option(self._name + '.video.encoding.bitrate', int, errors=_errors, **kwargs)
-        self._stream_width, self._stream_height = parse_width_height(self._name + '.video.output.shape', _errors, **kwargs)
+        input_width, input_height = parse_width_height('camera.image.input.shape', '640x480', _errors, **kwargs)
+        bitrate = parse_option(self._name + '.video.encoding.bitrate', int, 1024, errors=_errors, **kwargs)
+        self._stream_width, self._stream_height = parse_width_height(self._name + '.video.output.shape', '640x480', _errors, **kwargs)
         if len(_errors) == 0:
             _args = dict(input_width=input_width,
                          input_height=input_height,

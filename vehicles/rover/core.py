@@ -73,17 +73,18 @@ class ConfigurableImageGstSource(Configurable):
     def internal_start(self, **kwargs):
         self._close()
         _errors = []
-        _type = parse_option(self._name + '.camera.type', str, errors=_errors, **kwargs)
+        _type = parse_option(self._name + '.camera.type', str, 'h264/rtsp', errors=_errors, **kwargs)
         assert _type in gst_commands.keys(), "Unrecognized camera type '{}'.".format(_type)
-        framerate = (parse_option(self._name + '.camera.framerate', int, errors=_errors, **kwargs))
-        out_width, out_height = [int(x) for x in parse_option(self._name + '.camera.shape', str, errors=_errors, **kwargs).split('x')]
+        framerate = (parse_option(self._name + '.camera.framerate', int, 25, errors=_errors, **kwargs))
+        out_width, out_height = [int(x) for x in parse_option(self._name + '.camera.shape', str, '320x240',
+                                                              errors=_errors, **kwargs).split('x')]
         if _type == 'h264/rtsp':
             config = {
-                'ip': (parse_option(self._name + '.camera.ip', str, errors=_errors, **kwargs)),
-                'port': (parse_option(self._name + '.camera.port', int, errors=_errors, **kwargs)),
-                'user': (parse_option(self._name + '.camera.user', str, errors=_errors, **kwargs)),
-                'password': (parse_option(self._name + '.camera.password', str, errors=_errors, **kwargs)),
-                'path': (parse_option(self._name + '.camera.path', str, errors=_errors, **kwargs)),
+                'ip': (parse_option(self._name + '.camera.ip', str, '192.168.1.64', errors=_errors, **kwargs)),
+                'port': (parse_option(self._name + '.camera.port', int, 554, errors=_errors, **kwargs)),
+                'user': (parse_option(self._name + '.camera.user', str, 'user', errors=_errors, **kwargs)),
+                'password': (parse_option(self._name + '.camera.password', str, 'pass', errors=_errors, **kwargs)),
+                'path': (parse_option(self._name + '.camera.path', str, '/Streaming/Channels/102', errors=_errors, **kwargs)),
                 'height': out_height,
                 'width': out_width,
                 'framerate': framerate
@@ -91,13 +92,13 @@ class ConfigurableImageGstSource(Configurable):
         else:
             _type = 'h264/udp'
             config = {
-                'port': (parse_option(self._name + '.camera.port', int, errors=_errors, **kwargs)),
+                'port': (parse_option(self._name + '.camera.port', int, 5000, errors=_errors, **kwargs)),
                 'height': out_height,
                 'width': out_width,
                 'framerate': framerate
             }
         self._shape = (out_height, out_width, 3)
-        self._ptz = parse_option(self._name + '.camera.ptz.enabled', int, errors=_errors, **kwargs)
+        self._ptz = parse_option(self._name + '.camera.ptz.enabled', int, 1, errors=_errors, **kwargs)
         _command = gst_commands.get(_type).format(**config)
         self._sink = create_image_source(self._name, shape=self._shape, command=_command)
         self._sink.add_listener(self._publish)
@@ -224,11 +225,11 @@ class PTZCamera(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', (lambda x: bool(int(x))), False, errors, **kwargs)
+        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', (lambda x: bool(int(x))), True, errors, **kwargs)
         if ptz_enabled:
-            _server = parse_option(self._name + '.camera.ip', str, errors=errors, **kwargs)
-            _user = parse_option(self._name + '.camera.user', str, errors=errors, **kwargs)
-            _password = parse_option(self._name + '.camera.password', str, errors=errors, **kwargs)
+            _server = parse_option(self._name + '.camera.ip', str, '192.168.1.64', errors=errors, **kwargs)
+            _user = parse_option(self._name + '.camera.user', str, 'user', errors=errors, **kwargs)
+            _password = parse_option(self._name + '.camera.password', str, 'pass', errors=errors, **kwargs)
             _protocol = 'http'
             _path = '/ISAPI/PTZCtrl/channels/1'
             _flip = 'tilt'

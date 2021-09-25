@@ -245,15 +245,15 @@ class AbstractCruiseControl(AbstractDriverBase):
         _errors = []
         self._min_desired_speed = 0
         self._max_desired_speed = 0
-        self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, 0, _errors, **kwargs)
-        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, 0, _errors, **kwargs)
+        self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, 0.1, _errors, **kwargs)
+        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, 5.0, _errors, **kwargs)
         #
-        _control_type = parse_option('driver.cc.control.type', str, 'direct', _errors, **kwargs)
+        _control_type = parse_option('driver.cc.control.type', str, 'pid', _errors, **kwargs)
         if _control_type == 'pid':
-            p = (parse_option('driver.cc.throttle.pid_controller.p', float, 0, _errors, **kwargs))
-            i = (parse_option('driver.cc.throttle.pid_controller.i', float, 0, _errors, **kwargs))
+            p = (parse_option('driver.cc.throttle.pid_controller.p', float, 0.6, _errors, **kwargs))
+            i = (parse_option('driver.cc.throttle.pid_controller.i', float, 2.0, _errors, **kwargs))
             d = (parse_option('driver.cc.throttle.pid_controller.d', float, 0, _errors, **kwargs))
-            stop_p = (parse_option('driver.cc.stop.pid_controller.p', float, 1, _errors, **kwargs))
+            stop_p = (parse_option('driver.cc.stop.pid_controller.p', float, 1.0, _errors, **kwargs))
             self._throttle_control = PidThrottleControl(
                 (p, i, d),
                 stop_p=stop_p,
@@ -261,9 +261,9 @@ class AbstractCruiseControl(AbstractDriverBase):
                 max_desired_speed=self._max_desired_speed
             )
         else:
-            _throttle_up_momentum = parse_option('driver.throttle.direct.up.momentum', float, 0, _errors, **kwargs)
-            _throttle_down_momentum = parse_option('driver.throttle.direct.down.momentum', float, 0, _errors, **kwargs)
-            _throttle_cutoff = parse_option('driver.throttle.direct.minimum', float, 0, _errors, **kwargs)
+            _throttle_up_momentum = parse_option('driver.throttle.direct.up.momentum', float, 0.05, _errors, **kwargs)
+            _throttle_down_momentum = parse_option('driver.throttle.direct.down.momentum', float, 1.0, _errors, **kwargs)
+            _throttle_cutoff = parse_option('driver.throttle.direct.minimum', float, 0.002, _errors, **kwargs)
             self._throttle_control = DirectThrottleControl(
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed,
@@ -553,7 +553,8 @@ class DriverManager(Configurable):
         self._navigator = Navigator(route_store)
         self._navigation_queue = deque(maxlen=10)
         self._principal_steer_scale = 0
-        self._speed_scale = 1
+        # Static conversion factor of m/s to km/h.
+        self._speed_scale = 3.6
         self._cruise_speed_step = 0
         self._steering_stabilizer = None
         self._pilot_state = PilotState()
@@ -569,10 +570,9 @@ class DriverManager(Configurable):
 
     def internal_start(self, **kwargs):
         _errors = []
-        _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0, _errors, **kwargs)
-        self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0, _errors, **kwargs)
-        self._speed_scale = parse_option('driver.speed.norm.scale', float, 1, _errors, **kwargs)
-        self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0, _errors, **kwargs)
+        _steer_low_momentum = parse_option('driver.handler.steering.low_pass.momentum', float, 0.40, _errors, **kwargs)
+        self._principal_steer_scale = parse_option('driver.steering.teleop.scale', float, 0.45, _errors, **kwargs)
+        self._cruise_speed_step = parse_option('driver.cc.static.gear.step', float, 0.50, _errors, **kwargs)
         self._steering_stabilizer = LowPassFilter(alpha=_steer_low_momentum)
         self._navigator.initialize()
         self._driver_cache.clear()
@@ -739,10 +739,10 @@ class CommandProcessor(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         self._driver.restart(**kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
-        self._patience_ms = parse_option('patience.ms', int, 100, _errors, **kwargs)
-        self._button_north_ctl = parse_option('controller.button.north.mode', str, 0, _errors, **kwargs)
-        self._button_west_ctl = parse_option('controller.button.west.mode', str, 0, _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
+        self._patience_ms = parse_option('patience.ms', int, 500, _errors, **kwargs)
+        self._button_north_ctl = parse_option('controller.button.north.mode', str, 'driver_mode.inference.dnn', _errors, **kwargs)
+        self._button_west_ctl = parse_option('controller.button.west.mode', str, 'ignore', _errors, **kwargs)
         self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.

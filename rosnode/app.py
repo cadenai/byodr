@@ -2,10 +2,10 @@ import argparse
 import glob
 import logging
 import os
+from configparser import ConfigParser as SafeConfigParser
 
 import rclpy
 from actionlib_msgs.msg import GoalID
-from configparser import ConfigParser as SafeConfigParser
 from diagnostic_msgs.msg import DiagnosticArray, DiagnosticStatus, KeyValue
 from rclpy.node import Node
 from std_msgs.msg import Float32
@@ -81,14 +81,16 @@ class RosApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        return dict(parser.items('ros2'))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        return dict(parser.items('ros2')) if parser.has_section('ros2') else {}
 
     def setup(self):
         if self.active():
             if self._bridge is not None:
                 self._bridge.destroy_node()
-            bridge = Bridge(node_name=self._config().get('rover.node.name'), get_pilot_message=self.pilot, publish_internal=self.publish)
+            bridge = Bridge(node_name=self._config().get('rover.node.name', 'rover1'),
+                            get_pilot_message=self.pilot,
+                            publish_internal=self.publish)
             rclpy.spin(bridge)
             self._bridge = bridge
 

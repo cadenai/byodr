@@ -5,10 +5,12 @@ import logging
 import multiprocessing
 import os
 import signal
-from ConfigParser import SafeConfigParser
 
 import cv2
 import numpy as np
+from ConfigParser import SafeConfigParser
+from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
+    JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 
@@ -16,8 +18,6 @@ from byodr.utils import Application, hash_dict
 from byodr.utils import timestamp
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
-    JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,8 @@ class TeleopApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        cfg = dict(parser.items('teleop'))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('teleop')) if parser.has_section('teleop') else {}
         return cfg
 
     def get_user_config_file(self):

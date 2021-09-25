@@ -232,9 +232,9 @@ def _norm_scale(v, min_=0., max_=1.):
     return abs(max(0., v - min_) / (max_ - min_))
 
 
-def _build_expression(key, errors, **kwargs):
+def _build_expression(key, default_value, errors, **kwargs):
     _expression = lambda x, y: 100
-    _equation = parse_option(key, str, "e ** (surprise + loss)", errors, **kwargs)
+    _equation = parse_option(key, str, default_value, errors, **kwargs)
     try:
         _expression = Expression(_equation)
         _expression(surprise=0, loss=0)
@@ -271,19 +271,23 @@ class TFRunner(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         self._gpu_id = parse_option('gpu.id', int, 0, _errors, **kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
-        self._steering_scale_left = parse_option('driver.dnn.steering.scale.left', lambda x: abs(float(x)), 0, _errors, **kwargs)
-        self._steering_scale_right = parse_option('driver.dnn.steering.scale.right', float, 0, _errors, **kwargs)
-        _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0, _errors, **kwargs)
-        _penalty_down_momentum = parse_option('driver.autopilot.filter.momentum.down', float, 0, _errors, **kwargs)
-        _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 0, _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 25, _errors, **kwargs)
+        self._steering_scale_left = parse_option('driver.dnn.steering.scale.left', lambda x: abs(float(x)), -1, _errors, **kwargs)
+        self._steering_scale_right = parse_option('driver.dnn.steering.scale.right', float, 1, _errors, **kwargs)
+        _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0.15, _errors, **kwargs)
+        _penalty_down_momentum = parse_option('driver.autopilot.filter.momentum.down', float, 0.25, _errors, **kwargs)
+        _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 2.0, _errors, **kwargs)
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
         self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
-        self._fn_steer_mu = _build_expression('driver.dnn.steer.mu.equation', _errors, **kwargs)
-        self._fn_brake_mu = _build_expression('driver.dnn.brake.mu.equation', _errors, **kwargs)
-        _fn_dave_image = get_registered_function('dnn.image.transform.dave', _errors, **kwargs)
-        _fn_alex_image = get_registered_function('dnn.image.transform.alex', _errors, **kwargs)
-        _nav_threshold = parse_option('navigator.point.recognition.threshold', float, 0, _errors, **kwargs)
+        self._fn_steer_mu = _build_expression(
+            'driver.dnn.steer.mu.equation', '(7.0 * (-0.50 + surprise + loss)) **7', _errors, **kwargs
+        )
+        self._fn_brake_mu = _build_expression(
+            'driver.dnn.brake.mu.equation', '1.5 * surprise + 5 * (loss > 0.60) * (loss - 0.60)', _errors, **kwargs
+        )
+        _fn_dave_image = get_registered_function('dnn.image.transform.dave', 'dave__320_240__200_66__0', _errors, **kwargs)
+        _fn_alex_image = get_registered_function('dnn.image.transform.alex', 'alex__200_100', _errors, **kwargs)
+        _nav_threshold = parse_option('navigator.point.recognition.threshold', float, 0.100, _errors, **kwargs)
         _rt_compile = parse_option('runtime.graph.compilation', int, 1, _errors, **kwargs)
         self._navigator.restart(fn_dave_image=_fn_dave_image,
                                 fn_alex_image=_fn_alex_image,
@@ -349,8 +353,8 @@ class InferenceApplication(Application):
         parser = SafeConfigParser()
         # Ignore the teleop managed configuration use a location not accessible via the ui. Overrides come last.
         _override = os.path.join(self._config_dir, 'inference')
-        [parser.read(_f) for _f in ['config.ini'] + self._glob(self._internal_models, '*.ini') + self._glob(_override, '*.ini')]
-        cfg = dict(parser.items('inference'))
+        [parser.read(_f) for _f in self._glob(self._internal_models, '*.ini') + self._glob(_override, '*.ini')]
+        cfg = dict(parser.items('inference')) if parser.has_section('inference') else {}
         logger.info(cfg)
         return cfg
 

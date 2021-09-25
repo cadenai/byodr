@@ -2,6 +2,7 @@ import argparse
 import glob
 import logging
 import os
+
 from ConfigParser import SafeConfigParser
 
 from byodr.utils import Application
@@ -26,8 +27,8 @@ class PilotApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        cfg = dict(parser.items('pilot'))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('pilot')) if parser.has_section('pilot') else {}
         self.logger.info(cfg)
         return cfg
 

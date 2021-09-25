@@ -2,6 +2,7 @@ import argparse
 import collections
 import glob
 import logging
+import multiprocessing
 import os
 import shutil
 
@@ -17,38 +18,41 @@ from byodr.utils.option import parse_option, hash_dict
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
-
-class FakeSpeedOdometer(object):
-    def __init__(self):
-        self._value = 0
-
-    def get(self, c_teleop):
-        # Use throttle as the proxy.
-        # The teleop command can be none sometimes on slow connections.
-        self._value = self._value if c_teleop is None else c_teleop.get('throttle', 0)
-        return self._value
-
-    def start(self):
-        pass
-
-    def quit(self):
-        pass
+RAS_ERROR_SPEED_VAL = 999
 
 
 class RasSpeedOdometer(object):
     def __init__(self, master_uri):
         self._values = collections.deque(maxlen=1)
         self._status = ReceiverThread(url=('{}:5560'.format(master_uri)), topic=b'ras/sensor/odometer')
-        self._status.add_listener(self._on_receive)
+        self._status.add_listener(self.ras_receive)
+        self._operation_mode = 'throttle'
+        self._receive_micro = 0
+        self._lock = multiprocessing.Lock()
 
-    def _on_receive(self, msg):
-        self._values.append(float(msg.get('velocity')))
+    def ras_receive(self, msg):
+        with self._lock:
+            self._operation_mode = 'odometer'
+            self._receive_micro = timestamp()
+            self._values.append(float(msg.get('velocity')))
 
-    # noinspection PyUnusedLocal
+    def _get_proxy_mode(self, c_teleop):
+        # Use throttle as the proxy value for speed.
+        # The teleop command can be none sometimes on slow connections.
+        if c_teleop is not None:
+            self._values.append(abs(c_teleop.get('throttle')))
+        return self._values[0]
+
+    def _get_ras_mode(self):
+        _is_receiving = timestamp() - self._receive_micro < 1e6
+        return self._values[0] if _is_receiving else RAS_ERROR_SPEED_VAL
+
     def get(self, c_teleop):
-        return self._values[0] if len(self._values) > 0 else 0
+        with self._lock:
+            return self._get_proxy_mode(c_teleop) if self._operation_mode == 'throttle' else self._get_ras_mode()
 
     def start(self):
+        self._values.append(0)
         self._status.start()
 
     def quit(self):
@@ -58,7 +62,7 @@ class RasSpeedOdometer(object):
 class Platform(Configurable):
     def __init__(self):
         super(Platform, self).__init__()
-        self._odometer = FakeSpeedOdometer()
+        self._odometer = None
         self._gps_poller = GpsPollerThread()
         self._geo_tracker = GeoTracker()
 
@@ -68,7 +72,7 @@ class Platform(Configurable):
         return self._geo_tracker.track(position)
 
     def state(self, c_teleop):
-        y_vel = self._odometer.get(c_teleop)
+        y_vel = 0 if self._odometer is None else self._odometer.get(c_teleop)
         latitude, longitude, bearing = self._track()
         return dict(latitude_geo=latitude,
                     longitude_geo=longitude,
@@ -77,18 +81,15 @@ class Platform(Configurable):
                     time=timestamp())
 
     def internal_quit(self, restarting=False):
-        self._odometer.quit()
+        if self._odometer is not None:
+            self._odometer.quit()
         if not restarting:
             self._gps_poller.quit()
 
     def internal_start(self, **kwargs):
         errors = []
-        _speed_enabled = parse_option('ras.odometer.speed.type', int, 0, errors, **kwargs) == 1
-        if _speed_enabled:
-            _master_uri = parse_option('ras.master.uri', str, errors, **kwargs)
-            self._odometer = RasSpeedOdometer(_master_uri)
-        else:
-            self._odometer = FakeSpeedOdometer()
+        _master_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **kwargs)
+        self._odometer = RasSpeedOdometer(_master_uri)
         self._odometer.start()
         if not self._gps_poller.is_alive():
             self._gps_poller.start()
@@ -121,7 +122,7 @@ class RoverHandler(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        self._process_frequency = parse_option('clock.hz', int, 10, errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 100, errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 200, errors, **kwargs) * 1000.
         self._vehicle.restart(**kwargs)
         errors.extend(self._vehicle.get_errors())
@@ -191,9 +192,9 @@ class RoverApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        cfg = dict(parser.items('vehicle'))
-        cfg.update(dict(parser.items('camera')))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('vehicle')) if parser.has_section('vehicle') else {}
+        cfg.update(dict(parser.items('camera')) if parser.has_section('camera') else {})
         self.logger.info(cfg)
         return cfg
 

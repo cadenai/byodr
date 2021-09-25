@@ -95,10 +95,10 @@ class EventHandler(threading.Thread):
         self._photo_dir = photos
         self._quit_event = threading.Event()
         _errors = []
-        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
-        self._publish_frequency = parse_option('publish.hz', int, 1, _errors, **kwargs)
-        self._vehicle = parse_option('constant.vehicle.type', str, 'none', _errors, **kwargs)
-        self._config = parse_option('constant.vehicle.config', str, 'none', _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
+        self._publish_frequency = parse_option('publish.hz', int, 2, _errors, **kwargs)
+        self._vehicle = parse_option('constant.vehicle.type', str, 'vehicle.byodr.2020', _errors, **kwargs)
+        self._config = parse_option('constant.vehicle.config', str, 'latest', _errors, **kwargs)
         _im_width, _im_height = parse_option('image.persist.scale', str, '320x240', _errors, **kwargs).split('x')
         self._im_height = int(_im_height)
         self._im_width = int(_im_width)
@@ -215,8 +215,8 @@ class RecorderApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        cfg = dict(parser.items('recorder'))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('recorder')) if parser.has_section('recorder') else {}
         self.logger.info(cfg)
         return cfg
 

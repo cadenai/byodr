@@ -65,8 +65,8 @@ _registered_functions = {
 }
 
 
-def get_registered_function(key, errors, **kwargs):
-    name = kwargs.get(key, None)
+def get_registered_function(key, default_value, errors, **kwargs):
+    name = kwargs.get(key, default_value)
     if name in _registered_functions:
         return _registered_functions.get(name)
     else:

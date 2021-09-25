@@ -47,8 +47,8 @@ class CarlaHandler(Configurable):
 
     def internal_start(self, **kwargs):
         _errors = []
-        _remote = parse_option('host.location', str, 'localhost', _errors, **kwargs)
-        _img_wh = parse_option('camera.image.input.shape', str, errors=_errors, **kwargs)
+        _remote = parse_option('host.location', str, '127.0.0.1:2000', _errors, **kwargs)
+        _img_wh = parse_option('camera.image.input.shape', str, '640x480', errors=_errors, **kwargs)
         carla_host, carla_port = _remote, 2000
         if ':' in carla_host:
             host, port = carla_host.split(':')
@@ -58,9 +58,9 @@ class CarlaHandler(Configurable):
         _shape = [int(x) for x in _img_wh.split('x')]
         _shape = (_shape[1], _shape[0], 3)
         self._image_shape = _shape
-        self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, -1, _errors, **kwargs)
+        self._rand_weather_seconds = parse_option('weather.random.each.seconds', int, 180, _errors, **kwargs)
         self._spawn_preferred_id = parse_option('world.spawn.preferred.id', int, -1, _errors, **kwargs)
-        self._spawn_preferred_weather = parse_option('world.spawn.preferred.weather', str, None, _errors, **kwargs)
+        self._spawn_preferred_weather = parse_option('world.spawn.preferred.weather', str, 'ClearNoon', _errors, **kwargs)
         self._world = carla_client.get_world()
         self._traffic_manager = carla_client.get_trafficmanager(self._tm_port)
         self._traffic_manager.global_percentage_speed_difference(65)

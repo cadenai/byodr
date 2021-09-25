@@ -87,7 +87,7 @@ class CarlaRunner(Configurable):
         self._vehicle.restart(**kwargs)
         _errors = self._vehicle.get_errors()
         _errors += self._publisher.restart(**kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 10, _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
         return _errors
 
@@ -124,10 +124,10 @@ class CarlaApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        cfg = dict(parser.items('platform'))
-        cfg.update(dict(parser.items('vehicle')))
-        cfg.update(dict(parser.items('camera')))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        cfg = dict(parser.items('platform')) if parser.has_section('platform') else {}
+        cfg.update(dict(parser.items('vehicle')) if parser.has_section('vehicle') else {})
+        cfg.update(dict(parser.items('camera')) if parser.has_section('camera') else {})
         self.logger.info(cfg)
         return cfg
 

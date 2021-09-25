@@ -93,8 +93,8 @@ class MonitorApplication(Application):
 
     def _config(self):
         parser = SafeConfigParser()
-        [parser.read(_f) for _f in ['config.ini'] + glob.glob(os.path.join(self._config_dir, '*.ini'))]
-        return dict(parser.items('vehicle'))
+        [parser.read(_f) for _f in glob.glob(os.path.join(self._config_dir, '*.ini'))]
+        return dict(parser.items('vehicle')) if parser.has_section('vehicle') else {}
 
     def _on_receive(self, msg):
         self._integrity.on_message(msg.get('time'))
@@ -113,8 +113,8 @@ class MonitorApplication(Application):
             self._status.quit()
         errors = []
         _config = self._config()
-        _process_frequency = parse_option('clock.hz', int, 10, errors, **_config)
-        _master_uri = parse_option('ras.master.uri', str, 'none', errors, **_config)
+        _process_frequency = parse_option('clock.hz', int, 100, errors, **_config)
+        _master_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **_config)
         _steering_offset = parse_option('ras.driver.steering.offset', float, 0.0, errors, **_config)
         _motor_scale = parse_option('ras.driver.motor.scale', float, 1.0, errors, **_config)
         self.set_hz(_process_frequency)
