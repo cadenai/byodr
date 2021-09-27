@@ -1,4 +1,4 @@
-FROM centipede2donald/raspbian-stretch:gst-omx-rpi-0.50.1
+FROM centipede2donald/raspbian-stretch:gst-omx-rpi-0.50.2
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 

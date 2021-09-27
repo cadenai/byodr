@@ -200,12 +200,13 @@ class AbstractThrottleControl(object):
 
 
 class PidThrottleControl(AbstractThrottleControl):
-    def __init__(self, (p, i, d), stop_p, min_desired_speed, max_desired_speed):
+    def __init__(self, pid_config, stop_p, min_desired_speed, max_desired_speed):
         super(PidThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
         self._pid_throttle = None
         self._pid_stop = None
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
+        (p, i, d) = pid_config
         self._pid_throttle = self._create_pid_ctl(p=p, i=i, d=d)
         self._pid_stop = self._create_pid_ctl(p=stop_p)
 
@@ -273,14 +274,19 @@ class AbstractCruiseControl(AbstractDriverBase):
             )
         self._errors = _errors
 
+    def get_action(self, *args):
+        raise NotImplementedError()
+
     def get_errors(self):
         return self._errors
 
     def calculate_desired_speed(self, desired_speed, throttle, forced_acceleration, forced_deceleration, maximum=None):
         return self._throttle_control.calculate_desired_speed(desired_speed, throttle, forced_acceleration, forced_deceleration, maximum)
 
-    def calculate_throttle(self, desired_speed, current_speed):
-        return 0 if None in (desired_speed, current_speed) else self._throttle_control.calculate_throttle(desired_speed, current_speed)
+    def calculate_throttle(self, desired_speed, current_speed, trust_odometer=0):
+        if None in (desired_speed, current_speed) or not bool(int(trust_odometer)):
+            return 0
+        return self._throttle_control.calculate_throttle(desired_speed, current_speed)
 
 
 class RawConsoleDriver(AbstractCruiseControl):
@@ -308,7 +314,9 @@ class StaticCruiseDriver(AbstractCruiseControl):
                                                           forced_acceleration=blob.forced_acceleration,
                                                           forced_deceleration=blob.forced_deceleration)
         blob.steering = self._apply_dead_zone(blob.steering, dead_zone=0)
-        blob.throttle = self.calculate_throttle(blob.desired_speed, current_speed=(vehicle.get('velocity', 0)))
+        blob.throttle = self.calculate_throttle(blob.desired_speed,
+                                                current_speed=vehicle.get('velocity'),
+                                                trust_odometer=vehicle.get('trust_velocity'))
         blob.steering_driver = OriginType.HUMAN
         blob.speed_driver = OriginType.HUMAN
         blob.save_event = True
@@ -405,7 +413,9 @@ class DeepNetworkDriver(AbstractCruiseControl):
                                                                  maximum=self._max_desired_speed))
         _speed_intervention = blob.forced_acceleration or blob.forced_deceleration
         blob.speed_driver = OriginType.CONSOLE if _speed_intervention else OriginType.DNN
-        blob.throttle = self.calculate_throttle(desired_speed=blob.desired_speed, current_speed=(vehicle.get('velocity', 0)))
+        blob.throttle = self.calculate_throttle(desired_speed=blob.desired_speed,
+                                                current_speed=vehicle.get('velocity'),
+                                                trust_odometer=vehicle.get('trust_velocity'))
         # Handle steering.
         if blob.forced_steering or _speed_intervention:
             # Any intervention type is sufficient to set the steering coming in from the user.

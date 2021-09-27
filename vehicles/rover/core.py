@@ -82,8 +82,8 @@ class ConfigurableImageGstSource(Configurable):
             config = {
                 'ip': (parse_option(self._name + '.camera.ip', str, '192.168.1.64', errors=_errors, **kwargs)),
                 'port': (parse_option(self._name + '.camera.port', int, 554, errors=_errors, **kwargs)),
-                'user': (parse_option(self._name + '.camera.user', str, 'user', errors=_errors, **kwargs)),
-                'password': (parse_option(self._name + '.camera.password', str, 'pass', errors=_errors, **kwargs)),
+                'user': (parse_option(self._name + '.camera.user', str, 'user1', errors=_errors, **kwargs)),
+                'password': (parse_option(self._name + '.camera.password', str, 'HaikuPlot876', errors=_errors, **kwargs)),
                 'path': (parse_option(self._name + '.camera.path', str, '/Streaming/Channels/102', errors=_errors, **kwargs)),
                 'height': out_height,
                 'width': out_width,

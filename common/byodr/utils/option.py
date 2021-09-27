@@ -13,7 +13,7 @@ class PropertyError(ValueError):
 def _parse(key, fn_type=(lambda x: x), **kwargs):
     try:
         return fn_type(kwargs[key])
-    except (KeyError, ValueError, TypeError) as e:
+    except (ValueError, TypeError) as e:
         raise PropertyError(key, str(e))
 
 
@@ -21,10 +21,12 @@ def parse_option(key, fn_type=(lambda x: x), default_value=None, errors=None, **
     errors = [] if errors is None else errors
     try:
         return _parse(key, fn_type=fn_type, **kwargs)
+    except KeyError:
+        if default_value is None:
+            errors.append(PropertyError(key, "The key is missing and no default value has been set"))
     except PropertyError as pe:
-        if errors is not None:
-            errors.append(pe)
-        return fn_type(default_value)
+        errors.append(pe)
+    return fn_type(default_value)
 
 
 def hash_dict(**m):

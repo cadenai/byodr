@@ -1,5 +1,5 @@
 # Must be run from directory root so the python common directory is included in the build context.
-# docker build -f docker/pi-cp39-gstreamer.dockerfile -t centipede2donald/raspbian-stretch:gst-omx-rpi-0.50.1 .
+# docker build -f docker/pi-cp39-gstreamer.dockerfile -t centipede2donald/raspbian-stretch:gst-omx-rpi-0.50.2 .
 
 FROM mmastrac/gst-omx-rpi
 

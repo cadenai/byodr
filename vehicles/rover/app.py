@@ -2,7 +2,6 @@ import argparse
 import collections
 import glob
 import logging
-import multiprocessing
 import os
 import shutil
 
@@ -18,41 +17,31 @@ from byodr.utils.option import parse_option, hash_dict
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
-RAS_ERROR_SPEED_VAL = 999
-
 
 class RasSpeedOdometer(object):
     def __init__(self, master_uri):
+        self._motor_effort_speed_factor = 2.5 / 3.6
         self._values = collections.deque(maxlen=1)
-        self._status = ReceiverThread(url=('{}:5560'.format(master_uri)), topic=b'ras/sensor/odometer')
+        self._status = ReceiverThread(url=('{}:5555'.format(master_uri)), topic=b'ras/drive/status')
         self._status.add_listener(self.ras_receive)
-        self._operation_mode = 'throttle'
-        self._receive_micro = 0
-        self._lock = multiprocessing.Lock()
 
     def ras_receive(self, msg):
-        with self._lock:
-            self._operation_mode = 'odometer'
-            self._receive_micro = timestamp()
-            self._values.append(float(msg.get('velocity')))
+        if 'velocity' in msg.keys():
+            value = float(msg.get('velocity'))
+        else:
+            value = float(msg.get('motor_effort')) * self._motor_effort_speed_factor
+        self._values.append((value, timestamp()))
 
-    def _get_proxy_mode(self, c_teleop):
-        # Use throttle as the proxy value for speed.
-        # The teleop command can be none sometimes on slow connections.
-        if c_teleop is not None:
-            self._values.append(abs(c_teleop.get('throttle')))
-        return self._values[0]
-
-    def _get_ras_mode(self):
-        _is_receiving = timestamp() - self._receive_micro < 1e6
-        return self._values[0] if _is_receiving else RAS_ERROR_SPEED_VAL
-
-    def get(self, c_teleop):
-        with self._lock:
-            return self._get_proxy_mode(c_teleop) if self._operation_mode == 'throttle' else self._get_ras_mode()
+    def get(self):
+        value, ts = self._values[-1]
+        _duration = timestamp() - ts
+        # Half a second is an eternity.
+        if _duration > 5e5:
+            raise AssertionError(_duration)
+        return value
 
     def start(self):
-        self._values.append(0)
+        self._values.append((0, timestamp()))
         self._status.start()
 
     def quit(self):
@@ -71,13 +60,20 @@ class Platform(Configurable):
         position = None if None in (latitude, longitude) else (latitude, longitude)
         return self._geo_tracker.track(position)
 
-    def state(self, c_teleop):
-        y_vel = 0 if self._odometer is None else self._odometer.get(c_teleop)
+    def state(self):
+        y_vel, trust_velocity = 0, 0
+        try:
+            if self._odometer is not None:
+                y_vel, trust_velocity = self._odometer.get(), 1
+        except AssertionError:
+            pass
+
         latitude, longitude, bearing = self._track()
         return dict(latitude_geo=latitude,
                     longitude_geo=longitude,
                     heading=bearing,
                     velocity=y_vel,
+                    trust_velocity=trust_velocity,
                     time=timestamp())
 
     def internal_quit(self, restarting=False):
@@ -168,7 +164,7 @@ class RoverHandler(Configurable):
     def cycle(self, c_pilot, c_teleop):
         self._cycle_ptz_cameras(c_pilot, c_teleop)
         map(lambda x: x.check(), self._gst_sources)
-        return self._vehicle.state(c_teleop)
+        return self._vehicle.state()
 
 
 class RoverApplication(Application):

@@ -205,6 +205,7 @@ class CarlaHandler(Configurable):
                     longitude_geo=longitude,
                     heading=bearing,
                     velocity=self._velocity(),
+                    trust_velocity=1,
                     auto_active=ap_active,
                     auto_steering=ap_steering,
                     auto_throttle=ap_throttle,
