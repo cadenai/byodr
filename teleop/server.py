@@ -125,7 +125,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
             recorder = None if state is None else state[3]
-            speed_scale = 1. if pilot is None else float(pilot.get('speed_scale', 1))
+            speed_scale = 3.6
             pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
             pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)
             pilot_match_distance = 1 if pilot is None else pilot.get('navigation_match_distance', 1)
