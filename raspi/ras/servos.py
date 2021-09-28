@@ -129,7 +129,7 @@ class GPIODriver(AbstractDriver):
         _motor_effort = 0
         if self._motor_servo is not None:
             config = self._throttle_config
-            _motor_effort = config.get('scale') * throttle
+            _motor_effort = config.get('scale') * throttle * (1 if throttle > 0 else 0.5)
             _motor_shift = config.get('forward_shift') if throttle > 0 else config.get('backward_shift')
             _motor_angle = min(90, max(-90, _motor_shift + _motor_effort))
             _reverse_boost = config.get('reverse')
@@ -340,7 +340,7 @@ class HallRps(object):
 
 class HallOdometer(object):
     def __init__(self, **kwargs):
-        self._cm_per_revolution = parse_option('odometer.distance.cm_per_revolution', float, 5.0, **kwargs)
+        self._cm_per_revolution = parse_option('odometer.distance.cm_per_revolution', float, 18.75, **kwargs)
         self._debug = parse_option('odometer.debug', int, 0, **kwargs) == 1
         self._alpha = parse_option('odometer.moment.alpha', float, 0.10, **kwargs)
         self._enabled = parse_option('drive.type', str, **kwargs) == 'gpio_with_hall'
