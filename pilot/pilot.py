@@ -56,7 +56,6 @@ class Blob(AttrDict):
     def __init__(self, **kwargs):
         super(Blob, self).__init__(**kwargs)
         self.time = timestamp()
-        self.speed_scale = kwargs.get('speed_scale')
         self.cruise_speed = kwargs.get('cruise_speed')
         self.desired_speed = kwargs.get('desired_speed')
         self.driver = kwargs.get('driver')
@@ -708,7 +707,6 @@ class DriverManager(Configurable):
             _nav_match_point = self._navigator.get_match_point() if _nav_active else None
             _inference_brake = 0. if inference is None else inference.get('obstacle', 0.)
             blob = Blob(driver=self._driver_ctl,
-                        speed_scale=self._speed_scale,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         navigation_active=_nav_active,
