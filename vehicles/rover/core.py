@@ -225,11 +225,11 @@ class PTZCamera(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', (lambda x: bool(int(x))), True, errors, **kwargs)
+        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', (lambda x: bool(int(x))), 1, errors, **kwargs)
         if ptz_enabled:
             _server = parse_option(self._name + '.camera.ip', str, '192.168.1.64', errors=errors, **kwargs)
-            _user = parse_option(self._name + '.camera.user', str, 'user', errors=errors, **kwargs)
-            _password = parse_option(self._name + '.camera.password', str, 'pass', errors=errors, **kwargs)
+            _user = parse_option(self._name + '.camera.user', str, 'user1', errors=errors, **kwargs)
+            _password = parse_option(self._name + '.camera.password', str, 'HaikuPlot876', errors=errors, **kwargs)
             _protocol = 'http'
             _path = '/ISAPI/PTZCtrl/channels/1'
             _flip = 'tilt'
