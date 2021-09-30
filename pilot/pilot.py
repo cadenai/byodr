@@ -201,8 +201,6 @@ class AbstractThrottleControl(object):
 class PidThrottleControl(AbstractThrottleControl):
     def __init__(self, pid_config, stop_p, min_desired_speed, max_desired_speed):
         super(PidThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
-        self._pid_throttle = None
-        self._pid_stop = None
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
         (p, i, d) = pid_config
@@ -245,12 +243,13 @@ class AbstractCruiseControl(AbstractDriverBase):
         _errors = []
         self._min_desired_speed = 0
         self._max_desired_speed = 0
-        self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, 0.1, _errors, **kwargs)
-        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, 5.0, _errors, **kwargs)
+        # Internal speed values are in meters per second.
+        self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, (0.1 / 3.6), _errors, **kwargs)
+        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, (8.0 / 3.6), _errors, **kwargs)
         #
         _control_type = parse_option('driver.cc.control.type', str, 'pid', _errors, **kwargs)
         if _control_type == 'pid':
-            p = (parse_option('driver.cc.throttle.pid_controller.p', float, 0.6, _errors, **kwargs))
+            p = (parse_option('driver.cc.throttle.pid_controller.p', float, 0.002, _errors, **kwargs))
             i = (parse_option('driver.cc.throttle.pid_controller.i', float, 2.0, _errors, **kwargs))
             d = (parse_option('driver.cc.throttle.pid_controller.d', float, 0, _errors, **kwargs))
             stop_p = (parse_option('driver.cc.stop.pid_controller.p', float, 1.0, _errors, **kwargs))
