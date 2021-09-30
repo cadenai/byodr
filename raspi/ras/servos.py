@@ -129,7 +129,7 @@ class GPIODriver(AbstractDriver):
         _motor_effort = 0
         if self._motor_servo is not None:
             config = self._throttle_config
-            _motor_effort = config.get('scale') * throttle * (1 if throttle > 0 else 0.5)
+            _motor_effort = config.get('scale') * throttle
             _motor_shift = config.get('forward_shift') if throttle > 0 else config.get('backward_shift')
             _motor_angle = min(90, max(-90, _motor_shift + _motor_effort))
             _reverse_boost = config.get('reverse')
@@ -151,7 +151,7 @@ class GPIODriver(AbstractDriver):
             _steer_servo_config = self._steer_servo_config
             _motor_servo_config = self._motor_servo_config
             # Translate the values into our domain.
-            _steer_servo_config['min_pw'] = 0.5 + .5 * max(-1, min(1, config.get('steering_offset')))
+            _steer_servo_config['min_pw'] = 0.5 + .5 * max(-2, min(2, config.get('steering_offset')))
             self._throttle_config['scale'] = max(0, config.get('motor_scale'))
             self._steer_servo = self._create_servo(self._steer_servo, 'steering', _steer_servo_config)
             self._motor_servo = self._create_servo(self._motor_servo, 'motor', _motor_servo_config)
@@ -312,35 +312,43 @@ class HallRps(object):
     def __init__(self, pin=16, moment=0.05, debug=False):
         self._moment = moment
         self._debug = debug
+        self._lock = threading.Lock()
         self._rps = 0
         self._detect_time = 0
-        self._detections = 0
+        self._detect_duration = 0
+        self._num_detections = 0
         self._sensor = DigitalInputDevice(pin=pin, pull_up=True)
         self._sensor.when_activated = self._detect
 
     def tick(self):
-        # Drop to zero when stopped.
-        if timestamp() - self._detect_time > 1e5:
-            self._rps = (1. - self._moment) * self._rps
-            self._rps = self._rps if self._rps > 1e-4 else 0
+        with self._lock:
+            # Drop to zero when stopped.
+            _elapsed = timestamp() - self._detect_time
+            if self._detect_duration > 0 and _elapsed / self._detect_duration > 1:
+                self._rps *= (1 - self._moment) if self._rps > 1e-2 else 0
 
     def rps(self):
-        return self._rps
+        with self._lock:
+            return self._rps
 
     def detections(self):
-        return self._detections
+        with self._lock:
+            return self._num_detections
 
     def _detect(self):
-        h_val = 1e6 / (timestamp() - self._detect_time)
-        self._rps = self._moment * h_val + (1. - self._moment) * self._rps
-        self._detect_time = timestamp()
-        if self._debug:
-            self._detections += 1
+        with self._lock:
+            _now = timestamp()
+            self._detect_duration = _now - self._detect_time
+            _rps = 1e6 / self._detect_duration
+            self._rps = (self._moment * _rps + (1. - self._moment) * self._rps) if self._rps > 0 else _rps
+            self._detect_time = _now
+            if self._debug:
+                self._num_detections += 1
 
 
 class HallOdometer(object):
     def __init__(self, **kwargs):
-        self._cm_per_revolution = parse_option('odometer.distance.cm_per_revolution', float, 18.75, **kwargs)
+        self._cm_per_revolution = parse_option('odometer.distance.cm_per_revolution', float, 15, **kwargs)
         self._debug = parse_option('odometer.debug', int, 0, **kwargs) == 1
         self._alpha = parse_option('odometer.moment.alpha', float, 0.10, **kwargs)
         self._enabled = parse_option('drive.type', str, **kwargs) == 'gpio_with_hall'
@@ -369,7 +377,7 @@ class HallOdometer(object):
 
 
 class MainApplication(Application):
-    def __init__(self, chassis=None, hz=100, **kwargs):
+    def __init__(self, chassis=None, hz=50, **kwargs):
         super(MainApplication, self).__init__(run_hz=hz)
         self._chassis = chassis
         self._integrity = MessageStreamProtocol()
