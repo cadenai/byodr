@@ -245,7 +245,7 @@ class AbstractCruiseControl(AbstractDriverBase):
         self._max_desired_speed = 0
         # Internal speed values are in meters per second.
         self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, (0.1 / 3.6), _errors, **kwargs)
-        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, (8.0 / 3.6), _errors, **kwargs)
+        self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, (5.0 / 3.6), _errors, **kwargs)
         #
         _control_type = parse_option('driver.cc.control.type', str, 'pid', _errors, **kwargs)
         if _control_type == 'pid':
