@@ -2,14 +2,15 @@ import argparse
 import glob
 import logging
 import os
+from abc import ABCMeta, abstractmethod
 
 from ConfigParser import SafeConfigParser
 
-from byodr.utils import Application, timestamp
-from byodr.utils.ipc import ReceiverThread, LocalIPCServer, JSONZmqClient, json_collector
+from byodr.utils import timestamp
+from byodr.utils.ipc import ReceiverThread, JSONZmqClient
 from byodr.utils.option import parse_option, hash_dict
 from byodr.utils.protocol import MessageStreamProtocol
-from byodr.utils.usbrelay import SingleChannelUsbRelay, StaticChannelRelayHolder, SearchUsbRelayFactory
+from byodr.utils.usbrelay import SingleChannelUsbRelay
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
@@ -46,9 +47,40 @@ class PiClientFactory(object):
         return JSONZmqClient(urls='{}:5550'.format(master_uri))
 
 
-class MonitorApplication(Application):
+class AbstractRelay(object):
+    __metaclass__ = ABCMeta
+
+    @staticmethod
+    def _latest_or_none(candidate, patience):
+        _time = 0 if candidate is None else candidate.get('time')
+        _on_time = (timestamp() - _time) < patience
+        return candidate if _on_time else None
+
+    @abstractmethod
+    def setup(self):
+        pass
+
+    def step(self, pilot, teleop):
+        pass
+
+    def quit(self):
+        pass
+
+
+class NoopRelay(AbstractRelay):
+    def setup(self):
+        return []
+
+    def step(self, pilot, teleop):
+        pass
+
+    def quit(self):
+        pass
+
+
+class RealMonitoringRelay(AbstractRelay):
     def __init__(self, relay, client_factory=None, status_factory=None, config_dir=os.getcwd()):
-        super(MonitorApplication, self).__init__()
+        super(RealMonitoringRelay, self).__init__()
         self._relay = relay
         self._config_dir = config_dir
         self._integrity = MessageStreamProtocol()
@@ -59,10 +91,6 @@ class MonitorApplication(Application):
         self._pi_client = None
         self._status = None
         self._servo_config = None
-        self.ipc_server = None
-        self.pilot = None
-        self.teleop = None
-        self.ipc_chatter = None
 
     def _send_config(self, data):
         if self._pi_client is not None and data is not None:
@@ -100,11 +128,12 @@ class MonitorApplication(Application):
         self._integrity.on_message(msg.get('time'))
 
     def setup(self):
-        if self.active():
-            _hash = hash_dict(**self._config())
-            if _hash != self._config_hash:
-                self._config_hash = _hash
-                self._reboot()
+        _hash = hash_dict(**self._config())
+        if _hash != self._config_hash:
+            self._config_hash = _hash
+            return self._reboot()
+        else:
+            return []
 
     def _reboot(self):
         if self._pi_client is not None:
@@ -113,34 +142,31 @@ class MonitorApplication(Application):
             self._status.quit()
         errors = []
         _config = self._config()
-        _process_frequency = parse_option('clock.hz', int, 100, errors, **_config)
         _master_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **_config)
         _steering_offset = parse_option('ras.driver.steering.offset', float, 0.0, errors, **_config)
         _motor_scale = parse_option('ras.driver.motor.scale', float, 1.0, errors, **_config)
-        self.set_hz(_process_frequency)
-        self._patience_micro = parse_option('patience.ms', int, 200, errors, **_config) * 1000.
+        self._patience_micro = parse_option('patience.ms', int, 100, errors, **_config) * 1000.
         self._servo_config = dict(app_version=2, steering_offset=_steering_offset, motor_scale=_motor_scale)
         self._pi_client = self._client_factory.create(_master_uri)
         self._status = self._status_factory.create(_master_uri)
         self._status.add_listener(self._on_receive)
         self._status.start()
         self._integrity.reset()
-        self.ipc_server.register_start(errors)
         self._send_config(self._servo_config)
-        self.logger.info("Processing master uri '{}' at {} Hz.".format(_master_uri, _process_frequency))
+        logger.info("Processing master at uri '{}'.".format(_master_uri))
+        return errors
 
-    def finish(self):
+    def quit(self):
         self._relay.open()
         if self._pi_client is not None:
             self._pi_client.quit()
         if self._status is not None:
             self._status.quit()
 
-    def step(self):
+    def step(self, pilot, teleop):
         # Always consume the latest commands.
-        pilot, teleop, _patience_micro = self.pilot, self.teleop, self._patience_micro
-        c_pilot = self._latest_or_none(pilot, patience=_patience_micro)
-        c_teleop = self._latest_or_none(teleop, patience=_patience_micro)
+        c_pilot = self._latest_or_none(pilot, patience=self._patience_micro)
+        c_teleop = self._latest_or_none(teleop, patience=self._patience_micro)
         n_violations = self._integrity.check()
         if n_violations < -5:
             self._relay.close()
@@ -153,40 +179,6 @@ class MonitorApplication(Application):
             self._drive(None, None)
         else:
             self._drive(None, None)
-        chat = self.ipc_chatter()
-        if chat and chat.get('command') == 'restart':
-            self.setup()
-
-
-def monitor(arguments):
-    _relay = SearchUsbRelayFactory().get_relay()
-    assert _relay.is_attached(), "The device is not attached."
-
-    try:
-        _holder = StaticChannelRelayHolder(relay=_relay, channel=arguments.channel)
-        application = MonitorApplication(relay=_holder, config_dir=arguments.config)
-        quit_event = application.quit_event
-
-        pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-        teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-        ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
-
-        application.ipc_server = LocalIPCServer(url='ipc:///byodr/relay_c.sock', name='relay', event=quit_event)
-        application.pilot = lambda: pilot.get()
-        application.teleop = lambda: teleop.get()
-        application.ipc_chatter = lambda: ipc_chatter.get()
-
-        threads = [pilot, teleop, ipc_chatter, application.ipc_server]
-        if quit_event.is_set():
-            return 0
-
-        [t.start() for t in threads]
-        application.run()
-
-        logger.info("Waiting on threads to stop.")
-        [t.join() for t in threads]
-    finally:
-        _relay.open()
 
 
 def main():
@@ -196,11 +188,6 @@ def main():
     parser_a = subparsers.add_parser('exec', help='Open or close the relay.')
     parser_a.add_argument('--cmd', type=str, required=True, help='Open or close the relay.')
     parser_a.set_defaults(func=execute)
-
-    parser_b = subparsers.add_parser('monitor', help='Open or close the relay depending on the availability of a service and topic.')
-    parser_b.add_argument('--config', type=str, default='/config', help='Config directory path.')
-    parser_b.add_argument('--channel', type=int, default=0, help='Relay channel id.')
-    parser_b.set_defaults(func=monitor)
 
     args = parser.parse_args()
     args.func(args)

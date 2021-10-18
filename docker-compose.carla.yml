@@ -4,7 +4,8 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
-  relay:
+  wireguard:
+    image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
   rosnode:
@@ -14,7 +15,7 @@ services:
       - ./rosnode:/app
   vehicle:
     # Need extra cpu resources to run the h264 encoder sockets.
-    cpuset: "0-4"
+    cpuset: "1,4,5"
     build:
       context: .
       dockerfile: vehicles/carla09/Dockerfile

@@ -4,18 +4,23 @@ import logging
 import os
 
 from ConfigParser import SafeConfigParser
+from core import CommandProcessor
+from relay import NoopRelay, RealMonitoringRelay
 
 from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
-from pilot import CommandProcessor
+from byodr.utils.usbrelay import StaticChannelRelayHolder, SearchUsbRelayFactory
+
+logger = logging.getLogger(__name__)
 
 
 class PilotApplication(Application):
-    def __init__(self, processor, config_dir=os.getcwd()):
+    def __init__(self, processor, relay, config_dir=os.getcwd()):
         super(PilotApplication, self).__init__()
         self._config_dir = config_dir
         self._processor = processor
+        self._relay = relay
         self.publisher = None
         self.ipc_server = None
         self.ipc_chatter = None
@@ -37,21 +42,25 @@ class PilotApplication(Application):
 
     def setup(self):
         if self.active():
+            _relay_errors = self._relay.setup()
             _restarted = self._processor.restart(**self._config())
             if _restarted:
-                self.ipc_server.register_start(self._processor.get_errors())
+                self.ipc_server.register_start(_relay_errors + self._processor.get_errors())
                 _frequency = self._processor.get_frequency()
                 self.set_hz(_frequency)
                 self.logger.info("Processing at {} Hz - patience is {:2.2f} ms.".format(_frequency, self._processor.get_patience_ms()))
 
     def finish(self):
+        self._relay.quit()
         self._processor.quit()
 
     def step(self):
-        commands = (self.teleop(), self.external(), self.ros(), self.vehicle(), self.inference())
-        action = self._processor.next_action(*commands)
-        if action:
-            self.publisher.publish(action)
+        teleop = self.teleop()
+        commands = (teleop, self.external(), self.ros(), self.vehicle(), self.inference())
+        pilot = self._processor.next_action(*commands)
+        if pilot is not None:
+            self._relay.step(pilot, teleop)
+            self.publisher.publish(pilot)
         chat = self.ipc_chatter()
         if chat is not None:
             if chat.get('command') == 'restart':
@@ -65,37 +74,48 @@ def main():
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
     args = parser.parse_args()
 
-    route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes, load_instructions=True))
-    application = PilotApplication(processor=CommandProcessor(route_store), config_dir=args.config)
-    quit_event = application.quit_event
-    logger = application.logger
+    _relay = SearchUsbRelayFactory().get_relay()
+    logger.info("The USB Relay is {} attached.".format('well' if _relay.is_attached() else 'not'))
 
-    teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    external = json_collector(url='ipc:///byodr/external.sock', topic=b'aav/external/input', hwm=10, pop=True, event=quit_event)
-    ros = json_collector(url='ipc:///byodr/ros.sock', topic=b'aav/ros/input', hwm=10, pop=True, event=quit_event)
-    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
-    ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
+    if _relay.is_attached():
+        _holder = StaticChannelRelayHolder(relay=_relay, channel=0)
+        monitoring_relay = RealMonitoringRelay(relay=_holder, config_dir=args.config)
+    else:
+        monitoring_relay = NoopRelay()
 
-    application.teleop = lambda: teleop.get()
-    application.external = lambda: external.get()
-    application.ros = lambda: ros.get()
-    application.vehicle = lambda: vehicle.get()
-    application.inference = lambda: inference.get()
-    application.ipc_chatter = lambda: ipc_chatter.get()
-    application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
-    application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
-    threads = [teleop, external, ros, vehicle, inference, ipc_chatter, application.ipc_server]
-    if quit_event.is_set():
-        return 0
+    try:
+        route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes, load_instructions=True))
+        application = PilotApplication(processor=CommandProcessor(route_store), relay=monitoring_relay, config_dir=args.config)
+        quit_event = application.quit_event
 
-    [t.start() for t in threads]
-    application.run()
+        teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
+        external = json_collector(url='ipc:///byodr/external.sock', topic=b'aav/external/input', hwm=10, pop=True, event=quit_event)
+        ros = json_collector(url='ipc:///byodr/ros.sock', topic=b'aav/ros/input', hwm=10, pop=True, event=quit_event)
+        vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
+        inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
+        ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
-    route_store.quit()
+        application.teleop = lambda: teleop.get()
+        application.external = lambda: external.get()
+        application.ros = lambda: ros.get()
+        application.vehicle = lambda: vehicle.get()
+        application.inference = lambda: inference.get()
+        application.ipc_chatter = lambda: ipc_chatter.get()
+        application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
+        application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
+        threads = [teleop, external, ros, vehicle, inference, ipc_chatter, application.ipc_server]
+        if quit_event.is_set():
+            return 0
 
-    logger.info("Waiting on threads to stop.")
-    [t.join() for t in threads]
+        [t.start() for t in threads]
+        application.run()
+
+        route_store.quit()
+
+        logger.info("Waiting on threads to stop.")
+        [t.join() for t in threads]
+    finally:
+        monitoring_relay.quit()
 
 
 if __name__ == "__main__":

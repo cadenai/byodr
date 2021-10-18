@@ -727,14 +727,13 @@ class CommandProcessor(Configurable):
         super(CommandProcessor, self).__init__()
         self._driver = DriverManager(route_store)
         self._process_frequency = 10
-        self._patience_ms = 10
         self._button_north_ctl = None
         self._button_west_ctl = None
         self._patience_micro = 1000.
         self._cache = None
 
     def get_patience_ms(self):
-        return self._patience_ms
+        return self._patience_micro * 1e-3
 
     def get_frequency(self):
         return self._process_frequency
@@ -747,13 +746,12 @@ class CommandProcessor(Configurable):
         _errors = []
         self._driver.restart(**kwargs)
         self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
-        self._patience_ms = parse_option('patience.ms', int, 500, _errors, **kwargs)
+        self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
         self._button_north_ctl = parse_option('controller.button.north.mode', str, 'driver_mode.inference.dnn', _errors, **kwargs)
         self._button_west_ctl = parse_option('controller.button.west.mode', str, 'ignore', _errors, **kwargs)
-        self._patience_micro = self._patience_ms * 1000.
         # Avoid processing the same command more than once.
         # TTL is specified in seconds.
-        self._cache = cachetools.TTLCache(maxsize=100, ttl=(self._patience_ms * 1e-3))
+        self._cache = cachetools.TTLCache(maxsize=100, ttl=(self._patience_micro * 1e-6))
         return _errors + self._driver.get_errors()
 
     def _cache_safe(self, key, func, *arguments):
@@ -838,4 +836,4 @@ class CommandProcessor(Configurable):
         if vehicle is not None and _ctl == 'driver_mode.automatic.backend':
             return self._driver.next_action(dict(), vehicle, inference)
         # Ignore old or repetitive teleop commands.
-        return self._driver.noop()
+        return None

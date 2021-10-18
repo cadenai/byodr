@@ -8,7 +8,7 @@ volumes:
   volume_byodr_sessions:
 services:
   zerotier:
-    cpuset: "0,1"
+    cpuset: "0"
     build:
       context: ./docker
       dockerfile: zerotier.dockerfile
@@ -25,7 +25,7 @@ services:
     volumes:
       - volume_zerotier_config:/var/lib/zerotier-one:rw
   wireguard:
-    cpuset: "0,1"
+    cpuset: "0"
     image: masipcat/wireguard-go
     container_name: wireguard
     restart: always
@@ -39,7 +39,7 @@ services:
     volumes:
       - volume_wireguard_config:/etc/wireguard:rw
   httpd:
-    cpuset: "0,1"
+    cpuset: "0"
     build:
       context: .
       dockerfile: httpd/Dockerfile
@@ -54,7 +54,7 @@ services:
     volumes:
       - volume_byodr_config:/config:ro
   ftpd:
-    cpuset: "0,1"
+    cpuset: "0"
     build:
       context: ./docker
       dockerfile: pure-ftpd.dockerfile
@@ -68,7 +68,7 @@ services:
       - volume_ftpd_config:/etc/pureftpd:rw
       - volume_byodr_sessions:/home/ftpuser:rw
   rosnode:
-    cpuset: "0,1"
+    cpuset: "0"
     build:
       context: .
       dockerfile: rosnode/Dockerfile
@@ -81,20 +81,8 @@ services:
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
-  relay:
-    cpuset: "0,1"
-    build:
-      context: .
-      dockerfile: vehicles/rover/rover_relay.dockerfile
-    image: centipede2donald/byodr-ce:rover_relay
-    container_name: byodr_relay
-    restart: always
-    privileged: true  # Access to usb devices without udev rules.
-    volumes:
-      - volume_byodr_sockets:/byodr:rw
-      - volume_byodr_config:/config:ro
   vehicle:
-    cpuset: "0,1"
+    cpuset: "1"
     build:
       context: .
       dockerfile: vehicles/rover/rover_vehicle.dockerfile
@@ -110,7 +98,7 @@ services:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:rw
   teleop:
-    cpuset: "0,1"
+    cpuset: "2"
     build:
       context: .
       dockerfile: teleop/Dockerfile
@@ -127,13 +115,14 @@ services:
       - volume_byodr_config:/config:rw
       - volume_byodr_sessions:/sessions:ro
   pilot:
-    cpuset: "0,1"
+    cpuset: "2"
     build:
       context: .
       dockerfile: pilot/Dockerfile
     image: centipede2donald/byodr-ce:pilot
     container_name: byodr_pilot
     restart: always
+    privileged: true  # Access to usb devices without udev rules.
     command: ["python", "app.py", "--name", "pilot", "--routes", "/sessions/routes"]
     environment:
       LD_PRELOAD: libgomp.so.1
@@ -142,7 +131,7 @@ services:
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:ro
   recorder:
-    cpuset: "2,3"
+    cpuset: "3"
     build:
       context: .
       dockerfile: recorder/Dockerfile
