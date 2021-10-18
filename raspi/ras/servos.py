@@ -380,7 +380,7 @@ class MainApplication(Application):
     def __init__(self, chassis=None, hz=50, **kwargs):
         super(MainApplication, self).__init__(run_hz=hz)
         self._chassis = chassis
-        self._integrity = MessageStreamProtocol()
+        self._integrity = MessageStreamProtocol(max_age_ms=100, max_delay_ms=100)
         self._cmd_history = CommandHistory(hz=hz)
         self._config_queue = collections.deque(maxlen=1)
         self._drive_queue = collections.deque(maxlen=1)
