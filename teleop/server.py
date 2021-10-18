@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import threading
-import time
 import traceback
 
 import cv2
@@ -35,8 +34,7 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_control = kwargs.get('fn_control')
-        self._operator_timeout_micro = 10 * 1e6  # 10 seconds.
-        self._operator_throttle_micro = 10 * 1e3  # 10 milliseconds.
+        self._operator_throttle_micro = 15 * 1e3  # 15 milliseconds.
 
     def check_origin(self, origin):
         return True
@@ -63,15 +61,15 @@ class ControlServerSocket(websocket.WebSocketHandler):
     def on_message(self, json_message):
         _response = json.dumps(dict(control='viewer'))
         if self._is_operator():
-            _micro_time = timestamp()
-            # Throttle very fast operator connections.
-            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
-            time.sleep(max(0, self._operator_throttle_micro - (_micro_time - _last_msg_micro)) * 1e-6)
-            msg = json.loads(json_message)
-            msg['time'] = _micro_time
-            self.operator_access_control.append(_micro_time)
-            self._fn_control(msg)
             _response = json.dumps(dict(control='operator'))
+            _micro_time = timestamp()
+            # Throttle very fast operator connections to protect our processing resources.
+            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
+            if _micro_time - _last_msg_micro > self._operator_throttle_micro:
+                msg = json.loads(json_message)
+                msg['time'] = _micro_time
+                self.operator_access_control.append(_micro_time)
+                self._fn_control(msg)
         try:
             self.write_message(_response)
         except websocket.WebSocketClosedError:
