@@ -88,7 +88,7 @@ class CarlaRunner(Configurable):
         _errors = self._vehicle.get_errors()
         _errors += self._publisher.restart(**kwargs)
         self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
-        self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
+        self._patience_micro = parse_option('patience.ms', int, 100, _errors, **kwargs) * 1000.
         return _errors
 
     def reset_agent(self):
@@ -154,6 +154,13 @@ class CarlaApplication(Application):
 
     def finish(self):
         self._runner.quit()
+
+    # def run(self):
+    #     from byodr.utils import Profiler
+    #     profiler = Profiler()
+    #     with profiler():
+    #         super(CarlaApplication, self).run()
+    #     profiler.dump_stats('/config/prof.stats')
 
     def step(self):
         runner, pilot, teleop, ipc_chatter, ipc_server = self._runner, self.pilot, self.teleop, self.ipc_chatter, self.ipc_server

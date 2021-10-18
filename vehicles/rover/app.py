@@ -119,7 +119,7 @@ class RoverHandler(Configurable):
     def internal_start(self, **kwargs):
         errors = []
         self._process_frequency = parse_option('clock.hz', int, 100, errors, **kwargs)
-        self._patience_micro = parse_option('patience.ms', int, 200, errors, **kwargs) * 1000.
+        self._patience_micro = parse_option('patience.ms', int, 100, errors, **kwargs) * 1000.
         self._vehicle.restart(**kwargs)
         errors.extend(self._vehicle.get_errors())
         if not self._gst_sources:
@@ -213,6 +213,13 @@ class RoverApplication(Application):
 
     def finish(self):
         self._handler.quit()
+
+    # def run(self):
+    #     from byodr.utils import Profiler
+    #     profiler = Profiler()
+    #     with profiler():
+    #         super(RoverApplication, self).run()
+    #     profiler.dump_stats('/config/prof.stats')
 
     def step(self):
         rover, pilot, teleop, publisher = self._handler, self.pilot, self.teleop, self.state_publisher
