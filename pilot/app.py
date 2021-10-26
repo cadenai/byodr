@@ -58,8 +58,8 @@ class PilotApplication(Application):
         teleop = self.teleop()
         commands = (teleop, self.external(), self.ros(), self.vehicle(), self.inference())
         pilot = self._processor.next_action(*commands)
+        self._relay.step(pilot, teleop)
         if pilot is not None:
-            self._relay.step(pilot, teleop)
             self.publisher.publish(pilot)
         chat = self.ipc_chatter()
         if chat is not None:
