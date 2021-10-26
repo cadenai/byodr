@@ -20,12 +20,12 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 class RasSpeedOdometer(object):
     def __init__(self, master_uri):
+        self._ras_uri = master_uri
         self._motor_effort_speed_factor = 2.5 / 3.6
         self._values = collections.deque(maxlen=1)
-        self._status = ReceiverThread(url=('{}:5555'.format(master_uri)), topic=b'ras/drive/status')
-        self._status.add_listener(self.ras_receive)
+        self._receiver = None
 
-    def ras_receive(self, msg):
+    def _on_receive(self, msg):
         if 'velocity' in msg.keys():
             value = float(msg.get('velocity'))
         else:
@@ -33,19 +33,26 @@ class RasSpeedOdometer(object):
         self._values.append((value, timestamp()))
 
     def get(self):
-        value, ts = self._values[-1]
-        _duration = timestamp() - ts
-        # Half a second is an eternity.
-        if _duration > 5e5:
-            raise AssertionError(_duration)
-        return value
+        try:
+            value, ts = self._values[-1]
+            _duration = timestamp() - ts
+            # Half a second is an eternity.
+            if _duration > 5e5:
+                raise AssertionError(_duration)
+            return value
+        except IndexError:
+            raise AssertionError("Not yet started.")
 
     def start(self):
+        # The receiver thread is not restartable.
+        self._receiver = ReceiverThread(url=('{}:5555'.format(self._ras_uri)), topic=b'ras/drive/status')
+        self._receiver.add_listener(self._on_receive)
+        self._receiver.start()
         self._values.append((0, timestamp()))
-        self._status.start()
 
     def quit(self):
-        self._status.quit()
+        if self._receiver is not None:
+            self._receiver.quit()
 
 
 class Platform(Configurable):
