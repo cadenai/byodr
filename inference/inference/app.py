@@ -96,12 +96,13 @@ class RouteMemory(object):
         other_evidence = self._evidence[_competitor]
         _tracking = self._tracking is not None
 
-        if _tracking and _errors[_image] > np.power(image_evidence, .75):
+        _nlf = .90
+        if _tracking and _errors[_image] > np.power(image_evidence, _nlf):
             _match = code_points[_image]
             self._tracking = None
         elif not _tracking and image_evidence < _threshold:
             self._tracking = _image
-        elif not _tracking and other_evidence < _threshold and _errors[_competitor] > np.power(other_evidence, .75):
+        elif not _tracking and other_evidence < _threshold and _errors[_competitor] > np.power(other_evidence, _nlf):
             _image = _competitor
             _match = code_points[_competitor]
             self._tracking = None
