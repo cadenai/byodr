@@ -1,5 +1,5 @@
 # Must be run from directory root so the python common directory is included in the build context.
-# docker build -f docker/pi-cp37-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.22.1 .
+# docker build -f docker/pi-cp37-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.23.0 .
 
 FROM raspbian/stretch
 
@@ -31,5 +31,8 @@ RUN git clone https://github.com/joan2937/pigpio.git \
 RUN pip3 install "pymodbus==2.3.0" && \
     pip3 install "pyusb==1.1.1" && \
     pip3 install "pytest==4.6.11"
+
+RUN pip3 install "pythoncrc" && \
+    pip3 install "pyvesc"
 
 COPY ./common common/
