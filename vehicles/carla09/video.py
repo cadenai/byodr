@@ -54,11 +54,13 @@ class NumpyImageVideoSource(Configurable):
     def get_width(self):
         # The lock is used at (re)configuration.
         with self._lock:
+            # This is from the output shape.
             return self._stream_width
 
     def get_height(self):
         # The lock is used at (re)configuration.
         with self._lock:
+            # This is from the output shape.
             return self._stream_height
 
     def add_listener(self, listener):
