@@ -67,9 +67,6 @@ class CarlaRunner(Configurable):
         self._publisher = image_publisher
         self._vehicle = CarlaHandler((lambda img, route: image_publisher.publish(img, route=route)))
 
-    def get_image_shape(self):
-        return self._vehicle.get_image_shape()
-
     def get_process_frequency(self):
         with self._lock:
             return self._process_frequency
@@ -105,9 +102,9 @@ class CarlaRunner(Configurable):
 
 
 class CarlaApplication(Application):
-    def __init__(self, image_publisher, config_dir=os.getcwd()):
+    def __init__(self, image_router, config_dir=os.getcwd()):
         super(CarlaApplication, self).__init__(quit_event=quit_event)
-        self._runner = CarlaRunner(image_publisher)
+        self._runner = CarlaRunner(image_router)
         self._config_dir = config_dir
         self.publisher = None
         self.ipc_chatter = None
@@ -191,7 +188,7 @@ def main():
     rear_stream = NumpyImageVideoSource(name='rear')
 
     image_router = RoutingImagePublisher(cameras=(front_camera, rear_camera), streams=(front_stream, rear_stream))
-    application = CarlaApplication(image_publisher=image_router, config_dir=args.config)
+    application = CarlaApplication(image_router=image_router, config_dir=args.config)
 
     pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
