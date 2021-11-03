@@ -94,15 +94,14 @@ class CameraController {
         // E.g. '{"camera": "front", "quality": 50, "display": "vga"}'
         if (socket != undefined && socket.readyState == 1) {
             socket.send(JSON.stringify({
-                camera: _instance.camera_position,
                 quality: _instance.frame_controller.jpeg_quality
-                // display: _instance.frame_controller.display_resolution
             }));
         }
     }
     start_socket() {
         var _instance = this;
-        socket_utils.create_socket("/ws/cam", true, 100, function(ws) {
+        var _cam_uri = "/ws/cam/" + _instance.camera_position;
+        socket_utils.create_socket(_cam_uri, true, 100, function(ws) {
             _instance.socket = ws;
             ws.attempt_reconnect = true;
             ws.is_reconnect = function() {
@@ -144,14 +143,21 @@ var rear_camera_frame_controller = new MJPEGFrameController();
 // Accessed outside of this module.
 var mjpeg_page_controller = {
     store: new MJPEGControlLocalStorage(),
+    camera_init_listeners: [],
     camera_image_listeners: [],
 
     init: function(frame_controllers) {
         this.frame_controllers = frame_controllers;
         this.apply_limits();
     },
-    add_camera_image_listener: function(cb) {
-        this.camera_image_listeners.push(cb);
+    add_camera_listener: function(cb_init, cb_image) {
+        this.camera_init_listeners.push(cb_init);
+        this.camera_image_listeners.push(cb_image);
+    },
+    notify_camera_init_listeners: function(camera_position, _cmd) {
+        this.camera_init_listeners.forEach(function(cb) {
+            cb(camera_position, _cmd);
+        });
     },
     notify_camera_image_listeners: function(camera_position, _blob) {
         this.camera_image_listeners.forEach(function(cb) {
@@ -196,15 +202,26 @@ var mjpeg_page_controller = {
 mjpeg_page_controller.init([front_camera_frame_controller, rear_camera_frame_controller]);
 
 // Setup both the camera socket consumers.
-mjpeg_rear_camera = new CameraController('rear', rear_camera_frame_controller, function(im_data) {
-    var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
-    mjpeg_page_controller.notify_camera_image_listeners(mjpeg_rear_camera.camera_position, _blob);
-    $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
+mjpeg_rear_camera = new CameraController('rear', rear_camera_frame_controller, function(evt_data) {
+    if(typeof evt_data == "string") {
+        cmd = JSON.parse(evt_data);
+        mjpeg_page_controller.notify_camera_init_listeners(mjpeg_rear_camera.camera_position, cmd);
+    } else {
+        var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(evt_data)], {type: "image/jpeg"}));
+        mjpeg_page_controller.notify_camera_image_listeners(mjpeg_rear_camera.camera_position, _blob);
+        $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
+    }
 });
-mjpeg_front_camera = new CameraController('front', front_camera_frame_controller, function(im_data) {
-    var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(im_data)], {type: "image/jpeg"}));
-    mjpeg_page_controller.notify_camera_image_listeners(mjpeg_front_camera.camera_position, _blob);
-    $('span#front_camera_framerate').text(front_camera_frame_controller.actual_fps.toFixed(0));
+
+mjpeg_front_camera = new CameraController('front', front_camera_frame_controller, function(evt_data) {
+    if(typeof evt_data == "string") {
+        cmd = JSON.parse(evt_data);
+        mjpeg_page_controller.notify_camera_init_listeners(mjpeg_front_camera.camera_position, cmd);
+    } else {
+        var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(evt_data)], {type: "image/jpeg"}));
+        mjpeg_page_controller.notify_camera_image_listeners(mjpeg_front_camera.camera_position, _blob);
+        $('span#front_camera_framerate').text(front_camera_frame_controller.actual_fps.toFixed(0));
+    }
 });
 
 
@@ -222,25 +239,45 @@ document.addEventListener("DOMContentLoaded", function() {
         el_front_preview_image.addClass('active');
         teleop_screen.activate_camera('front');
     });
-    mjpeg_page_controller.add_camera_image_listener(function(position, _blob) {
-        if (position == 'front') {
-            el_front_preview_image.attr('src', _blob);
-        } else {
-            el_rear_preview_image.attr('src', _blob);
+    mjpeg_page_controller.add_camera_listener(
+        function(position, _cmd) {},
+        function(position, _blob) {
+            if (position == 'front') {
+                el_front_preview_image.attr('src', _blob);
+            } else {
+                el_rear_preview_image.attr('src', _blob);
+            }
         }
-    });
+    );
     // Build the main view if required.
     if (page_utils.get_stream_type() == 'mjpeg') {
-        // The main viewport is also mjpeg.
-        const el_main_camera_image = document.createElement("img");
-        el_main_camera_image.style.cssText = 'width: 100% !important; height: 100% !important;';
-        document.getElementById('viewport_container').appendChild(el_main_camera_image);
+        const el_viewport = document.getElementById('viewport_container');
+        const el_main_camera_display = document.createElement("canvas");
+        el_main_camera_display.style.cssText = 'width: 100% !important; height: 100% !important;';
+        // The canvas dimension will be set when we open the websocket.
+        el_main_camera_display.width = 640;
+        el_main_camera_display.height = 480;
+        el_viewport.appendChild(el_main_camera_display);
         // Render images for the active camera.
-        mjpeg_page_controller.add_camera_image_listener(function(position, _blob) {
-            if (teleop_screen.active_camera == position) {
-                el_main_camera_image.src = _blob;
+        mjpeg_page_controller.add_camera_listener(
+            function(position, _cmd) {
+                if (teleop_screen.active_camera == position && _cmd.action == "init") {
+                    console.log("Display " + position + " received command ", _cmd);
+                    el_main_camera_display.width = _cmd.width;
+                    el_main_camera_display.height = _cmd.height;
+                }
+            },
+            function(position, _blob) {
+                if (teleop_screen.active_camera == position) {
+                    var ctx = el_main_camera_display.getContext('2d');
+                    var img = new Image();
+                    img.onload = function() {
+                        ctx.drawImage(img, 0, 0);
+                    };
+                    img.src = _blob;
+                }
             }
-        });
+        );
         // Set the socket desired fps when the active camera changes.
         teleop_screen.add_camera_activation_listener(function(position) {
             if (position == 'front') {
