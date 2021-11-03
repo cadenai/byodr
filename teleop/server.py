@@ -171,20 +171,10 @@ def jpeg_encode(image, quality=95):
 
 
 class CameraMJPegSocket(websocket.WebSocketHandler):
-    _display_resolutions = collections.OrderedDict()
-    _display_resolutions['CGA'] = (320, 200)
-    _display_resolutions['QVGA'] = (320, 240)
-    _display_resolutions['WQVGA'] = (400, 240)
-    _display_resolutions['HVGA'] = (480, 320)
-    _display_resolutions['VGA'] = (640, 480)
-    _display_resolutions['SVGA'] = (800, 600)
-    _display_resolutions['XGA'] = (1024, 768)
-
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._capture_front = kwargs.get('capture_front')
-        self._capture_rear = kwargs.get('capture_rear')
-        self._black_img = np.zeros(shape=(1, 1, 3), dtype=np.uint8)
+        self._fn_capture = kwargs.get('image_capture')
+        self._black_img = np.zeros(shape=(320, 240, 3), dtype=np.uint8)
 
     def check_origin(self, origin):
         return True
@@ -193,7 +183,11 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        pass
+        _width, _height = 640, 480
+        md = self._fn_capture()[0]
+        if md is not None:
+            _height, _width, _channels = md['shape']
+        self.write_message(json.dumps(dict(action='init', width=_width, height=_height)))
 
     def on_close(self):
         pass
@@ -202,17 +196,9 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         try:
             request = json.loads(message)
             quality = int(request.get('quality', 90))
-            camera = request.get('camera', 'front').strip().lower()
-            display = request.get('display', '_original_').strip().upper()
-            img = self._capture_front() if camera == 'front' else self._capture_rear()
-            if img is None:
-                # Always send something to the client is able to resume polling.
-                img = self._black_img
-            resolutions = CameraMJPegSocket._display_resolutions
-            if display in resolutions.keys():
-                _width, _height = resolutions[display]
-                if np.prod(img.shape[:2]) > (_width * _height):
-                    img = cv2.resize(img, (_width, _height))
+            img = self._fn_capture()[-1]
+            # Always send something so the client is able to resume polling.
+            img = self._black_img if img is None else img
             self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
