@@ -75,9 +75,6 @@ class CarlaHandler(Configurable):
         self._change_weather_time = 0
         self._in_reverse = False
 
-    def get_image_shape(self):
-        return self._image_shape
-
     def internal_quit(self, restarting=False):
         if self._vehicle_tick:
             self._world.remove_on_tick(self._vehicle_tick)
