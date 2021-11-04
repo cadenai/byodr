@@ -105,11 +105,7 @@ var PS4StandardController = extend(NoneController, {
 var gamepad_controller = {
     controller: Object.create(NoneController),
 
-    reset: function() {
-        this.controller.reset();
-    },
-
-    create_gamepad: function(gamepad) {
+    _create_gamepad: function(gamepad) {
         // 45e-28e-Xbox 360 Wired Controller / Xbox Wireless Controller (STANDARD GAMEPAD Vendor: 045e Product: 02fd)
         // Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)
         var gid = gamepad.id;
@@ -131,10 +127,10 @@ var gamepad_controller = {
         return result;
     },
 
-    connect: function(event, connecting) {
+    _connect: function(event, connecting) {
         var gamepad = event.gamepad;
         if (connecting) {
-            controller = this.create_gamepad(gamepad);
+            controller = this._create_gamepad(gamepad);
             if (controller != undefined) {
                 this.controller = controller;
                 console.log("Connected " + gamepad.id + " - mapping = '" + gamepad.mapping + "'.");
@@ -145,5 +141,60 @@ var gamepad_controller = {
             this.controller = Object.create(NoneController);
             console.log("Disconnected " + gamepad.id + ".");
         }
+    },
+
+    is_active: function() {
+        return this.controller.poll();
+    },
+
+    reset: function() {
+        this.controller.reset();
+    },
+
+    get_command: function() {
+        const ct = this.controller;
+        // Skip buttons when not pressed to save bandwidth.
+        var command = {};
+        command.steering = ct.steering;
+        command.throttle = ct.throttle;
+        command.pan = ct.pan;
+        command.tilt = ct.tilt;
+        if (ct.button_center) {
+            command.button_center = ct.button_center;
+        }
+        if (ct.button_left) {
+            command.button_left = ct.button_left;
+        }
+        if (ct.button_right) {
+            command.button_right = ct.button_right;
+        }
+        if (ct.button_a) {
+            command.button_a = ct.button_a;
+        }
+        if (ct.button_b) {
+            command.button_b = ct.button_b;
+        }
+        if (ct.button_x) {
+            command.button_x = ct.button_x;
+        }
+        if (ct.button_y) {
+            command.button_y = ct.button_y;
+        }
+        if (ct.arrow_up) {
+            command.arrow_up = ct.arrow_up;
+        }
+        if (ct.arrow_down) {
+            command.arrow_down = ct.arrow_down;
+        }
+        if (ct.arrow_left) {
+            command.arrow_left = ct.arrow_left;
+        }
+        if (ct.arrow_right) {
+            command.arrow_right = ct.arrow_right;
+        }
+        return command;
     }
 }
+
+window.addEventListener("gamepadconnected", function(e) { gamepad_controller._connect(e, true); }, false);
+window.addEventListener("gamepaddisconnected", function(e) { gamepad_controller._connect(e, false); }, false);

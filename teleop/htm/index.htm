@@ -114,12 +114,13 @@ div#navigation_route_container > p {
    <!-- <script src="jmuxer/jmuxer-21.07.min.js"></script>-->
     <script src="live-player/http-live-player.js?v=0.50.0"></script>
     <script src="performance-polyfill.js?v=0.50.0"></script>
-	<script src="index_utils.js?v=0.50.0"></script>
-	<script src="index_gamepad.js?v=0.50.0"></script>
-	<script src="index_navigator.js?v=0.50.0"></script>
-	<script src="index_teleop.js?v=0.50.1"></script>
-	<script src="index_mjpeg.js?v=0.50.0"></script>
+	<script src="index_a_utils.js?v=0.50.0"></script>
+	<script src="index_b_gamepad.js?v=0.50.0"></script>
+	<script src="index_c_screen.js?v=0.50.0"></script>
+	<script src="index_d_navigator.js?v=0.50.0"></script>
+	<script src="index_e_teleop.js?v=0.50.1"></script>
 	<script src="index_video_hlp.js?v=0.50.0"></script>
+    <script src="index_video_mjpeg.js?v=0.50.0"></script>
 </head>
 <body>
 <div id="main_container">
@@ -239,6 +240,7 @@ teleop_screen.add_camera_selection_listener(function(is_selected) {
 });
 
 function start_all_handlers() {
+    screen_start_all();
     navigator_start_all();
     teleop_start_all();
     mjpeg_start_all();
@@ -246,6 +248,7 @@ function start_all_handlers() {
 }
 
 function stop_all_handlers() {
+    screen_stop_all();
     navigator_stop_all();
     teleop_stop_all();
     mjpeg_stop_all();

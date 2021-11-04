@@ -117,7 +117,7 @@ class CameraController {
             ws.onmessage = function(evt) {
                 _instance.clear_socket_timeout();
                 _instance.frame_controller.update_framerate();
-                _instance.message_callback(evt.data);
+                setTimeout(function() {_instance.message_callback(evt.data);}, 0);
                 setTimeout(function() {_instance.capture(ws);}, _instance.frame_controller.request_timeout);
             };
         });

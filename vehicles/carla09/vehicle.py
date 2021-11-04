@@ -39,7 +39,8 @@ class GeoTrackerThread(threading.Thread):
             self._queue.append(self._tracker.track((latitude, longitude)))
 
     def get(self):
-        return self._queue[-1] if len(self._queue) > 0 else (None, None, None)
+        # latitude, longitude, bearing
+        return self._queue[-1] if len(self._queue) > 0 else (0, 0, 0)
 
     def quit(self):
         self._quit_event.set()
@@ -104,8 +105,6 @@ class CarlaHandler(Configurable):
         self._change_weather_time = time.time() + self._rand_weather_seconds
         self._vehicle_tick = self._world.on_tick(lambda x: self.tick(x))
         self.reset()
-        self._geo_tracker = GeoTrackerThread(self._world, self._actor)
-        self._geo_tracker.start()
         return _errors
 
     def _destroy(self):
@@ -162,6 +161,11 @@ class CarlaHandler(Configurable):
         camera_rear.listen(lambda data: self._on_camera(data, camera=1))
         self._traffic_manager.ignore_lights_percentage(self._actor, 100.)
         self._set_weather(use_preset=True)
+        # The tracker need recreation through the actor dependency.
+        if self._geo_tracker is not None:
+            self._geo_tracker.quit()
+        self._geo_tracker = GeoTrackerThread(self._world, self._actor)
+        self._geo_tracker.start()
 
     def _on_camera(self, data, camera=0):
         img = np.frombuffer(data.raw_data, dtype=np.dtype("uint8"))
