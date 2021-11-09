@@ -118,8 +118,8 @@ class TRTDriver(object):
 
     def forward(self, dave_image, alex_image, maneuver_command=0, destination=None):
         _out = self._forward_all(dave_image, alex_image, maneuver_command, destination)
-        steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query, key, value = _out
-        return steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query
+        steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query, key, value = _out
+        return steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query
 
     def _forward_all(self, dave_image, alex_image, maneuver_command=0, destination=None):
         with self._lock:
@@ -133,5 +133,5 @@ class TRTDriver(object):
                 'input/current_destination': np.array([destination], dtype=np.float32)
             }
             _out = [x.flatten() for x in self._sess.run(None, _feed)]
-            steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query, key, value = _out
-            return steering, critic, surprise, command, direction, brake, br_critic, coord_source, coord_goal, query, key, value
+            steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query, key, value = _out
+            return steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query, key, value

@@ -40,14 +40,24 @@ var socket_utils = {
 
 var page_utils = {
     system_capabilities: {},
-    toggle_debug_values_listeners: [],
+    _debug_values_listeners: [],
 
     add_toggle_debug_values_listener: function(cb) {
-        this.toggle_debug_values_listeners.push(cb);
+        this._debug_values_listeners.push(cb);
     },
 
-    notify_toggle_debug_values_listeners: function(collapse) {
-        this.toggle_debug_values_listeners.forEach(function(cb) {cb(collapse);});
+    toggle_debug_values: function(show) {
+        if (show == undefined) {
+            show = !$('div#debug_drive_values').is_visible();
+        }
+        if (show) {
+            $("div#debug_drive_values").visible();
+            $("div#pilot_drive_values").css({'cursor': 'zoom-out'});
+        } else {
+            $("div#debug_drive_values").invisible();
+            $("div#pilot_drive_values").css({'cursor': 'zoom-in'});
+        }
+        this._debug_values_listeners.forEach(function(cb) {cb(show);});
     },
 
     get_stream_type: function() {

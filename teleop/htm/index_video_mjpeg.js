@@ -233,11 +233,13 @@ document.addEventListener("DOMContentLoaded", function() {
         el_front_preview_image.removeClass('active');
         el_rear_preview_image.addClass('active');
         teleop_screen.activate_camera('rear');
+        page_utils.toggle_debug_values(false);
     });
     el_front_preview_image.click(function() {
         el_rear_preview_image.removeClass('active');
         el_front_preview_image.addClass('active');
         teleop_screen.activate_camera('front');
+        page_utils.toggle_debug_values(true);
     });
     mjpeg_page_controller.add_camera_listener(
         function(position, _cmd) {},
@@ -251,13 +253,15 @@ document.addEventListener("DOMContentLoaded", function() {
     );
     // Build the main view if required.
     if (page_utils.get_stream_type() == 'mjpeg') {
-        const el_viewport = document.getElementById('viewport_container');
-        const el_main_camera_display = document.createElement("canvas");
-        el_main_camera_display.style.cssText = 'width: 100% !important; height: 100% !important;';
+        // const el_viewport = document.getElementById('viewport_container');
+        // const el_main_camera_display = document.createElement("canvas");
+        const el_main_camera_display = document.getElementById("viewport_canvas");
+        // el_main_camera_display.style.cssText = 'width: 100% !important; height: 100% !important;';
         // The canvas dimension will be set when we open the websocket.
-        el_main_camera_display.width = 640;
-        el_main_camera_display.height = 480;
-        el_viewport.appendChild(el_main_camera_display);
+        // el_main_camera_display.width = 640;
+        // el_main_camera_display.height = 480;
+        // el_viewport.appendChild(el_main_camera_display);
+        const display_ctx = el_main_camera_display.getContext('2d');
         // Render images for the active camera.
         mjpeg_page_controller.add_camera_listener(
             function(position, _cmd) {
@@ -269,10 +273,11 @@ document.addEventListener("DOMContentLoaded", function() {
             },
             function(position, _blob) {
                 if (teleop_screen.active_camera == position) {
-                    var ctx = el_main_camera_display.getContext('2d');
                     var img = new Image();
                     img.onload = function() {
-                        ctx.drawImage(img, 0, 0);
+                        // Do not run the canvas draws in parallel.
+                        display_ctx.drawImage(img, 0, 0);
+                        teleop_screen.canvas_update(display_ctx);
                     };
                     img.src = _blob;
                 }

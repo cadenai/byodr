@@ -1,6 +1,24 @@
 
 var screen_utils = {
     _version: '0.50.0',
+    _arrow_images: {},
+    _wheel_images: {},
+
+    _create_image: function(url) {
+        im = new Image();
+        im.src = url;
+        return im;
+    }, 
+
+    _init: function() {
+        this._arrow_images.left = this._create_image('im_arrow_left.png?v=' + this._version);
+        this._arrow_images.right = this._create_image('im_arrow_right.png?v=' + this._version);
+        this._arrow_images.ahead = this._create_image('im_arrow_up.png?v=' + this._version);
+        this._arrow_images.none = this._create_image('im_arrow_none.png?v=' + this._version);
+        this._wheel_images.black = this._create_image('im_wheel_black.png?v=' + this._version);
+        this._wheel_images.blue = this._create_image('im_wheel_blue.png?v=' + this._version);
+        this._wheel_images.red = this._create_image('im_wheel_red.png?v=' + this._version);
+    }, 
 
     _decorate_server_message: function(message) {
         message._is_on_autopilot = message.ctl == 5;
@@ -8,29 +26,87 @@ var screen_utils = {
         return message;
     },
 
-    _turn_arrow_url: function(turn) {
+    _turn_arrow_img: function(turn) {
         switch(turn) {
             case "intersection.left":
-                return 'im_arrow_left.png?v=' + this._version;
+                return this._arrow_images.left;
             case "intersection.right":
-                return 'im_arrow_right.png?v=' + this._version;
+                return this._arrow_images.right;
             case "intersection.ahead":
-                return 'im_arrow_up.png?v=' + this._version;
+                return this._arrow_images.ahead;
             default:
-                return 'im_arrow_none.png?v=' + this._version;
+                return this._arrow_images.none;
         }
     },
 
-    _steering_wheel_url: function(message) {
+    _steering_wheel_img: function(message) {
         if (message._is_on_autopilot && message._has_passage) {
-            return 'im_wheel_blue.png?v=' + this._version;
+            return this._wheel_images.blue;
         }
         if (message._has_passage) {
-            return 'im_wheel_black.png?v=' + this._version;
+            return this._wheel_images.black;
         }
-        return 'im_wheel_red.png?v=' + this._version;
+        return this._wheel_images.red;
+    },
+
+    _render_trapezoid: function(ctx, positions, fill) {
+        ctx.lineWidth = 0.5;
+        ctx.strokeStyle = 'rgb(255, 255, 255)';
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        ctx.moveTo(positions[0][0], positions[0][1]);
+        ctx.lineTo(positions[1][0], positions[1][1]);
+        ctx.lineTo(positions[2][0], positions[2][1]);
+        ctx.lineTo(positions[3][0], positions[3][1]);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.fill();
+    },
+
+    _render_path: function(ctx, path, _fill) {
+        const canvas = ctx.canvas;
+        const tz_width = 400/640 * canvas.width;
+        const tz_height = 95/480 * canvas.height;
+        const gap = 6/640 * canvas.width;
+        const cut = 8/480 * canvas.height;
+        const taper = 0.65;
+        const height_shrink = 0.55;
+        const gap_shrink = 0.8;
+        const cut_shrink = 0.7;
+        const w_steering = 150;
+        const h_steering = 6;
+
+        // Start from the middle of the base of the trapezoid.
+        var a_x = (canvas.width / 2) - (tz_width / 2);
+        var a_y = canvas.height - gap;
+        var b_x = a_x + tz_width;
+        var b_y = a_y;
+        var idx = 0;
+
+        path.forEach(function(element) {
+            // Start in the lower left corner and draw counter clockwise.
+            var w_base = b_x - a_x;
+            var w_off = (w_base - (w_base * taper)) / 2;
+            var v_height = tz_height * (height_shrink ** idx);
+            steer_dx = w_steering * element;
+            steer_dy = h_steering * element;
+            var c_x = b_x - w_off + steer_dx;
+            var c_y = b_y - v_height + (element > 0? steer_dy: 0);
+            var d_x = a_x + w_off + steer_dx;
+            var d_y = a_y - v_height - (element < 0? steer_dy: 0);
+            screen_utils._render_trapezoid(ctx, [[a_x, a_y], [b_x, b_y], [c_x, c_y], [d_x, d_y]], _fill);
+            // The next step starts from the top of the previous with gap.
+            var c_shrink = .5 * cut * (cut_shrink ** idx);
+            var g_shrink = gap * (gap_shrink ** idx);
+            a_x = d_x + c_shrink;
+            a_y = d_y - g_shrink;
+            b_x = c_x - c_shrink;
+            b_y = c_y - g_shrink;
+            idx++;
+        });
     }
 }
+screen_utils._init();
 
 var teleop_screen = {
     command_turn: null,
@@ -47,6 +123,7 @@ var teleop_screen = {
     selected_camera: null,  // Select a camera for ptz control.
     camera_selection_listeners: [],
     camera_cycle_timer: null,
+    last_server_message: null,
 
     _select_camera: function(name) {
         var is_selected = name == this.active_camera;
@@ -60,6 +137,9 @@ var teleop_screen = {
         } else {
             this._select_camera(this.active_camera);
         }
+        if (this.selected_camera != undefined) {
+            console.log("Camera " + this.selected_camera + " is selected for ptz control.")
+        }
         this.camera_cycle_timer = null;
     },
 
@@ -69,10 +149,12 @@ var teleop_screen = {
         }
     },
 
-    _screen_refresh: function(message) {
+    _server_message: function(message) {
+        this.last_server_message = message;
+
         $('span#pilot_steering').text(message.ste.toFixed(3));
         $('span#pilot_throttle').text(message.thr.toFixed(3));
-        // It may be the inference service is not yet available.
+        // It may be the inference service is not (yet) available.
         const _debug = this.in_debug;
         if (message.inf_surprise != undefined) {
             $('span#inference_brake_critic').text(message.inf_brake_critic.toFixed(2));
@@ -84,7 +166,7 @@ var teleop_screen = {
         //
         if (this.command_turn != message.turn) {
             this.command_turn = message.turn;
-            $('img#arrow').attr('src', screen_utils._turn_arrow_url(message.turn));
+            $('img#arrow').attr('src', screen_utils._turn_arrow_img(message.turn).src);
         }
         // speed is the desired speed
         // vel_y is the actual vehicle speed
@@ -104,7 +186,7 @@ var teleop_screen = {
         var str_command_ctl = message.ctl + '_' + message._has_passage;
         if (this.command_ctl != str_command_ctl) {
             this.command_ctl = str_command_ctl;
-            el_steering_wheel.attr('src', screen_utils._steering_wheel_url(message));
+            el_steering_wheel.attr('src', screen_utils._steering_wheel_img(message).src);
             if (message._is_on_autopilot) {
                 el_alpha_speed_label.text('MAX');
                 el_beta_speed_container.show();
@@ -117,10 +199,6 @@ var teleop_screen = {
         }
         var display_rotation = Math.floor(message.ste * 90.0)
         el_steering_wheel.css('transform', "rotate(" + display_rotation + "deg)");
-    },
-
-    _server_message: function(message) {
-        this._screen_refresh(message);
     },
 
     add_camera_activation_listener: function(cb) {
@@ -163,10 +241,10 @@ var teleop_screen = {
             show_message = true;
         }
         if (show_message) {
-            viewport_container.height('calc(82vh - 0px)');
+            viewport_container.height('calc(83vh - 0px)');
             message_box.show();
         } else {
-            viewport_container.height('calc(90vh - 0px)');
+            viewport_container.height('calc(91vh - 0px)');
             message_box.hide();
         }
         //
@@ -178,6 +256,15 @@ var teleop_screen = {
         //
         if (command.button_left) {
             setTimeout(function() {viewport_container.fadeOut(100).fadeIn(100);}, 0);
+        }
+    },
+
+    canvas_update: function(ctx) {
+        if (this.active_camera == 'front' && teleop_screen.in_debug) {
+            var message = this.last_server_message;
+            if (message != undefined) {
+                //screen_utils._render_path(ctx, message.nav_path, 'rgba(100, 217, 255, 0.3)');
+            }
         }
     }
 }
@@ -232,15 +319,12 @@ log_controller.stop_socket = function() {
     log_controller.socket = null;
 }
 
-page_utils.add_toggle_debug_values_listener(function(collapse) {
-    if (collapse) {
-        teleop_screen.in_debug = 0;
-    } else {
-        teleop_screen.in_debug = 1;
-    }
+page_utils.add_toggle_debug_values_listener(function(show) {
+    teleop_screen.in_debug = show? 1: 0;
 });
 
 document.addEventListener("DOMContentLoaded", function() {
+    page_utils.toggle_debug_values(true);
     log_controller.add_server_message_listener(function(message) {
         teleop_screen._server_message(message);
     });

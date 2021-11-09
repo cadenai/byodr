@@ -146,8 +146,8 @@ navigator_controller._update_visibility = function () {
     }
 }
 
-page_utils.add_toggle_debug_values_listener(function(collapse) {
-    navigator_controller.in_debug = !collapse;
+page_utils.add_toggle_debug_values_listener(function(show) {
+    navigator_controller.in_debug = show;
     navigator_controller._update_visibility();
 });
 

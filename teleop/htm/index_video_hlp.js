@@ -6,7 +6,6 @@ if (page_utils.get_stream_type() == 'h264') {
             this.attempt_reconnect = true;
         }
         onopen(player) {
-            canvas_controller.replace(player.canvas);
             player.playStream();
         }
         onclose(player) {
@@ -18,8 +17,9 @@ if (page_utils.get_stream_type() == 'h264') {
 
     var canvas_controller = {
         el_parent: null,
-        el_canvas_id: 'h264_camera_main_image',
+        el_canvas_id: 'viewport_canvas',
         el_canvas: null,
+        context_2d: null,
 
         init: function(el_parent) {
             this.el_parent = el_parent;
@@ -28,15 +28,16 @@ if (page_utils.get_stream_type() == 'h264') {
             if (this.el_canvas != undefined) {
                 this.el_canvas.remove();
             }
+            this.context_2d = canvas.getContext('2d');
             this.el_canvas = canvas;
             this.el_parent.appendChild(this.el_canvas);
         },
         create: function() {
             canvas = document.getElementById(this.el_canvas_id);
             // The canvas dimensions are set by the player.
-            canvas = document.createElement("canvas");
-            canvas.id = this.el_canvas_id;
-            canvas.style.cssText = 'width: 100% !important; height: 100% !important;';
+            // canvas = document.createElement("canvas");
+            // canvas.id = this.el_canvas_id;
+            // canvas.style.cssText = 'width: 100% !important; height: 100% !important;';
             return canvas;
         }
     }
@@ -50,7 +51,18 @@ if (page_utils.get_stream_type() == 'h264') {
             const ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
             const uri = ws_protocol + document.location.hostname + ':' + port;
             this.socket = new CameraSocketResumer(uri, 100);
-            this.wsavc = new WSAvcPlayer(canvas_controller.create(), "webgl", this.socket);
+            // The webgl context does not have a 2d rendering context.
+            this.wsavc = new WSAvcPlayer(canvas_controller.create(), "yuv", this.socket);
+            this.wsavc.on('canvasReady', function(width, height) {
+                // console.log("Canvas Ready.");
+                canvas_controller.replace(camera_controller.wsavc.canvas);
+            });
+            this.wsavc.on('canvasRendered', function() {
+                // Do not run the canvas draws in parallel.
+                if (canvas_controller.context_2d != undefined) {
+                    teleop_screen.canvas_update(canvas_controller.context_2d);
+                }
+            });
             this.wsavc.connect(uri);
         },
         stop: function() {

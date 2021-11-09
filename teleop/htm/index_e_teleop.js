@@ -3,7 +3,13 @@ gamepad_controller._capture = function(cs_response) {
     gc = gamepad_controller;
     gc_active = gc.is_active();
     command = gc_active? gc.get_command(): {};
-    command.camera_id = teleop_screen.selected_camera == 'rear'? 1: 0;
+    // The selected camera for ptz control can also be undefined.
+    command.camera_id = -1;
+    if (teleop_screen.selected_camera == 'front') {
+        command.camera_id = 0;
+    } else if (teleop_screen.selected_camera == 'rear') {
+        command.camera_id = 1;
+    }
     if (gc.socket != undefined && gc.socket.readyState == 1) {
         gc.socket.send(JSON.stringify(command));
     }
@@ -49,17 +55,6 @@ gamepad_controller._stop_socket = function() {
     }
     gamepad_controller.socket = null;
 }
-
-
-page_utils.add_toggle_debug_values_listener(function(collapse) {
-    if (collapse) {
-        $("div#debug_drive_values").invisible();
-        $("div#pilot_drive_values").css({'cursor': 'zoom-in'});
-    } else {
-        $("div#debug_drive_values").visible();
-        $("div#pilot_drive_values").css({'cursor': 'zoom-out'});
-    }
-});
 
 function teleop_start_all() {
     gamepad_controller.reset();

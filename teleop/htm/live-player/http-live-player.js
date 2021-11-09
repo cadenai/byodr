@@ -4417,6 +4417,7 @@ var WSAvcPlayer = new Class({
     }
     //log("Passed " + naltype + " to decoder");
     this.avc.decode(data);
+    this.emit("canvasRendered");
   },
 
   connect : function(url) {

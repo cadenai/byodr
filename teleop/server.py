@@ -116,6 +116,26 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 return 594
         return -999
 
+    @staticmethod
+    def _translate_instruction(index):
+        # if index == 3:
+        #     return 'intersection.ahead'
+        # elif index in (1, 2):
+        #     return 'intersection.left'
+        # elif index in (4, 5):
+        #     return 'intersection.right'
+        # else:
+        return 'general.fallback'
+
+    @staticmethod
+    def _translate_navigation_path(path, scope=5):
+        # Scope: The frontend can handle a maximum of path elements only.
+        if path is None:
+            return 0, [0] * scope
+        assert len(path) > scope
+        _x = len(path) // scope
+        return np.mean(path), [np.mean(path[i * _x: (i + 1) * _x]) for i in range(scope)]
+
     def on_message(self, *args):
         try:
             state = self._fn_state()
@@ -131,7 +151,8 @@ class MessageServerSocket(websocket.WebSocketHandler):
             inference_current_image = -1 if inference is None else inference.get('navigation_image', -1)
             inference_current_distance = -1 if inference is None else inference.get('navigation_distance', -1)
             inference_command = -1 if inference is None else inference.get('navigation_command', -1)
-            inference_direction = 0 if inference is None else inference.get('navigation_direction', 0)
+            inference_path = None if inference is None else inference.get('navigation_path')
+            nav_direction, nav_path = self._translate_navigation_path(inference_path)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
                 'inf_brake_critic': 0 if inference is None else inference.get('brake_critic_out'),
@@ -156,8 +177,9 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'nav_image': [pilot_match_image, inference_current_image],
                 'nav_distance': [pilot_match_distance, inference_current_distance],
                 'nav_command': inference_command,
-                'nav_direction': inference_direction,
-                'turn': None if pilot is None else pilot.get('instruction')
+                'nav_direction': nav_direction,
+                'nav_path': nav_path,
+                'turn': self._translate_instruction(inference_command)
             }
             self.write_message(json.dumps(response))
         except Exception:
