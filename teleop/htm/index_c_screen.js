@@ -106,7 +106,6 @@ var screen_utils = {
         });
     }
 }
-screen_utils._init();
 
 var teleop_screen = {
     command_turn: null,
@@ -119,6 +118,7 @@ var teleop_screen = {
     c_msg_controller_err: "Controller not detected - please press a button on the device.",
     c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
     active_camera: 'front',  // The active camera is rendered on the main display.
+    _debug_values_listeners: [],
     camera_activation_listeners: [],
     selected_camera: null,  // Select a camera for ptz control.
     camera_selection_listeners: [],
@@ -201,6 +201,25 @@ var teleop_screen = {
         el_steering_wheel.css('transform', "rotate(" + display_rotation + "deg)");
     },
 
+    add_toggle_debug_values_listener: function(cb) {
+        this._debug_values_listeners.push(cb);
+    },
+
+    toggle_debug_values: function(show) {
+        if (show == undefined) {
+            show = !$('div#debug_drive_values').is_visible();
+        }
+        if (show) {
+            $("div#debug_drive_values").visible();
+            $("div#pilot_drive_values").css({'cursor': 'zoom-out'});
+        } else {
+            $("div#debug_drive_values").invisible();
+            $("div#pilot_drive_values").css({'cursor': 'zoom-in'});
+        }
+        this.in_debug = show? 1: 0;
+        this._debug_values_listeners.forEach(function(cb) {cb(show);});
+    },
+
     add_camera_activation_listener: function(cb) {
         this.camera_activation_listeners.push(cb);
     },
@@ -227,17 +246,17 @@ var teleop_screen = {
         if (!is_connection_ok) {
             message_box.text(c_msg_connection_lost);
             message_box.removeClass();
-            message_box.addClass('message error_message');
+            message_box.addClass('error_message');
             show_message = true;
         } else if (controller_status == 0) {
             message_box.text(c_msg_controller_err);
             message_box.removeClass();
-            message_box.addClass('message warning_message');
+            message_box.addClass('warning_message');
             show_message = true;
         } else if (controller_status == 2) {
             message_box.text(c_msg_teleop_view_only);
             message_box.removeClass();
-            message_box.addClass('message warning_message');
+            message_box.addClass('warning_message');
             show_message = true;
         }
         if (show_message) {
@@ -260,7 +279,8 @@ var teleop_screen = {
     },
 
     canvas_update: function(ctx) {
-        if (this.active_camera == 'front' && teleop_screen.in_debug) {
+        //if (this.active_camera == 'front' && teleop_screen.in_debug) {
+        if (teleop_screen.in_debug) {
             var message = this.last_server_message;
             if (message != undefined) {
                 //screen_utils._render_path(ctx, message.nav_path, 'rgba(100, 217, 255, 0.3)');
@@ -269,75 +289,6 @@ var teleop_screen = {
     }
 }
 
-var log_controller = {
-    server_message_listeners: [],
 
-    _notify_server_message_listeners: function(message) {
-        this.server_message_listeners.forEach(function(cb) {
-            cb(message);
-        });
-    },
-
-    add_server_message_listener: function(cb) {
-        this.server_message_listeners.push(cb);
-    }
-}
-log_controller._capture = function() {
-    if (log_controller.socket != undefined && log_controller.socket.readyState == 1) {
-        log_controller.socket.send('{}');
-    }
-}
-log_controller.start_socket = function() {
-    socket_utils.create_socket("/ws/log", false, 100, function(ws) {
-        log_controller.socket = ws;
-        ws.attempt_reconnect = true;
-        ws.is_reconnect = function() {
-            return ws.attempt_reconnect;
-        }
-        ws.onopen = function() {
-            console.log("Logger socket connection was established.");
-            log_controller._capture();
-        };
-        ws.onclose = function() {
-            console.log("Logger socket connection was closed.");
-        };
-        ws.onmessage = function(evt) {
-            var message = JSON.parse(evt.data);
-            // console.log(message);
-            setTimeout(function() {
-                log_controller._notify_server_message_listeners(screen_utils._decorate_server_message(message));
-            }, 0);
-            setTimeout(log_controller._capture, 40);
-        };
-    });
-}
-log_controller.stop_socket = function() {
-    log_controller.socket.attempt_reconnect = false;
-    if (log_controller.socket.readyState < 2) {
-        log_controller.socket.close();
-    }
-    log_controller.socket = null;
-}
-
-page_utils.add_toggle_debug_values_listener(function(show) {
-    teleop_screen.in_debug = show? 1: 0;
-});
-
-document.addEventListener("DOMContentLoaded", function() {
-    page_utils.toggle_debug_values(true);
-    log_controller.add_server_message_listener(function(message) {
-        teleop_screen._server_message(message);
-    });
-});
-
-function screen_start_all() {
-    if (log_controller.socket == undefined) {
-        log_controller.start_socket();
-    }
-}
-
-function screen_stop_all() {
-    if (log_controller.socket != undefined) {
-        log_controller.stop_socket();
-    }
-}
+// --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
+screen_utils._init();

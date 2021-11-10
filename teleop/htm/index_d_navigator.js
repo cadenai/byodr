@@ -1,4 +1,4 @@
-class NavigatorController {
+class BaseNavigatorController {
     constructor() {
         const location = document.location;
         this.nav_path = location.protocol + "//" + location.hostname + ":" + location.port + "/ws/nav";
@@ -13,7 +13,7 @@ class NavigatorController {
         this.matched_image_id = null;
         this.routes = [];
         this.selected_route = null;
-        this.active = false;
+        this.started = false;
         this.backend_active = false;
         this.in_mouse_over = false;
         this.in_debug = false;
@@ -26,7 +26,6 @@ class NavigatorController {
         this.el_point = $('span#navigation_point_name');
         this.el_route_select_prev = $('span#navigation_route_sel_prev');
         this.el_route_select_next = $('span#navigation_route_sel_next');
-        this._schedule_navigation_image_update();
         this.el_point.text('');
     }
     _has_next_route() {
@@ -80,6 +79,15 @@ class NavigatorController {
     _render_navigation_image(image_src) {
         this.el_image.attr('src', image_src).width(this.el_image_width).height(this.el_image_height);
     }
+    _update_visibility() {
+        if (this.routes.length < 1) {
+            $('div#navigation_image_container').invisible();
+            $('div#navigation_route_container').invisible();
+        } else {
+            $('div#navigation_image_container').visible();
+            $('div#navigation_route_container').visible();
+        }
+    }
     _schedule_navigation_image_update() {
         var image_src = this.backend_active? 'icon_pause.png?v=0.50.0' : 'icon_play.png?v=0.50.0';
         if (this.backend_active && !this.in_mouse_over) {
@@ -91,11 +99,19 @@ class NavigatorController {
             navigator_controller._render_navigation_image(image_src);
         }, 0);
     }
+    _mouse_over() {
+        this.in_mouse_over = true;
+        this._schedule_navigation_image_update();
+    }
+    _mouse_out() {
+        this.in_mouse_over = false;
+        this._schedule_navigation_image_update();
+    }
     _server_message(message) {
         $('span#navigation_geo_lat').text(message.geo_lat.toFixed(6));
         $('span#navigation_geo_long').text(message.geo_long.toFixed(6));
         $('span#navigation_heading').text(message.geo_head.toFixed(2));
-        if (this.active) {
+        if (this.started) {
             const _debug = this.in_debug;
             const column_id = _debug? 1 : 0;
             if (message.inf_surprise != undefined) {
@@ -119,34 +135,48 @@ class NavigatorController {
         }
     }
 }
-const navigator_controller = new NavigatorController();
-navigator_controller.api_route_command = function(command, fn_done) {
-    $.post('api/navigation/routes', JSON.stringify(command))
-                .fail(function(xhr, status, error) {console.log(error);})
-                .done(fn_done)
-}
-navigator_controller._toggle_route = function() {
-    navigator_controller.api_route_command({'action': 'toggle', 'route': this.selected_route}, function(data) {})
-}
-navigator_controller._mouse_over = function() {
-    navigator_controller.in_mouse_over = true;
-    navigator_controller._schedule_navigation_image_update();
-}
-navigator_controller._mouse_out = function() {
-    navigator_controller.in_mouse_over = false;
-    navigator_controller._schedule_navigation_image_update();
-}
-navigator_controller._update_visibility = function () {
-    if (navigator_controller.routes.length < 1) {
-        $('div#navigation_image_container').invisible();
-        $('div#navigation_route_container').invisible();
-    } else {
-        $('div#navigation_image_container').visible();
-        $('div#navigation_route_container').visible();
+
+class FakeNavigatorController extends BaseNavigatorController {
+    _toggle_route() {
+    }
+    _list_routes() {
     }
 }
 
-page_utils.add_toggle_debug_values_listener(function(show) {
+class RealNavigatorController extends BaseNavigatorController {
+    _toggle_route() {
+        var command = {'action': 'toggle', 'route': this.selected_route};
+        $.post('api/navigation/routes', JSON.stringify(command))
+                    .fail(function(xhr, status, error) {
+                        console.log(error);
+                    })
+                    .done(function(data) {
+                        // console.log(data);
+                    });
+    }
+    _list_routes() {
+        $.get("/api/navigation/routes?action=list", function(response) {
+            navigator_controller._set_routes(response);
+            navigator_controller._update_visibility();
+        });
+    }
+}
+
+// In development mode there is no use of a backend.
+const navigator_controller = page_utils.is_develop()? new FakeNavigatorController(): new RealNavigatorController();
+
+function navigator_start_all() {
+    navigator_controller.started = true;
+    navigator_controller._list_routes();
+}
+
+function navigator_stop_all() {
+    navigator_controller.started = false;
+}
+
+
+// --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
+teleop_screen.add_toggle_debug_values_listener(function(show) {
     navigator_controller.in_debug = show;
     navigator_controller._update_visibility();
 });
@@ -158,19 +188,7 @@ document.addEventListener("DOMContentLoaded", function() {
     navigator_controller.el_image.click(function() {navigator_controller._toggle_route()});
     navigator_controller.el_route_select_prev.click(function() {navigator_controller._select_prev_route()});
     navigator_controller.el_route_select_next.click(function() {navigator_controller._select_next_route()});
-    log_controller.add_server_message_listener(function(message) {
+    server_controller.add_server_message_listener(function(message) {
         navigator_controller._server_message(message);
     });
 });
-
-function navigator_start_all() {
-    navigator_controller.active = true;
-    $.get("/api/navigation/routes?action=list", function(response) {
-        navigator_controller._set_routes(response);
-        navigator_controller._update_visibility();
-    });
-}
-
-function navigator_stop_all() {
-    navigator_controller.active = false;
-}

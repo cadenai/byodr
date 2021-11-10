@@ -27,12 +27,13 @@ var socket_utils = {
             ws.binaryType = 'arraybuffer';
         }
         assign(ws);
+        var _assigned_on_close = ws.onclose;
         ws.onclose = function() {
             if (typeof ws.is_reconnect == "function" && ws.is_reconnect()) {
                 setTimeout(function() {socket_utils.create_socket(path, binary, reconnect, assign);}, reconnect);
             }
-            if (typeof ws.on_close === "function") {
-                ws.on_close();
+            if (typeof _assigned_on_close === "function") {
+                _assigned_on_close();
             }
         };
     }
@@ -40,24 +41,30 @@ var socket_utils = {
 
 var page_utils = {
     system_capabilities: {},
-    _debug_values_listeners: [],
+    _develop: null,
 
-    add_toggle_debug_values_listener: function(cb) {
-        this._debug_values_listeners.push(cb);
+    _parse_develop: function() {
+        const params = new URLSearchParams(window.location.search);
+        const _develop = params.get('develop');
+        return _develop;
     },
 
-    toggle_debug_values: function(show) {
-        if (show == undefined) {
-            show = !$('div#debug_drive_values').is_visible();
-        }
-        if (show) {
-            $("div#debug_drive_values").visible();
-            $("div#pilot_drive_values").css({'cursor': 'zoom-out'});
+    _init: function() {
+        this._develop = this._parse_develop();
+        if (this._develop) {
+            console.log("Development mode is active.")
+            page_utils.system_capabilities = {
+                'platform': {'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}}
+            };
         } else {
-            $("div#debug_drive_values").invisible();
-            $("div#pilot_drive_values").css({'cursor': 'zoom-in'});
+            jQuery.get("/api/system/capabilities", function(data) {
+                page_utils.system_capabilities = data;
+            });
         }
-        this._debug_values_listeners.forEach(function(cb) {cb(show);});
+    },
+
+    is_develop: function() {
+        return this._develop == undefined? this._parse_develop(): this._develop;
     },
 
     get_stream_type: function() {
@@ -74,6 +81,6 @@ var page_utils = {
     }
 }
 
-jQuery.get("/api/system/capabilities", function(data) {
-    page_utils.system_capabilities = data;
-});
+
+// --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
+page_utils._init();

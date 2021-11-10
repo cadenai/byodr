@@ -42,7 +42,7 @@ if (page_utils.get_stream_type() == 'h264') {
                     setTimeout(function() {camera_controller.connect();}, 100);
                 }
             };
-            console.log("Jmuxer " + position + " camera connection established.");
+            //console.log("Jmuxer " + position + " camera connection established.");
         },
         start: function() {
             this.connect();
@@ -54,7 +54,7 @@ if (page_utils.get_stream_type() == 'h264') {
                 this.jmuxer.reset();
                 this.socket = null;
                 delete this.socket;
-                console.log("Jmuxer camera connection closed.");
+                //console.log("Jmuxer camera connection closed.");
             }
         }
     }

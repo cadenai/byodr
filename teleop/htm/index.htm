@@ -23,7 +23,6 @@ body {
 
 #message_box {
   color: #000;
-  background-color: #ffffcc;
   font-family: Verdana;
   font-size; 13px;
   border: 1px solid #ccc;
@@ -31,6 +30,13 @@ body {
   margin-bottom: 10px;
   padding: 10px;
 }
+#message_box.warning_message {
+  background-color: #ffffcc;
+}
+#message_box.error_message {
+  background-color: #f7432f;
+}
+
 
 #horizontal_bar {
   overflow: hidden;
@@ -170,7 +176,7 @@ div#navigation_route_container > p {
             <div id="pilot_drive_values"
                  style="float: right; margin: 30px 0 1px 50px; cursor: zoom-in;
                         color: white; font-family: Lucida Console; font-size: 11px;"
-                 onclick="page_utils.toggle_debug_values();"
+                 onclick="teleop_screen.toggle_debug_values();"
                  title="Toggle debug values">
                 <p style="min-width: 50px;"><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p style="min-width: 50px;"><span id="pilot_throttle">0</span>&nbsp;thr</p>
@@ -205,7 +211,7 @@ div#navigation_route_container > p {
                         position: absolute; cursor: zoom-out;
                         color: white; font-size: 15px; padding: 10px 0 0 10px;
                         font-family: Lucida Console;"
-                onclick="page_utils.toggle_debug_values();"
+                onclick="teleop_screen.toggle_debug_values();"
                 title="Toggle debug values">
                 <span class="debug_bar_text">front</span>&nbsp;<span id="front_camera_framerate">0</span>
                 <span class="debug_bar_text">rear</span>&nbsp;<span id="rear_camera_framerate">0</span>
@@ -233,7 +239,6 @@ teleop_screen.add_camera_selection_listener(function(is_selected) {
 });
 
 function start_all_handlers() {
-    screen_start_all();
     navigator_start_all();
     teleop_start_all();
     mjpeg_start_all();
@@ -241,7 +246,6 @@ function start_all_handlers() {
 }
 
 function stop_all_handlers() {
-    screen_stop_all();
     navigator_stop_all();
     teleop_stop_all();
     mjpeg_stop_all();

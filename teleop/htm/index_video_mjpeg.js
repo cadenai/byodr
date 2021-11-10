@@ -108,11 +108,11 @@ class CameraController {
                 return ws.attempt_reconnect;
             }
             ws.onopen = function() {
-                console.log("MJPEG " + _instance.camera_position + " camera connection established.");
+                //console.log("MJPEG " + _instance.camera_position + " camera connection established.");
                 _instance.capture(ws);
             };
             ws.onclose = function() {
-                console.log("MJPEG " + _instance.camera_position + " camera connection closed.");
+                //console.log("MJPEG " + _instance.camera_position + " camera connection closed.");
             };
             ws.onmessage = function(evt) {
                 _instance.clear_socket_timeout();
@@ -233,13 +233,13 @@ document.addEventListener("DOMContentLoaded", function() {
         el_front_preview_image.removeClass('active');
         el_rear_preview_image.addClass('active');
         teleop_screen.activate_camera('rear');
-        page_utils.toggle_debug_values(false);
+        //teleop_screen.toggle_debug_values(false);
     });
     el_front_preview_image.click(function() {
         el_rear_preview_image.removeClass('active');
         el_front_preview_image.addClass('active');
         teleop_screen.activate_camera('front');
-        page_utils.toggle_debug_values(true);
+        teleop_screen.toggle_debug_values(true);
     });
     mjpeg_page_controller.add_camera_listener(
         function(position, _cmd) {},
