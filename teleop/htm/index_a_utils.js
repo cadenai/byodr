@@ -44,7 +44,10 @@ var dev_tools = {
 
     _parse_develop: function() {
         const params = new URLSearchParams(window.location.search);
-        const _develop = params.get('develop');
+        var _develop = params.get('develop');
+        if (_develop != undefined) {
+            _develop = ['xga', 'svga', 'vga'].includes(_develop)? _develop: 'xga';
+        }
         return _develop;
     },
 
@@ -56,8 +59,42 @@ var dev_tools = {
         return this._develop == undefined? this._parse_develop(): this._develop;
     },
 
+    get_img_dimensions: function() {
+        const _key = this.is_develop();
+        switch(_key) {
+            case "xga":
+                return [1024, 768];
+            case "svga":
+                return [800, 600];
+            case "vga":
+                return [640, 480];
+            default:
+                return [320, 240];
+        }
+    },
+
     get_img_url: function(camera_position) {
-        return '/develop/img_' + this.is_develop() + '.jpg';
+        const _key = this.is_develop();
+        return '/develop/img_' + camera_position + '_' + _key + '.jpg';
+    },
+
+    set_next_resolution: function() {
+        var _next = null;
+        const _key = this.is_develop();
+        switch(_key) {
+            case "xga":
+                _next = 'svga';
+                break;
+            case "svga":
+                _next = 'vga';
+                break;
+            case "vga":
+                _next = 'qvga';
+                break;
+            default:
+                _next = 'xga';
+        }
+        this._develop = _next;
     }
 }
 

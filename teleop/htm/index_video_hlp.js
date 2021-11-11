@@ -95,3 +95,9 @@ function h264_stop_all() {
         camera_controller.stop();
     }
 }
+
+document.addEventListener("DOMContentLoaded", function() {
+    if (!dev_tools.is_develop()) {
+        $("a#video_stream_h264").click(function() {page_utils.set_stream_type('h264'); location.reload();});
+    }
+});

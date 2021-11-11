@@ -29,6 +29,7 @@ body {
   margin-top: 10px;
   margin-bottom: 10px;
   padding: 10px;
+  display: none;
 }
 #message_box.warning_message {
   background-color: #ffffcc;
@@ -135,22 +136,16 @@ div#navigation_route_container > p {
             </div>
             <div id="stream_links" style="float: left; padding-top: 20px; text-align: left;">
                 <a id="video_stream_h264" href="#"
-                   title="Display the main camera video-stream"
-                   onclick="page_utils.set_stream_type('h264'); location.reload();">h264</a><br/>
+                   title="Display the main camera video-stream">h264</a>
+                <br/>
                 <a id="video_stream_mjpeg" href="#"
-                   title="Display the main camera motion jpeg stream (attempt manual latency control) "
-                   onclick="page_utils.set_stream_type('mjpeg'); location.reload();">mjpeg</a>
+                   title="Display the main camera motion jpeg stream (attempt manual latency control)">mjpeg</a>
             </div>
             <div id="mjpeg_stream_controls"
                  style="float: left; padding: 38px 0 0 10px; font-family: 'Lucida Console'; font-size: 15px;">
                 <span id="mjpeg_quality_val">0</span>
-                <img id="caret_down" src='caret.png?v=0.50.0'
-                     title="Decrease motion jpeg quality"
-                     onclick="mjpeg_page_controller.caret_down();"/>
-                <img id="caret_up" src='caret.png?v=0.50.0'
-                     style="transform: rotate(180deg);"
-                     title="Increase motion jpeg quality"
-                     onclick="mjpeg_page_controller.caret_up();"/>
+                <img id="caret_down" src='caret.png?v=0.50.0' title="Decrease motion jpeg quality"/>
+                <img id="caret_up" src='caret.png?v=0.50.0' style="transform: rotate(180deg);" title="Increase motion jpeg quality"/>
             </div>
             <div id="preview_container"
                  style="float: left; margin: 5px 0 5px 5px;"
@@ -174,9 +169,8 @@ div#navigation_route_container > p {
                 </div>
             </div>
             <div id="pilot_drive_values"
-                 style="float: right; margin: 30px 0 1px 50px; cursor: zoom-in;
+                 style="float: right; margin: 30px 0 1px 50px;
                         color: white; font-family: Lucida Console; font-size: 11px;"
-                 onclick="teleop_screen.toggle_debug_values();"
                  title="Toggle debug values">
                 <p style="min-width: 50px;"><span id="pilot_steering">0</span>&nbsp;ste</p>
                 <p style="min-width: 50px;"><span id="pilot_throttle">0</span>&nbsp;thr</p>
@@ -205,38 +199,45 @@ div#navigation_route_container > p {
             <canvas id="viewport_canvas" width="640" height="480"
                     style="width: 100% !important; height: 100% !important; position: absolute;">
             </canvas>
-            <div id="debug_drive_values"
-                 style="width: 99.3% !important; z-index: 10; height: 30px;
-                        background: rgba(100, 217, 255, 0.3);
-                        position: absolute; cursor: zoom-out;
-                        color: white; font-size: 15px; padding: 10px 0 0 10px;
-                        font-family: Lucida Console;"
-                onclick="teleop_screen.toggle_debug_values();"
-                title="Toggle debug values">
-                <span class="debug_bar_text">front</span>&nbsp;<span id="front_camera_framerate">0</span>
-                <span class="debug_bar_text">rear</span>&nbsp;<span id="rear_camera_framerate">0</span>
-                <span class="debug_bar_text">inference</span>&nbsp;<span id="inference_fps">0</span>
-                <span class="debug_bar_text">s-mu</span>&nbsp;<span id="inference_surprise">0</span>
-                <span class="debug_bar_text">s-cri</span>&nbsp;<span id="inference_critic">0</span>
-                <span class="debug_bar_text">obstruction</span>&nbsp;<span id="inference_obstacle">0</span>
-                <span class="debug_bar_text">p-mu</span>&nbsp;<span id="inference_brake_critic">0</span>
-                <span class="debug_bar_text">lat</span>&nbsp;<span id="navigation_geo_lat">0</span>
-                <span class="debug_bar_text">lon</span>&nbsp;<span id="navigation_geo_long">0</span>
-                <span class="debug_bar_text">bea</span>&nbsp;<span id="navigation_heading">0</span>
-                <span class="debug_bar_text">dist</span>&nbsp;<span id="navigation_match_image_distance">0</span>
-                <span class="debug_bar_text">cmd</span>&nbsp;<span id="navigation_current_command">0</span>
-                <span class="debug_bar_text">dir</span>&nbsp;<span id="navigation_direction">0</span>
+            <div id="debug_drive_bar"
+                     style="width: 99.3% !important; z-index: 10; height: 30px;
+                            background: rgba(100, 217, 255, 0.3);
+                            position: absolute;
+                            color: white; font-size: 15px; padding: 10px 0 0 10px;
+                            font-family: Lucida Console;"
+                    title="Drive values">
+                <div id="debug_drive_values">
+                    <span class="debug_bar_text">front</span>&nbsp;<span id="front_camera_framerate">0</span>
+                    <span class="debug_bar_text">rear</span>&nbsp;<span id="rear_camera_framerate">0</span>
+                    <span class="debug_bar_text">inference</span>&nbsp;<span id="inference_fps">0</span>
+                    <span class="debug_bar_text">s-mu</span>&nbsp;<span id="inference_surprise">0</span>
+                    <span class="debug_bar_text">s-cri</span>&nbsp;<span id="inference_critic">0</span>
+                    <span class="debug_bar_text">obstruction</span>&nbsp;<span id="inference_obstacle">0</span>
+                    <span class="debug_bar_text">p-mu</span>&nbsp;<span id="inference_brake_critic">0</span>
+                    <span class="debug_bar_text">lat</span>&nbsp;<span id="navigation_geo_lat">0</span>
+                    <span class="debug_bar_text">lon</span>&nbsp;<span id="navigation_geo_long">0</span>
+                    <span class="debug_bar_text">bea</span>&nbsp;<span id="navigation_heading">0</span>
+                    <span class="debug_bar_text">dist</span>&nbsp;<span id="navigation_match_image_distance">0</span>
+                    <span class="debug_bar_text">cmd</span>&nbsp;<span id="navigation_current_command">0</span>
+                    <span class="debug_bar_text">dir</span>&nbsp;<span id="navigation_direction">0</span>
+                </div>
             </div>
         </div>
     </div>
 </div>
 <script type="text/javascript">
-teleop_screen.add_camera_selection_listener(function(is_selected) {
-    $("div#viewport_container").removeClass('selected');
-    if (is_selected) {
-        $("div#viewport_container").addClass('selected');
-    }
-});
+// Set the name of the hidden property and the change event for visibility
+var hidden, visibilityChange;
+if (typeof document.hidden !== "undefined") { // Opera 12.10 and Firefox 18 and later support
+  hidden = "hidden";
+  visibilityChange = "visibilitychange";
+} else if (typeof document.msHidden !== "undefined") {
+  hidden = "msHidden";
+  visibilityChange = "msvisibilitychange";
+} else if (typeof document.webkitHidden !== "undefined") {
+  hidden = "webkitHidden";
+  visibilityChange = "webkitvisibilitychange";
+}
 
 function start_all_handlers() {
     navigator_start_all();
@@ -250,19 +251,6 @@ function stop_all_handlers() {
     teleop_stop_all();
     mjpeg_stop_all();
     h264_stop_all();
-}
-
-// Set the name of the hidden property and the change event for visibility
-var hidden, visibilityChange;
-if (typeof document.hidden !== "undefined") { // Opera 12.10 and Firefox 18 and later support
-  hidden = "hidden";
-  visibilityChange = "visibilitychange";
-} else if (typeof document.msHidden !== "undefined") {
-  hidden = "msHidden";
-  visibilityChange = "msvisibilitychange";
-} else if (typeof document.webkitHidden !== "undefined") {
-  hidden = "webkitHidden";
-  visibilityChange = "webkitvisibilitychange";
 }
 
 function handleVisibilityChange() {

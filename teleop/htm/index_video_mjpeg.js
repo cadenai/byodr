@@ -152,15 +152,16 @@ class FakeCameraController extends RealCameraController {
     async capture() {
         const _instance = this;
         if (_instance._running) {
-            const response = await fetch(dev_tools.get_img_url(this.camera_position));
+            const response = await fetch(dev_tools.get_img_url(_instance.camera_position));
             const blob = await response.blob();
             _instance.message_callback(blob);
-            //setTimeout(function() {_instance.capture();}, 100);
+            setTimeout(function() {_instance.capture();}, 500);
         }
     }
     start_socket() {
+        const _dim = dev_tools.get_img_dimensions();
+        this.message_callback(JSON.stringify({action: 'init', width: _dim[0], height: _dim[1]}));
         this._running = true;
-        this.message_callback(JSON.stringify({action: 'init', width: 640, height: 480}));
         this.capture();
     }
     stop_socket() {
@@ -263,21 +264,49 @@ if (dev_tools.is_develop()) {
 }
 
 
+function mjpeg_start_all() {
+    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket == undefined) {
+        mjpeg_rear_camera.start_socket();
+    }
+    if (mjpeg_front_camera != undefined && mjpeg_front_camera.socket == undefined) {
+        mjpeg_front_camera.start_socket();
+    }
+}
+
+function mjpeg_stop_all() {
+    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket != undefined) {
+        mjpeg_rear_camera.stop_socket();
+    }
+    if (mjpeg_front_camera != undefined && mjpeg_front_camera.socket != undefined) {
+        mjpeg_front_camera.stop_socket();
+    }
+}
 
 document.addEventListener("DOMContentLoaded", function() {
+    $("img#caret_down").click(function() {mjpeg_page_controller.caret_down();});
+    $("img#caret_up").click(function() {mjpeg_page_controller.caret_up();});
+
+    if (dev_tools.is_develop()) {
+        $("a#video_stream_mjpeg").click(function() {
+            mjpeg_stop_all();
+            dev_tools.set_next_resolution();
+            mjpeg_start_all();
+        });
+    } else {
+        $("a#video_stream_mjpeg").click(function() {page_utils.set_stream_type('mjpeg'); location.reload();});
+    }
+
     const el_rear_preview_image = $('img#mjpeg_rear_camera_preview_image');
     const el_front_preview_image = $('img#mjpeg_front_camera_preview_image');
     el_rear_preview_image.click(function() {
         el_front_preview_image.removeClass('active');
         el_rear_preview_image.addClass('active');
         teleop_screen.activate_camera('rear');
-        //teleop_screen.toggle_debug_values(false);
     });
     el_front_preview_image.click(function() {
         el_rear_preview_image.removeClass('active');
         el_front_preview_image.addClass('active');
         teleop_screen.activate_camera('front');
-        teleop_screen.toggle_debug_values(true);
     });
     mjpeg_page_controller.add_camera_listener(
         function(position, _cmd) {},
@@ -335,20 +364,3 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-function mjpeg_start_all() {
-    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket == undefined) {
-        mjpeg_rear_camera.start_socket();
-    }
-    if (mjpeg_front_camera != undefined && mjpeg_front_camera.socket == undefined) {
-        mjpeg_front_camera.start_socket();
-    }
-}
-
-function mjpeg_stop_all() {
-    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket != undefined) {
-        mjpeg_rear_camera.stop_socket();
-    }
-    if (mjpeg_front_camera != undefined && mjpeg_front_camera.socket != undefined) {
-        mjpeg_front_camera.stop_socket();
-    }
-}

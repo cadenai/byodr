@@ -66,11 +66,11 @@ var screen_utils = {
     _render_path: function(ctx, path, _fill) {
         const canvas = ctx.canvas;
         const tz_width = 400/640 * canvas.width;
-        const tz_height = 95/480 * canvas.height;
+        const tz_height = 120/480 * canvas.height;
         const gap = 6/640 * canvas.width;
         const cut = 8/480 * canvas.height;
         const taper = 0.65;
-        const height_shrink = 0.55;
+        const height_shrink = 0.65;
         const gap_shrink = 0.8;
         const cut_shrink = 0.7;
         const w_steering = 150;
@@ -108,6 +108,9 @@ var screen_utils = {
 }
 
 var teleop_screen = {
+    el_drive_bar: null,
+    el_drive_values: null,
+    el_pilot_bar: null,
     command_turn: null,
     command_ctl: null,
     server_message_listeners: [],
@@ -124,6 +127,12 @@ var teleop_screen = {
     camera_selection_listeners: [],
     camera_cycle_timer: null,
     last_server_message: null,
+
+    _init() {
+        this.el_drive_bar = $("div#debug_drive_bar");
+        this.el_drive_values = $("div#debug_drive_values");
+        this.el_pilot_bar = $("div#pilot_drive_values");
+    },
 
     _select_camera: function(name) {
         var is_selected = name == this.active_camera;
@@ -205,16 +214,27 @@ var teleop_screen = {
         this._debug_values_listeners.push(cb);
     },
 
+//    preview_debug_values: function(show) {
+//        if (!this.in_debug) {
+//            if (show) {
+//                this.el_drive_values.visible();
+//                this.el_drive_bar.css({'cursor': 'zoom-in'});
+//            } else {
+//                this.el_drive_values.invisible();
+//            }
+//        }
+//    },
+
     toggle_debug_values: function(show) {
         if (show == undefined) {
-            show = !$('div#debug_drive_values').is_visible();
+            show = !this.in_debug;
         }
         if (show) {
-            $("div#debug_drive_values").visible();
-            $("div#pilot_drive_values").css({'cursor': 'zoom-out'});
+            this.el_drive_bar.visible();
+            this.el_pilot_bar.css({'cursor': 'zoom-out'});
         } else {
-            $("div#debug_drive_values").invisible();
-            $("div#pilot_drive_values").css({'cursor': 'zoom-in'});
+            this.el_drive_bar.invisible();
+            this.el_pilot_bar.css({'cursor': 'zoom-in'});
         }
         this.in_debug = show? 1: 0;
         this._debug_values_listeners.forEach(function(cb) {cb(show);});
@@ -279,12 +299,9 @@ var teleop_screen = {
     },
 
     canvas_update: function(ctx) {
-        //if (this.active_camera == 'front' && teleop_screen.in_debug) {
-        if (teleop_screen.in_debug) {
-            var message = this.last_server_message;
-            if (message != undefined) {
-                //screen_utils._render_path(ctx, message.nav_path, 'rgba(100, 217, 255, 0.3)');
-            }
+        const message = this.last_server_message;
+        if (message != undefined && this.active_camera == 'front' && message._is_on_autopilot) {
+            screen_utils._render_path(ctx, message.nav_path, 'rgba(100, 217, 255, 0.3)');
         }
     }
 }
@@ -292,3 +309,16 @@ var teleop_screen = {
 
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
 screen_utils._init();
+
+teleop_screen.add_camera_selection_listener(function(is_selected) {
+    $("div#viewport_container").removeClass('selected');
+    if (is_selected) {
+        $("div#viewport_container").addClass('selected');
+    }
+});
+
+document.addEventListener("DOMContentLoaded", function() {
+    teleop_screen._init();
+    teleop_screen.toggle_debug_values(true);
+    teleop_screen.el_pilot_bar.click(function() {teleop_screen.toggle_debug_values()});
+});

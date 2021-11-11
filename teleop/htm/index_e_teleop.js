@@ -151,7 +151,7 @@ class FakeServerSocket extends RealServerSocket {
             'nav_direction': -0.05672478172928095,
             'nav_distance': [1, 1],
             'nav_image': [-1, -1],
-            'nav_path': [-0.06700272485613823, -0.0604995172470808, -0.055837567895650864, -0.05203636270016432, -0.04824773594737053],
+            'nav_path': [0, 0, 0, 0, 0],
             'nav_point': "",
             'speed': 0,
             'ste': 0,
@@ -206,7 +206,6 @@ function teleop_stop_all() {
 
 
 document.addEventListener("DOMContentLoaded", function() {
-    teleop_screen.toggle_debug_values(true);
     server_socket.add_server_message_listener(function(message) {
         teleop_screen._server_message(message);
     });
