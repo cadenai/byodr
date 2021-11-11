@@ -274,7 +274,9 @@ function handleVisibilityChange() {
 }
 
 $(function () {
-    window.history.pushState({}, 'application_index_loaded', '/');
+    if (!dev_tools.is_develop()) {
+        window.history.pushState({}, 'application_index_loaded', '/');
+    }
     if (page_utils.get_stream_type() == 'mjpeg') {
         $('a#video_stream_mjpeg').addClass('active');
         $('a#video_stream_h264').addClass('inactive');

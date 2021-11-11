@@ -74,7 +74,7 @@ function user_options_form_submit() {
     });
     $.post('api/user/options', JSON.stringify(p_body)).done(function(data) {
         $("form#form_user_options").find(':input').toArray().forEach(el => {el.defaultValue = el.value;});
-        setTimeout(system_state_update, 1000);
+        setTimeout(function() {system_state_update();}, 1000);
     });
 }
 

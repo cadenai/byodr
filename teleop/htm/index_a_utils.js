@@ -39,8 +39,7 @@ var socket_utils = {
     }
 }
 
-var page_utils = {
-    system_capabilities: {},
+var dev_tools = {
     _develop: null,
 
     _parse_develop: function() {
@@ -51,7 +50,22 @@ var page_utils = {
 
     _init: function() {
         this._develop = this._parse_develop();
-        if (this._develop) {
+    },
+
+    is_develop: function() {
+        return this._develop == undefined? this._parse_develop(): this._develop;
+    },
+
+    get_img_url: function(camera_position) {
+        return '/develop/img_' + this.is_develop() + '.jpg';
+    }
+}
+
+var page_utils = {
+    system_capabilities: {},
+
+    _init: function() {
+        if (dev_tools.is_develop()) {
             console.log("Development mode is active.")
             page_utils.system_capabilities = {
                 'platform': {'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}}
@@ -61,10 +75,6 @@ var page_utils = {
                 page_utils.system_capabilities = data;
             });
         }
-    },
-
-    is_develop: function() {
-        return this._develop == undefined? this._parse_develop(): this._develop;
     },
 
     get_stream_type: function() {
@@ -83,4 +93,5 @@ var page_utils = {
 
 
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
+dev_tools._init();
 page_utils._init();

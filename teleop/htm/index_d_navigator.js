@@ -1,4 +1,4 @@
-class BaseNavigatorController {
+class RealNavigatorController {
     constructor() {
         const location = document.location;
         this.nav_path = location.protocol + "//" + location.hostname + ":" + location.port + "/ws/nav";
@@ -95,8 +95,9 @@ class BaseNavigatorController {
             const route = this.selected_route;
             image_src =  this.nav_path + '?im=' + image_id + '&r=' + route + '&n=' + this.random_id;
         }
+        const _instance = this;
         setTimeout(function() {
-            navigator_controller._render_navigation_image(image_src);
+            _instance._render_navigation_image(image_src);
         }, 0);
     }
     _mouse_over() {
@@ -106,6 +107,23 @@ class BaseNavigatorController {
     _mouse_out() {
         this.in_mouse_over = false;
         this._schedule_navigation_image_update();
+    }
+    _toggle_route() {
+        var command = {'action': 'toggle', 'route': this.selected_route};
+        $.post('api/navigation/routes', JSON.stringify(command))
+                    .fail(function(xhr, status, error) {
+                        console.log(error);
+                    })
+                    .done(function(data) {
+                        // console.log(data);
+                    });
+    }
+    _list_routes() {
+        const _instance = this;
+        $.get("/api/navigation/routes?action=list", function(response) {
+            _instance._set_routes(response);
+            _instance._update_visibility();
+        });
     }
     _server_message(message) {
         $('span#navigation_geo_lat').text(message.geo_lat.toFixed(6));
@@ -136,34 +154,18 @@ class BaseNavigatorController {
     }
 }
 
-class FakeNavigatorController extends BaseNavigatorController {
+class FakeNavigatorController extends RealNavigatorController {
+    constructor() {
+        super();
+    }
     _toggle_route() {
     }
     _list_routes() {
-    }
-}
-
-class RealNavigatorController extends BaseNavigatorController {
-    _toggle_route() {
-        var command = {'action': 'toggle', 'route': this.selected_route};
-        $.post('api/navigation/routes', JSON.stringify(command))
-                    .fail(function(xhr, status, error) {
-                        console.log(error);
-                    })
-                    .done(function(data) {
-                        // console.log(data);
-                    });
-    }
-    _list_routes() {
-        $.get("/api/navigation/routes?action=list", function(response) {
-            navigator_controller._set_routes(response);
-            navigator_controller._update_visibility();
-        });
     }
 }
 
 // In development mode there is no use of a backend.
-const navigator_controller = page_utils.is_develop()? new FakeNavigatorController(): new RealNavigatorController();
+const navigator_controller = dev_tools.is_develop()? new FakeNavigatorController(): new RealNavigatorController();
 
 function navigator_start_all() {
     navigator_controller.started = true;
@@ -188,7 +190,7 @@ document.addEventListener("DOMContentLoaded", function() {
     navigator_controller.el_image.click(function() {navigator_controller._toggle_route()});
     navigator_controller.el_route_select_prev.click(function() {navigator_controller._select_prev_route()});
     navigator_controller.el_route_select_next.click(function() {navigator_controller._select_next_route()});
-    server_controller.add_server_message_listener(function(message) {
+    server_socket.add_server_message_listener(function(message) {
         navigator_controller._server_message(message);
     });
 });

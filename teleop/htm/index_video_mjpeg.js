@@ -71,7 +71,7 @@ class MJPEGControlLocalStorage {
     }
 }
 
-class CameraController {
+class RealCameraController {
     constructor(camera_position, frame_controller, message_callback) {
         this.camera_position = camera_position;
         this.message_callback = message_callback;
@@ -84,16 +84,17 @@ class CameraController {
             clearTimeout(this.socket_close_timer_id);
         }
     }
-    socket_close(socket) {
-        socket.close(4001, "Done waiting for the server to respond.");
-    }
-    capture(socket) {
+    capture() {
         var _instance = this;
-        this.clear_socket_timeout();
-        this.socket_close_timer_id = setTimeout(function() {_instance.socket_close(socket);}, 1000);
+        _instance.clear_socket_timeout();
+        _instance.socket_close_timer_id = setTimeout(function() {
+            if (_instance.socket != undefined) {
+                _instance.socket.close(4001, "Done waiting for the server to respond.");
+            }
+        }, 1000);
         // E.g. '{"camera": "front", "quality": 50, "display": "vga"}'
-        if (socket != undefined && socket.readyState == 1) {
-            socket.send(JSON.stringify({
+        if (_instance.socket != undefined && _instance.socket.readyState == 1) {
+            _instance.socket.send(JSON.stringify({
                 quality: _instance.frame_controller.jpeg_quality
             }));
         }
@@ -109,7 +110,7 @@ class CameraController {
             }
             ws.onopen = function() {
                 //console.log("MJPEG " + _instance.camera_position + " camera connection established.");
-                _instance.capture(ws);
+                _instance.capture();
             };
             ws.onclose = function() {
                 //console.log("MJPEG " + _instance.camera_position + " camera connection closed.");
@@ -117,8 +118,16 @@ class CameraController {
             ws.onmessage = function(evt) {
                 _instance.clear_socket_timeout();
                 _instance.frame_controller.update_framerate();
-                setTimeout(function() {_instance.message_callback(evt.data);}, 0);
-                setTimeout(function() {_instance.capture(ws);}, _instance.frame_controller.request_timeout);
+                setTimeout(function() {
+                    var cmd = null;
+                    if (typeof evt.data == "string") {
+                        cmd = evt.data;
+                    } else {
+                        cmd = new Blob([new Uint8Array(evt.data)], {type: "image/jpeg"});
+                    }
+                    _instance.message_callback(cmd);
+                }, 0);
+                setTimeout(function() {_instance.capture();}, _instance.frame_controller.request_timeout);
             };
         });
     }
@@ -132,6 +141,30 @@ class CameraController {
             }
         }
         this.socket = null;
+    }
+}
+
+class FakeCameraController extends RealCameraController {
+    constructor(camera_position, frame_controller, message_callback) {
+        super(camera_position, frame_controller, message_callback);
+        this._running = false;
+    }
+    async capture() {
+        const _instance = this;
+        if (_instance._running) {
+            const response = await fetch(dev_tools.get_img_url(this.camera_position));
+            const blob = await response.blob();
+            _instance.message_callback(blob);
+            //setTimeout(function() {_instance.capture();}, 100);
+        }
+    }
+    start_socket() {
+        this._running = true;
+        this.message_callback(JSON.stringify({action: 'init', width: 640, height: 480}));
+        this.capture();
+    }
+    stop_socket() {
+        this._running = false;
     }
 }
 
@@ -202,27 +235,32 @@ var mjpeg_page_controller = {
 mjpeg_page_controller.init([front_camera_frame_controller, rear_camera_frame_controller]);
 
 // Setup both the camera socket consumers.
-mjpeg_rear_camera = new CameraController('rear', rear_camera_frame_controller, function(evt_data) {
-    if(typeof evt_data == "string") {
-        cmd = JSON.parse(evt_data);
-        mjpeg_page_controller.notify_camera_init_listeners(mjpeg_rear_camera.camera_position, cmd);
+mjpeg_rear_camera_consumer = function(_blob) {
+    if(typeof _blob == "string") {
+        mjpeg_page_controller.notify_camera_init_listeners(mjpeg_rear_camera.camera_position, JSON.parse(_blob));
     } else {
-        var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(evt_data)], {type: "image/jpeg"}));
-        mjpeg_page_controller.notify_camera_image_listeners(mjpeg_rear_camera.camera_position, _blob);
+        mjpeg_page_controller.notify_camera_image_listeners(mjpeg_rear_camera.camera_position, URL.createObjectURL(_blob));
         $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
     }
-});
-
-mjpeg_front_camera = new CameraController('front', front_camera_frame_controller, function(evt_data) {
-    if(typeof evt_data == "string") {
-        cmd = JSON.parse(evt_data);
-        mjpeg_page_controller.notify_camera_init_listeners(mjpeg_front_camera.camera_position, cmd);
+}
+mjpeg_front_camera_consumer = function(_blob) {
+    if(typeof _blob == "string") {
+        mjpeg_page_controller.notify_camera_init_listeners(mjpeg_front_camera.camera_position, JSON.parse(_blob));
     } else {
-        var _blob = window.URL.createObjectURL(new Blob([new Uint8Array(evt_data)], {type: "image/jpeg"}));
-        mjpeg_page_controller.notify_camera_image_listeners(mjpeg_front_camera.camera_position, _blob);
+        mjpeg_page_controller.notify_camera_image_listeners(mjpeg_front_camera.camera_position, URL.createObjectURL(_blob));
         $('span#front_camera_framerate').text(front_camera_frame_controller.actual_fps.toFixed(0));
     }
-});
+}
+
+
+// In development mode there is no use of a backend.
+if (dev_tools.is_develop()) {
+    mjpeg_rear_camera = new FakeCameraController('rear', rear_camera_frame_controller, mjpeg_rear_camera_consumer);
+    mjpeg_front_camera = new FakeCameraController('front', front_camera_frame_controller, mjpeg_front_camera_consumer);
+} else {
+    mjpeg_rear_camera = new RealCameraController('rear', rear_camera_frame_controller, mjpeg_rear_camera_consumer);
+    mjpeg_front_camera = new RealCameraController('front', front_camera_frame_controller, mjpeg_front_camera_consumer);
+}
 
 
 
