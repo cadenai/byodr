@@ -73,9 +73,9 @@ var path_renderer = {
     _get_constants: function() {
         switch(dev_tools._vehicle) {
             case "rover1":
-                return [400/640, 120/480, 6/640, 8/480, 0.65, 0.65, 0.8, 0.7, 150, 6];
+                return [400/640, 120/480, 6/640, 8/480, 0.65, 0.65, 0.8, 0.7, 65/640, 2/480];
             default:
-                return [400/640, 80/480, 6/640, 8/480, 0.65, 0.65, 0.8, 0.7, 150, 6];
+                return [400/640, 74/480, 6/640, 8/480, 0.65, 0.65, 0.8, 0.7, 120/640, 2/480];
         }
     },
 
@@ -90,8 +90,8 @@ var path_renderer = {
         const height_shrink = _constants[5];
         const gap_shrink = _constants[6];
         const cut_shrink = _constants[7];
-        const w_steering = _constants[8];
-        const h_steering = _constants[9];
+        const w_steering = _constants[8] * canvas.width;
+        const h_steering = _constants[9] * canvas.height;
 
         // Start from the middle of the base of the trapezoid.
         var a_x = (canvas.width / 2) - (tz_width / 2);
@@ -231,17 +231,6 @@ var teleop_screen = {
         this._debug_values_listeners.push(cb);
     },
 
-//    preview_debug_values: function(show) {
-//        if (!this.in_debug) {
-//            if (show) {
-//                this.el_drive_values.visible();
-//                this.el_drive_bar.css({'cursor': 'zoom-in'});
-//            } else {
-//                this.el_drive_values.invisible();
-//            }
-//        }
-//    },
-
     toggle_debug_values: function(show) {
         if (show == undefined) {
             show = !this.in_debug;
@@ -313,6 +302,10 @@ var teleop_screen = {
         if (command.button_left) {
             setTimeout(function() {viewport_container.fadeOut(100).fadeIn(100);}, 0);
         }
+    },
+
+    on_canvas_init: function(width, height) {
+        $('span#debug_screen_dimension').text(width + 'x' + height);
     },
 
     canvas_update: function(ctx) {

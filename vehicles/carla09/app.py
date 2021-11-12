@@ -132,10 +132,8 @@ class CarlaApplication(Application):
     def _capabilities():
         # The video dimensions are determined by the websocket services.
         return {
-            'video': {
-                'front': {'ptz': 0},
-                'rear': {'ptz': 0}
-            }
+            'vehicle': 'carla1',
+            'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}
         }
 
     def setup(self):

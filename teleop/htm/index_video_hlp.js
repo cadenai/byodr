@@ -54,8 +54,8 @@ if (page_utils.get_stream_type() == 'h264') {
             // The webgl context does not have a 2d rendering context.
             this.wsavc = new WSAvcPlayer(canvas_controller.create(), "yuv", this.socket);
             this.wsavc.on('canvasReady', function(width, height) {
-                // console.log("Canvas Ready.");
                 canvas_controller.replace(camera_controller.wsavc.canvas);
+                teleop_screen.on_canvas_init(width, height);
             });
             this.wsavc.on('canvasRendered', function() {
                 // Do not run the canvas draws in parallel.

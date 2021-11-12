@@ -202,7 +202,7 @@ class RoverApplication(Application):
         return cfg
 
     def _capabilities(self):
-        return {'video': self._handler.get_video_capabilities()}
+        return {'vehicle': 'rover1', 'video': self._handler.get_video_capabilities()}
 
     def setup(self):
         if self.active():

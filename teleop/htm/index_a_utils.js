@@ -42,6 +42,7 @@ var socket_utils = {
 var dev_tools = {
     _develop: null,
     _vehicle: 'rover1',
+    _image_cache: new Map(),
 
     _random_choice: function(arr) {
         return arr[Math.floor(Math.random() * arr.length)];
@@ -83,6 +84,19 @@ var dev_tools = {
         return '/develop/' + this._vehicle + '/img_' + camera_position + '_' + _key + '.jpg';
     },
 
+    get_img_blob: async function(camera_position, callback) {
+        const _url = this.get_img_url(camera_position);
+        if (this._image_cache.has(_url)) {
+            callback(this._image_cache.get(_url));
+        } else {
+            const response = await fetch(_url);
+            const blob = await response.blob();
+            this._image_cache.set(_url, blob);
+            callback(blob);
+            // console.log("Image cached " + _url);
+        }
+    },
+
     set_next_resolution: function() {
         var _next = null;
         const _key = this.is_develop();
@@ -110,10 +124,10 @@ var page_utils = {
         const _instance = this;
         if (_instance._capabilities == undefined) {
             if (dev_tools.is_develop()) {
-                _instance._capabilities = {
+                _instance._capabilities = {'platform': {
                     'vehicle': dev_tools._random_choice(['rover1', 'carla1']),
-                    'platform': {'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}}
-                };
+                    'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}
+                }};
                 callback(_instance._capabilities);
             } else {
                 jQuery.get("/api/system/capabilities", function(data) {
@@ -146,6 +160,7 @@ dev_tools._init();
 
 document.addEventListener("DOMContentLoaded", function() {
     page_utils.request_capabilities(function(_capabilities) {
-        dev_tools._vehicle = _capabilities.vehicle;
+        dev_tools._vehicle = _capabilities.platform.vehicle;
+        console.log('Received platform vehicle ' + dev_tools._vehicle);
     });
 });

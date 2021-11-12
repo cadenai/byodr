@@ -149,14 +149,14 @@ class FakeCameraController extends RealCameraController {
         super(camera_position, frame_controller, message_callback);
         this._running = false;
     }
-    async capture() {
+    capture() {
         const _instance = this;
         if (_instance._running) {
-            const response = await fetch(dev_tools.get_img_url(_instance.camera_position));
-            const blob = await response.blob();
-            _instance.message_callback(blob);
-            _instance.frame_controller.update_framerate();
-            setTimeout(function() {_instance.capture();}, 500);
+            dev_tools.get_img_blob(_instance.camera_position, function(blob) {
+                _instance.message_callback(blob);
+                _instance.frame_controller.update_framerate();
+                setTimeout(function() {_instance.capture();}, 50 + Math.floor(Math.random() * 10));
+            });
         }
     }
     start_socket() {
@@ -266,19 +266,19 @@ if (dev_tools.is_develop()) {
 
 
 function mjpeg_start_all() {
-    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket == undefined) {
+    if (mjpeg_rear_camera != undefined) {
         mjpeg_rear_camera.start_socket();
     }
-    if (mjpeg_front_camera != undefined && mjpeg_front_camera.socket == undefined) {
+    if (mjpeg_front_camera != undefined) {
         mjpeg_front_camera.start_socket();
     }
 }
 
 function mjpeg_stop_all() {
-    if (mjpeg_rear_camera != undefined && mjpeg_rear_camera.socket != undefined) {
+    if (mjpeg_rear_camera != undefined) {
         mjpeg_rear_camera.stop_socket();
     }
-    if (mjpeg_front_camera != undefined && mjpeg_front_camera.socket != undefined) {
+    if (mjpeg_front_camera != undefined) {
         mjpeg_front_camera.stop_socket();
     }
 }
@@ -334,9 +334,9 @@ document.addEventListener("DOMContentLoaded", function() {
         mjpeg_page_controller.add_camera_listener(
             function(position, _cmd) {
                 if (teleop_screen.active_camera == position && _cmd.action == "init") {
-                    console.log("Display " + position + " received command ", _cmd);
                     el_main_camera_display.width = _cmd.width;
                     el_main_camera_display.height = _cmd.height;
+                    teleop_screen.on_canvas_init(_cmd.width, _cmd.height);
                 }
             },
             function(position, _blob) {

@@ -62,8 +62,25 @@ class RealServerSocket {
 class FakeServerSocket extends RealServerSocket {
     constructor() {
         super();
+        this._running = false;
+        this._num_steps = 0;
+        this._navigation_path_x = [0, 0, 0, 0, 0];
+        this._navigation_path_dx = [0.005, 0.005, 0.005, 0.005, 0.005];
     }
     _create_message() {
+        // Update the navigation path.
+        if (this._num_steps == 100000) {
+            this._num_steps = 0;
+            this._navigation_path_x = [0, 0, 0, 0, 0];
+        } else {
+            this._num_steps++;
+            const _navigation_path_dx = this._navigation_path_dx;
+            const _a = this._navigation_path_x.map(function (num, idx) {return num + _navigation_path_dx[idx] * Math.PI;});
+            this._navigation_path_x = _a;
+        }
+        // Simulate the path.
+        const _navigation_path = this._navigation_path_x.map(function(e) {return Math.sin(e);});
+        // Simulate the server message based on the gamepad
         const gamepad_command = gamepad_controller.is_active()? gamepad_controller.get_command(): {};
         return {
             'ctl': gamepad_command.button_y? 5: 2,
@@ -83,7 +100,7 @@ class FakeServerSocket extends RealServerSocket {
             'nav_direction': -0.05672478172928095,
             'nav_distance': [1, 1],
             'nav_image': [-1, -1],
-            'nav_path': [0, 0, 0, 0, 0],
+            'nav_path': _navigation_path,
             'nav_point': "",
             'speed': 0,
             'ste': gamepad_command.steering? gamepad_command.steering: 0,
