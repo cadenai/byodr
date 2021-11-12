@@ -1,4 +1,3 @@
-
 var screen_utils = {
     _version: '0.50.0',
     _arrow_images: {},
@@ -47,12 +46,20 @@ var screen_utils = {
             return this._wheel_images.black;
         }
         return this._wheel_images.red;
+    }
+}
+
+
+var path_renderer = {
+
+    _init: function() {
+        const _instance = this;
     },
 
     _render_trapezoid: function(ctx, positions, fill) {
         ctx.lineWidth = 0.5;
         ctx.strokeStyle = 'rgb(255, 255, 255)';
-        ctx.fillStyle = fill;
+        ctx.fillStyle = 'rgba(100, 217, 255, 0.3)';
         ctx.beginPath();
         ctx.moveTo(positions[0][0], positions[0][1]);
         ctx.lineTo(positions[1][0], positions[1][1]);
@@ -63,18 +70,28 @@ var screen_utils = {
         ctx.fill();
     },
 
-    _render_path: function(ctx, path, _fill) {
+    _get_constants: function() {
+        switch(dev_tools._vehicle) {
+            case "rover1":
+                return [400/640, 120/480, 6/640, 8/480, 0.65, 0.65, 0.8, 0.7, 150, 6];
+            default:
+                return [400/640, 80/480, 6/640, 8/480, 0.65, 0.65, 0.8, 0.7, 150, 6];
+        }
+    },
+
+    _render_path: function(ctx, path) {
         const canvas = ctx.canvas;
-        const tz_width = 400/640 * canvas.width;
-        const tz_height = 120/480 * canvas.height;
-        const gap = 6/640 * canvas.width;
-        const cut = 8/480 * canvas.height;
-        const taper = 0.65;
-        const height_shrink = 0.65;
-        const gap_shrink = 0.8;
-        const cut_shrink = 0.7;
-        const w_steering = 150;
-        const h_steering = 6;
+        const _constants = this._get_constants();
+        const tz_width = _constants[0] * canvas.width;
+        const tz_height = _constants[1] * canvas.height;
+        const gap = _constants[2] * canvas.width;
+        const cut = _constants[3] * canvas.height;
+        const taper = _constants[4];
+        const height_shrink = _constants[5];
+        const gap_shrink = _constants[6];
+        const cut_shrink = _constants[7];
+        const w_steering = _constants[8];
+        const h_steering = _constants[9];
 
         // Start from the middle of the base of the trapezoid.
         var a_x = (canvas.width / 2) - (tz_width / 2);
@@ -94,7 +111,7 @@ var screen_utils = {
             var c_y = b_y - v_height + (element > 0? steer_dy: 0);
             var d_x = a_x + w_off + steer_dx;
             var d_y = a_y - v_height - (element < 0? steer_dy: 0);
-            screen_utils._render_trapezoid(ctx, [[a_x, a_y], [b_x, b_y], [c_x, c_y], [d_x, d_y]], _fill);
+            path_renderer._render_trapezoid(ctx, [[a_x, a_y], [b_x, b_y], [c_x, c_y], [d_x, d_y]]);
             // The next step starts from the top of the previous with gap.
             var c_shrink = .5 * cut * (cut_shrink ** idx);
             var g_shrink = gap * (gap_shrink ** idx);
@@ -301,7 +318,7 @@ var teleop_screen = {
     canvas_update: function(ctx) {
         const message = this.last_server_message;
         if (message != undefined && this.active_camera == 'front' && message._is_on_autopilot) {
-            screen_utils._render_path(ctx, message.nav_path, 'rgba(100, 217, 255, 0.3)');
+            path_renderer._render_path(ctx, message.nav_path);
         }
     }
 }

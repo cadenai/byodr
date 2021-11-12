@@ -61,7 +61,8 @@ div#pilot_drive_values > p {
   text-align: right;
 }
 
-div#debug_drive_values > span.debug_bar_text {
+div#debug_drive_values > p.drive_value_text {
+    display: inline-block;
     margin-left: 10px;
 }
 
@@ -206,20 +207,20 @@ div#navigation_route_container > p {
                             color: white; font-size: 15px; padding: 10px 0 0 10px;
                             font-family: Lucida Console;"
                     title="Drive values">
-                <div id="debug_drive_values">
-                    <span class="debug_bar_text">front</span>&nbsp;<span id="front_camera_framerate">0</span>
-                    <span class="debug_bar_text">rear</span>&nbsp;<span id="rear_camera_framerate">0</span>
-                    <span class="debug_bar_text">inference</span>&nbsp;<span id="inference_fps">0</span>
-                    <span class="debug_bar_text">s-mu</span>&nbsp;<span id="inference_surprise">0</span>
-                    <span class="debug_bar_text">s-cri</span>&nbsp;<span id="inference_critic">0</span>
-                    <span class="debug_bar_text">obstruction</span>&nbsp;<span id="inference_obstacle">0</span>
-                    <span class="debug_bar_text">p-mu</span>&nbsp;<span id="inference_brake_critic">0</span>
-                    <span class="debug_bar_text">lat</span>&nbsp;<span id="navigation_geo_lat">0</span>
-                    <span class="debug_bar_text">lon</span>&nbsp;<span id="navigation_geo_long">0</span>
-                    <span class="debug_bar_text">bea</span>&nbsp;<span id="navigation_heading">0</span>
-                    <span class="debug_bar_text">dist</span>&nbsp;<span id="navigation_match_image_distance">0</span>
-                    <span class="debug_bar_text">cmd</span>&nbsp;<span id="navigation_current_command">0</span>
-                    <span class="debug_bar_text">dir</span>&nbsp;<span id="navigation_direction">0</span>
+                <div id="debug_drive_values" style="margin-top: -14px;">
+                    <p class="drive_value_text" style="min-width:80px;">front&nbsp;<span id="front_camera_framerate">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">rear&nbsp;<span id="rear_camera_framerate">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">inference&nbsp;<span id="inference_fps">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">s-mu&nbsp;<span id="inference_surprise">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">s-cri&nbsp;<span id="inference_critic">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">obstruction&nbsp;<span id="inference_obstacle">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">p-mu&nbsp;<span id="inference_brake_critic">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">lat&nbsp;<span id="navigation_geo_lat">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">lon&nbsp;<span id="navigation_geo_long">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">bea&nbsp;<span id="navigation_heading">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">dist&nbsp;<span id="navigation_match_image_distance">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">cmd&nbsp;<span id="navigation_current_command">0</span></p>
+                    <p class="drive_value_text" style="min-width:80px;">dir&nbsp;<span id="navigation_direction">0</span></p>
                 </div>
             </div>
         </div>

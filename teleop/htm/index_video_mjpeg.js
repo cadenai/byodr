@@ -155,6 +155,7 @@ class FakeCameraController extends RealCameraController {
             const response = await fetch(dev_tools.get_img_url(_instance.camera_position));
             const blob = await response.blob();
             _instance.message_callback(blob);
+            _instance.frame_controller.update_framerate();
             setTimeout(function() {_instance.capture();}, 500);
         }
     }

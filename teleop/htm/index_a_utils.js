@@ -41,6 +41,11 @@ var socket_utils = {
 
 var dev_tools = {
     _develop: null,
+    _vehicle: 'rover1',
+
+    _random_choice: function(arr) {
+        return arr[Math.floor(Math.random() * arr.length)];
+    },
 
     _parse_develop: function() {
         const params = new URLSearchParams(window.location.search);
@@ -75,7 +80,7 @@ var dev_tools = {
 
     get_img_url: function(camera_position) {
         const _key = this.is_develop();
-        return '/develop/img_' + camera_position + '_' + _key + '.jpg';
+        return '/develop/' + this._vehicle + '/img_' + camera_position + '_' + _key + '.jpg';
     },
 
     set_next_resolution: function() {
@@ -99,18 +104,25 @@ var dev_tools = {
 }
 
 var page_utils = {
-    system_capabilities: {},
+    _capabilities: null,
 
-    _init: function() {
-        if (dev_tools.is_develop()) {
-            console.log("Development mode is active.")
-            page_utils.system_capabilities = {
-                'platform': {'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}}
-            };
+    request_capabilities: function(callback) {
+        const _instance = this;
+        if (_instance._capabilities == undefined) {
+            if (dev_tools.is_develop()) {
+                _instance._capabilities = {
+                    'vehicle': dev_tools._random_choice(['rover1', 'carla1']),
+                    'platform': {'video': {'front': {'ptz': 0}, 'rear': {'ptz': 0}}}
+                };
+                callback(_instance._capabilities);
+            } else {
+                jQuery.get("/api/system/capabilities", function(data) {
+                    _instance._capabilities = data;
+                    callback(_instance._capabilities);
+                });
+            }
         } else {
-            jQuery.get("/api/system/capabilities", function(data) {
-                page_utils.system_capabilities = data;
-            });
+            callback(_instance._capabilities);
         }
     },
 
@@ -131,4 +143,9 @@ var page_utils = {
 
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
 dev_tools._init();
-page_utils._init();
+
+document.addEventListener("DOMContentLoaded", function() {
+    page_utils.request_capabilities(function(_capabilities) {
+        dev_tools._vehicle = _capabilities.vehicle;
+    });
+});

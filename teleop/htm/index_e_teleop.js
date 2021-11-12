@@ -1,4 +1,3 @@
-
 class RealServerSocket {
     constructor() {
         this.server_message_listeners = [];
@@ -58,6 +57,59 @@ class RealServerSocket {
         }
     }
 }
+
+
+class FakeServerSocket extends RealServerSocket {
+    constructor() {
+        super();
+    }
+    _create_message() {
+        const gamepad_command = gamepad_controller.is_active()? gamepad_controller.get_command(): {};
+        return {
+            'ctl': gamepad_command.button_y? 5: 2,
+            'geo_head': -85.13683911988542,
+            'geo_lat': 49.00155759398021,
+            'geo_long': 8.002592177745152,
+            'head': -85.13683911988542,
+            'inf_brake': 0.031192919239401817,
+            'inf_brake_critic': 0.7258226275444031,
+            'inf_critic': 0.38173234462738037,
+            'inf_hz': 29.67614871413384,
+            'inf_penalty': 0.031138078539692818,
+            'inf_surprise': 0.24887815117835999,
+            'max_speed': 0,
+            'nav_active': 0,
+            'nav_command': 0,
+            'nav_direction': -0.05672478172928095,
+            'nav_distance': [1, 1],
+            'nav_image': [-1, -1],
+            'nav_path': [0, 0, 0, 0, 0],
+            'nav_point': "",
+            'speed': 0,
+            'ste': gamepad_command.steering? gamepad_command.steering: 0,
+            'thr': gamepad_command.throttle? gamepad_command.throttle: 0,
+            'turn': "general.fallback",
+            'vel_y': 0
+        };
+    }
+    _capture() {
+        const _instance = this;
+        if (_instance._running) {
+            var message = _instance._create_message();
+            super._notify_server_message_listeners(screen_utils._decorate_server_message(message));
+            setTimeout(function() {_instance._capture();}, 50);
+        }
+    }
+    _start_socket() {
+        this._running = true;
+        this._capture();
+    }
+    _stop_socket() {
+        this._running = false;
+    }
+}
+
+
 
 class RealGamepadSocket {
     _send(command) {
@@ -127,63 +179,24 @@ class RealGamepadSocket {
 }
 
 
-
-class FakeServerSocket extends RealServerSocket {
-    constructor() {
-        super();
-    }
-    _create_message() {
-        return {
-            'ctl': 2,
-            'geo_head': -85.13683911988542,
-            'geo_lat': 49.00155759398021,
-            'geo_long': 8.002592177745152,
-            'head': -85.13683911988542,
-            'inf_brake': 0.031192919239401817,
-            'inf_brake_critic': 0.7258226275444031,
-            'inf_critic': 0.38173234462738037,
-            'inf_hz': 29.67614871413384,
-            'inf_penalty': 0.031138078539692818,
-            'inf_surprise': 0.24887815117835999,
-            'max_speed': 0,
-            'nav_active': 0,
-            'nav_command': 0,
-            'nav_direction': -0.05672478172928095,
-            'nav_distance': [1, 1],
-            'nav_image': [-1, -1],
-            'nav_path': [0, 0, 0, 0, 0],
-            'nav_point': "",
-            'speed': 0,
-            'ste': 0,
-            'thr': 0,
-            'turn': "general.fallback",
-            'vel_y': 0
-        };
-    }
-    _capture() {
-        const _instance = this;
-        if (_instance._running) {
-            var message = _instance._create_message();
-            super._notify_server_message_listeners(screen_utils._decorate_server_message(message));
-            setTimeout(function() {_instance._capture();}, 100);
-        }
-    }
-    _start_socket() {
-        this._running = true;
-        this._capture();
-    }
-    _stop_socket() {
-        this._running = false;
-    }
-}
-
-
 class FakeGamepadSocket extends RealGamepadSocket {
     _send(command) {
     }
+    _poll() {
+        const _instance = this;
+        if (_instance._running) {
+            super._capture(JSON.parse('{"control":"operator"}'));
+            setTimeout(function() {_instance._poll();}, 100);
+        }
+    }
     _start_socket() {
+        teleop_screen.is_connection_ok = 1;
+        this._running = true;
+        this._poll();
     }
     _stop_socket() {
+        this._running = false;
+        teleop_screen.is_connection_ok = 0;
     }
 }
 
