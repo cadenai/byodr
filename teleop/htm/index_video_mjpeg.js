@@ -2,7 +2,7 @@ class MJPEGFrameController {
     constructor() {
         this._target_timeout = null;
         // larger = more smoothing
-        this._time_smoothing = 0.50;
+        this._time_smoothing = 0.80;
         this._actual_fps = 0;
         this._target_fps = 0;
         this._timeout = 0;
@@ -27,9 +27,9 @@ class MJPEGFrameController {
         } else {
             const _now = performance.now();
             const _duration = _now - this._request_start;
-            this._duration = this._time_smoothing * _duration + (1 - this._time_smoothing) * this._duration;
+            this._duration = this._time_smoothing * this._duration + (1 - this._time_smoothing) * _duration;
             this._request_start = _now;
-            this._actual_fps = Math.round(1000 / this._duration);
+            this._actual_fps = Math.round(1000.0 / this._duration);
             var q_step = Math.min(1, Math.max(-1, this._actual_fps - this._target_fps));
             this.jpeg_quality = Math.min(this.max_jpeg_quality, Math.max(this.min_jpeg_quality, this.jpeg_quality + q_step));
             this._timeout = Math.max(0, this._target_timeout - this._duration);
@@ -115,7 +115,7 @@ class RealCameraController {
                 _instance._socket_capture_timer = setTimeout(function() {_instance.capture();}, 0);
                 break;
             case "slow":
-                _instance.frame_controller.set_target_fps(5);
+                _instance.frame_controller.set_target_fps(4);
                 _instance._socket_capture_timer = setTimeout(function() {_instance.capture();}, 0);
                 break;
             default:
@@ -176,15 +176,16 @@ class FakeCameraController extends RealCameraController {
     }
     capture() {
         const _instance = this;
+        _instance._clear_socket_capture_timer();
         if (_instance._running) {
             dev_tools.get_img_blob(_instance.camera_position, function(blob) {
                 _instance.message_callback(blob);
-                _instance.frame_controller.update_framerate();
-                setTimeout(function() {_instance.capture();}, 50 + Math.floor(Math.random() * 10));
+                const _timeout = _instance.frame_controller.update_framerate();
+                _instance._socket_capture_timer = setTimeout(function() {
+                    _instance.capture();
+                }, _timeout + Math.floor(Math.random() * 10) - Math.floor(Math.random() * 10));
             });
         }
-    }
-    set_rate(rate) {
     }
     start_socket() {
         const _dim = dev_tools.get_img_dimensions();
