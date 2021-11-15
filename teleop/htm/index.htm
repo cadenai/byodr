@@ -26,8 +26,8 @@ body {
   font-family: Verdana;
   font-size; 13px;
   border: 1px solid #ccc;
-  margin-top: 10px;
-  margin-bottom: 10px;
+  margin-top: 5px;
+  margin-bottom: 5px;
   padding: 10px;
   display: none;
 }
@@ -38,7 +38,6 @@ body {
   background-color: #f7432f;
 }
 
-
 #horizontal_bar {
   overflow: hidden;
   text-align: center;
@@ -48,6 +47,10 @@ body {
 
 #viewport_container.selected {
     border: 1px solid cyan;
+}
+
+#overlay_image.selected {
+    border: 2px solid cyan;
 }
 
 div.speed_value {
@@ -83,7 +86,7 @@ div#stream_links > a:hover, a:active, a.active {
     color: lightblue;
 }
 
-div#mjpeg_stream_controls > img {
+img.caret_img {
     cursor: pointer;
     background: white;
     width: 15px;
@@ -91,15 +94,9 @@ div#mjpeg_stream_controls > img {
 }
 
 img.preview_img {
-    width: 90px;
-    height: 50px;
+    height: 60px;
     border-radius: 3px;
     border: 1px solid grey;
-    cursor: pointer;
-}
-img.preview_img.active {
-    border: 1px solid cyan;
-    cursor: auto;
 }
 
 div#navigation_route_container > p {
@@ -145,23 +142,30 @@ div#navigation_route_container > p {
             <div id="mjpeg_stream_controls"
                  style="float: left; padding: 38px 0 0 10px; font-family: 'Lucida Console'; font-size: 15px;">
                 <span id="mjpeg_quality_val">0</span>
-                <img id="caret_down" src='caret.png?v=0.50.0' title="Decrease motion jpeg quality"/>
-                <img id="caret_up" src='caret.png?v=0.50.0' style="transform: rotate(180deg);" title="Increase motion jpeg quality"/>
+                <img id="caret_down" src='caret.png?v=0.50.0' class="caret_img"
+                     title="Decrease motion jpeg quality"/>
+                <img id="caret_up" src='caret.png?v=0.50.0' class="caret_img" style="transform: rotate(180deg);"
+                     title="Increase motion jpeg quality"/>
             </div>
             <div id="preview_container"
                  style="float: left; margin: 5px 0 5px 5px;"
                  title="Show this camera on the main display">
-                <img id="mjpeg_front_camera_preview_image" class="preview_img active">
-                <img id="mjpeg_rear_camera_preview_image" class="preview_img" style="margin-left: 3px;">
+                <img id="mjpeg_camera_preview_image" class="preview_img" style="width: 240px; cursor: pointer;"/>
             </div>
-            <div id="dashboard" style="float: left; margin: 0 0 0 20%;">
+            <div id="overlay_control_container"
+                 style="float: left; margin: 5px 0 0 5px;"
+                 title="Expand or collapse the camera overlay">
+                <img src="expand-collapse-icon-8.jpg?v=0.50.0" width="30" height="30"
+                     style="border-radius: 5px; background: white;"/>
+            </div>
+            <div id="dashboard" style="float: left; margin: 0 0 0 20%; padding: 0 0 5px 0;">
                 <span id="autopilot_status" style="display: inline-block; width: 45px;"></span>
                 <img id="arrow" style="padding-top: 10px;"/>
                 <div id="alpha_speed" class="speed_value" style="padding: 5px 10px 0 20px;">
                     <div id="alpha_speed_value" style="font-size: 30px;">0</div>
                     <div id="alpha_speed_label"></div>
                 </div>
-                <img id="steeringWheel" style="transform: scale(0.8); padding: 10px 0 0 0;"/>
+                <img id="steeringWheel" style="transform: scale(0.8);"/>
                 <div id="beta_speed"
                      class="speed_value"
                      style="padding: 10px 10px 0 10px;">
@@ -177,21 +181,31 @@ div#navigation_route_container > p {
                 <p style="min-width: 50px;"><span id="pilot_throttle">0</span>&nbsp;thr</p>
             </div>
             <div id="navigation_image_container"
-                 title="Start or pause the route"
-                 style="float: right; visibility: hidden; margin: 5px 0 5px 5px;">
-                <img id="navigation_image" class="preview_img"/>
+                 style="float: right; visibility: hidden; margin: 6px 0 0 5px;">
+                <img id="current_navigation_image" class="preview_img"
+                     title="Start or pause the selected route. This image is the most recent recognized navigation point."
+                     style="width: 90px; cursor: pointer;"
+                />
+                <img id="next_navigation_image" class="preview_img"
+                     title="This image is the next expected navigation point."
+                     style="width: 90px;"
+                />
             </div>
             <div id="navigation_route_container"
                  title="Navigation points and their images will be displayed when matched"
                  style="float:right; visibility: hidden; margin: 15px 20px 0 0; font-family: 'Lucida Console'; font-size: 15px;">
                 <p>
                     <span id="navigation_route_sel_prev"
-                          style="cursor: pointer;"
-                          title="Select the previous route, if any">&lt;</span>
+                          style="cursor: pointer; display: none;"
+                          title="Select the previous route, if any">
+                        <img src='caret.png?v=0.50.0' class="caret_img" style="transform: rotate(90deg);"/>
+                    </span>
                     <span id="navigation_route_name"></span>
                     <span id="navigation_route_sel_next"
                           style="cursor: pointer;"
-                          title="Select the next route, if any">&gt;</span>
+                          title="Select the next route, if any">
+                        <img src='caret.png?v=0.50.0' class="caret_img" style="transform: rotate(-90deg);"/>
+                    </span>
                 </p>
                 <p><span id="navigation_point_name"></span></p>
             </div>
@@ -201,7 +215,7 @@ div#navigation_route_container > p {
                     style="width: 100% !important; height: 100% !important; position: absolute;">
             </canvas>
             <div id="debug_drive_bar"
-                     style="width: 99.3% !important; z-index: 10; height: 30px;
+                     style="width: 99.3% !important; z-index: 100; height: 30px;
                             background: rgba(100, 217, 255, 0.3);
                             position: absolute;
                             color: white; font-size: 15px; padding: 10px 0 0 10px;
@@ -225,6 +239,10 @@ div#navigation_route_container > p {
                         <span id="debug_screen_dimension"></span>
                     </p>
                 </div>
+            </div>
+            <div id="overlay_image_container" style="position: absolute; z-index: 50;">
+                <img id="overlay_image" width="320" height="240"
+                     style="margin: 5px 0 0 5px; opacity: 0.5; border-radius: 5px;"/>
             </div>
         </div>
     </div>

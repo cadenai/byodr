@@ -1,39 +1,40 @@
 class MJPEGFrameController {
     constructor() {
-        this.actual_fps = 0;
-        this.target_fps = 1;
+        this._target_timeout = null;
+        // larger = more smoothing
+        this._time_smoothing = 0.50;
+        this._actual_fps = 0;
+        this._target_fps = 0;
+        this._timeout = 0;
+        this._duration = 1000;
+        this._request_start = performance.now();
         this.max_jpeg_quality = 50;
         this.jpeg_quality = 20;
         this.min_jpeg_quality = 25;
-        this.request_start = performance.now();
-        this.request_time = 0;
-        this.request_timeout = 0;
-        // larger = more smoothing
-        this.request_time_smoothing = 0.20;
-        this.request_target_timeout = 0;
-        this.set_slow();
+        this.update_framerate();
     }
-    set_target_fps(v) {
-        this.target_fps = v;
-        this.request_target_timeout = 1000. / this.target_fps;
+    set_target_fps(x) {
+        this._actual_fps = x;
+        this._target_fps = x;
+        this._target_timeout = this._target_fps > 0? 1000. / this._target_fps: null;
     }
-    set_slow() {
-        this.set_target_fps(2);
-    }
-    set_fast() {
-        this.set_target_fps(16);
+    get_actual_fps() {
+        return this._actual_fps;
     }
     update_framerate() {
-        var end_time = performance.now();
-        var duration = end_time - this.request_start;
-        this.request_start = end_time;
-        // smooth with moving average
-        this.request_time = (this.request_time * this.request_time_smoothing) + (duration * (1.0 - this.request_time_smoothing));
-        this.request_timeout = Math.max(0, this.request_target_timeout - this.request_time);
-        var actual_fps = Math.round(1000 / this.request_time);
-        var q_step = Math.min(1, Math.max(-1, actual_fps - this.target_fps));
-        this.jpeg_quality = Math.min(this.max_jpeg_quality, Math.max(this.min_jpeg_quality, this.jpeg_quality + q_step));
-        this.actual_fps = actual_fps;
+        if (this._target_timeout == undefined) {
+            this._timeout = null;
+        } else {
+            const _now = performance.now();
+            const _duration = _now - this._request_start;
+            this._duration = this._time_smoothing * _duration + (1 - this._time_smoothing) * this._duration;
+            this._request_start = _now;
+            this._actual_fps = Math.round(1000 / this._duration);
+            var q_step = Math.min(1, Math.max(-1, this._actual_fps - this._target_fps));
+            this.jpeg_quality = Math.min(this.max_jpeg_quality, Math.max(this.min_jpeg_quality, this.jpeg_quality + q_step));
+            this._timeout = Math.max(0, this._target_timeout - this._duration);
+        }
+        return this._timeout
     }
 }
 
@@ -76,18 +77,25 @@ class RealCameraController {
         this.camera_position = camera_position;
         this.message_callback = message_callback;
         this.frame_controller = frame_controller;
-        this.socket_close_timer_id = null;
+        this._socket_capture_timer = null;
+        this._socket_close_timer = null;
         this.socket = null;
     }
-    clear_socket_timeout() {
-        if (this.socket_close_timer_id != undefined) {
-            clearTimeout(this.socket_close_timer_id);
+    _clear_socket_close_timer() {
+        if (this._socket_close_timer != undefined) {
+            clearTimeout(this._socket_close_timer);
+        }
+    }
+    _clear_socket_capture_timer() {
+        if (this._socket_capture_timer != undefined) {
+            clearTimeout(this._socket_capture_timer);
         }
     }
     capture() {
         var _instance = this;
-        _instance.clear_socket_timeout();
-        _instance.socket_close_timer_id = setTimeout(function() {
+        _instance._clear_socket_close_timer();
+        _instance._clear_socket_capture_timer();
+        _instance._socket_close_timer = setTimeout(function() {
             if (_instance.socket != undefined) {
                 _instance.socket.close(4001, "Done waiting for the server to respond.");
             }
@@ -97,6 +105,21 @@ class RealCameraController {
             _instance.socket.send(JSON.stringify({
                 quality: _instance.frame_controller.jpeg_quality
             }));
+        }
+    }
+    set_rate(rate) {
+        var _instance = this;
+        switch(rate) {
+            case "fast":
+                _instance.frame_controller.set_target_fps(16);
+                _instance._socket_capture_timer = setTimeout(function() {_instance.capture();}, 0);
+                break;
+            case "slow":
+                _instance.frame_controller.set_target_fps(5);
+                _instance._socket_capture_timer = setTimeout(function() {_instance.capture();}, 0);
+                break;
+            default:
+                _instance.frame_controller.set_target_fps(0);
         }
     }
     start_socket() {
@@ -110,14 +133,17 @@ class RealCameraController {
             }
             ws.onopen = function() {
                 //console.log("MJPEG " + _instance.camera_position + " camera connection established.");
-                _instance.capture();
+                //_instance.capture();
             };
             ws.onclose = function() {
                 //console.log("MJPEG " + _instance.camera_position + " camera connection closed.");
             };
             ws.onmessage = function(evt) {
-                _instance.clear_socket_timeout();
-                _instance.frame_controller.update_framerate();
+                _instance._clear_socket_close_timer();
+                const _timeout = _instance.frame_controller.update_framerate();
+                if (_timeout != undefined && _timeout >= 0) {
+                    _instance._socket_capture_timer = setTimeout(function() {_instance.capture();}, _timeout);
+                }
                 setTimeout(function() {
                     var cmd = null;
                     if (typeof evt.data == "string") {
@@ -127,7 +153,6 @@ class RealCameraController {
                     }
                     _instance.message_callback(cmd);
                 }, 0);
-                setTimeout(function() {_instance.capture();}, _instance.frame_controller.request_timeout);
             };
         });
     }
@@ -158,6 +183,8 @@ class FakeCameraController extends RealCameraController {
                 setTimeout(function() {_instance.capture();}, 50 + Math.floor(Math.random() * 10));
             });
         }
+    }
+    set_rate(rate) {
     }
     start_socket() {
         const _dim = dev_tools.get_img_dimensions();
@@ -242,7 +269,7 @@ mjpeg_rear_camera_consumer = function(_blob) {
         mjpeg_page_controller.notify_camera_init_listeners(mjpeg_rear_camera.camera_position, JSON.parse(_blob));
     } else {
         mjpeg_page_controller.notify_camera_image_listeners(mjpeg_rear_camera.camera_position, URL.createObjectURL(_blob));
-        $('span#rear_camera_framerate').text(rear_camera_frame_controller.actual_fps.toFixed(0));
+        $('span#rear_camera_framerate').text(rear_camera_frame_controller.get_actual_fps().toFixed(0));
     }
 }
 mjpeg_front_camera_consumer = function(_blob) {
@@ -250,7 +277,7 @@ mjpeg_front_camera_consumer = function(_blob) {
         mjpeg_page_controller.notify_camera_init_listeners(mjpeg_front_camera.camera_position, JSON.parse(_blob));
     } else {
         mjpeg_page_controller.notify_camera_image_listeners(mjpeg_front_camera.camera_position, URL.createObjectURL(_blob));
-        $('span#front_camera_framerate').text(front_camera_frame_controller.actual_fps.toFixed(0));
+        $('span#front_camera_framerate').text(front_camera_frame_controller.get_actual_fps().toFixed(0));
     }
 }
 
@@ -283,6 +310,18 @@ function mjpeg_stop_all() {
     }
 }
 
+// The camera rates depend on visibility on the main screen and on the overlay div.
+function set_mjpeg_camera_framerate(position, overlay_visible) {
+    const _mjpeg = page_utils.get_stream_type() == 'mjpeg';
+    if (_mjpeg) {
+        mjpeg_front_camera.set_rate(position == 'front' || overlay_visible? 'fast': 'slow');
+        mjpeg_rear_camera.set_rate(position == 'rear' || overlay_visible? 'fast': 'slow');
+    } else {
+        mjpeg_front_camera.set_rate(position == 'front'? 'off': overlay_visible? 'fast': 'slow');
+        mjpeg_rear_camera.set_rate(position == 'rear'? 'off': overlay_visible? 'fast': 'slow');
+    }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     $("img#caret_down").click(function() {mjpeg_page_controller.caret_down();});
     $("img#caret_up").click(function() {mjpeg_page_controller.caret_up();});
@@ -297,28 +336,62 @@ document.addEventListener("DOMContentLoaded", function() {
         $("a#video_stream_mjpeg").click(function() {page_utils.set_stream_type('mjpeg'); location.reload();});
     }
 
-    const el_rear_preview_image = $('img#mjpeg_rear_camera_preview_image');
-    const el_front_preview_image = $('img#mjpeg_front_camera_preview_image');
-    el_rear_preview_image.click(function() {
-        el_front_preview_image.removeClass('active');
-        el_rear_preview_image.addClass('active');
-        teleop_screen.activate_camera('rear');
+    const overlay_control_container = $('div#overlay_control_container');
+    const overlay_image_container = $('div#overlay_image_container');
+    const el_overlay_image = $('img#overlay_image');
+
+    overlay_control_container.css({'cursor': 'zoom-in'});
+    overlay_image_container.invisible();
+
+    // Set the initial framerate.
+    set_mjpeg_camera_framerate(teleop_screen.active_camera, overlay_image_container.is_visible());
+
+    overlay_control_container.click(function() {
+        var _visible = overlay_image_container.is_visible();
+        if (_visible) {
+            const _state = el_overlay_image.width() < 640? 'small': 'medium';
+            switch(_state) {
+                case "small":
+                    el_overlay_image.width(640);
+                    el_overlay_image.height(480);
+                    overlay_control_container.css({'cursor': 'zoom-out'});
+                    break;
+                default:
+                    el_overlay_image.width(320);
+                    el_overlay_image.height(240);
+                    overlay_image_container.invisible();
+                    overlay_control_container.css({'cursor': 'zoom-in'});
+            }
+        } else {
+            overlay_image_container.visible();
+            overlay_control_container.css({'cursor': 'zoom-in'});
+        }
+        // Reset the framerate.
+        set_mjpeg_camera_framerate(teleop_screen.active_camera, overlay_image_container.is_visible());
     });
-    el_front_preview_image.click(function() {
-        el_rear_preview_image.removeClass('active');
-        el_front_preview_image.addClass('active');
-        teleop_screen.activate_camera('front');
-    });
+
+    const el_preview_image = $('img#mjpeg_camera_preview_image');
+    el_preview_image.click(function() {teleop_screen.toggle_camera();});
+
+    // Set the image receiver handlers.
     mjpeg_page_controller.add_camera_listener(
         function(position, _cmd) {},
         function(position, _blob) {
-            if (position == 'front') {
-                el_front_preview_image.attr('src', _blob);
-            } else {
-                el_rear_preview_image.attr('src', _blob);
+            // Show the other camera in preview.
+            if (position != teleop_screen.active_camera) {
+                el_preview_image.attr('src', _blob);
+                el_overlay_image.attr('src', _blob);
             }
         }
     );
+
+    // Set the socket desired fps when the active camera changes.
+    teleop_screen.add_camera_activation_listener(function(position) {
+        setTimeout(function() {
+            set_mjpeg_camera_framerate(position, overlay_image_container.is_visible());
+        }, 100);
+    });
+
     // Build the main view if required.
     if (page_utils.get_stream_type() == 'mjpeg') {
         // const el_viewport = document.getElementById('viewport_container');
@@ -347,21 +420,11 @@ document.addEventListener("DOMContentLoaded", function() {
                         display_ctx.drawImage(img, 0, 0);
                         teleop_screen.canvas_update(display_ctx);
                     };
+                    // Set the src to trigger the image load.
                     img.src = _blob;
                 }
             }
         );
-        // Set the socket desired fps when the active camera changes.
-        teleop_screen.add_camera_activation_listener(function(position) {
-            if (position == 'front') {
-                rear_camera_frame_controller.set_slow();
-                front_camera_frame_controller.set_fast();
-            } else {
-                front_camera_frame_controller.set_slow();
-                rear_camera_frame_controller.set_fast();
-            }
-        });
-        front_camera_frame_controller.set_fast();
     }
 });
 

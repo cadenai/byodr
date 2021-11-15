@@ -2,6 +2,7 @@ var screen_utils = {
     _version: '0.50.0',
     _arrow_images: {},
     _wheel_images: {},
+    _navigation_icons: {},
 
     _create_image: function(url) {
         im = new Image();
@@ -17,7 +18,9 @@ var screen_utils = {
         this._wheel_images.black = this._create_image('im_wheel_black.png?v=' + this._version);
         this._wheel_images.blue = this._create_image('im_wheel_blue.png?v=' + this._version);
         this._wheel_images.red = this._create_image('im_wheel_red.png?v=' + this._version);
-    }, 
+        this._navigation_icons.play = this._create_image('icon_play.png?v=' + this._version);
+        this._navigation_icons.pause = this._create_image('icon_pause.png?v=' + this._version);
+    },
 
     _decorate_server_message: function(message) {
         message._is_on_autopilot = message.ctl == 5;
@@ -46,12 +49,20 @@ var screen_utils = {
             return this._wheel_images.black;
         }
         return this._wheel_images.red;
+    },
+
+    _navigation_icon: function(state) {
+        switch(state) {
+            case "play":
+                return this._navigation_icons.play;
+            default:
+                return this._navigation_icons.pause;
+        }
     }
 }
 
 
 var path_renderer = {
-
     _init: function() {
         const _instance = this;
     },
@@ -151,18 +162,22 @@ var teleop_screen = {
         this.el_pilot_bar = $("div#pilot_drive_values");
     },
 
-    _select_camera: function(name) {
-        var is_selected = name == this.active_camera;
-        this.selected_camera = name;
-        this.camera_selection_listeners.forEach(function(cb) {cb(is_selected);});
+    _select_next_camera: function() {
+        // If the overlay is visible it can also be selected.
+        _overlay = $('div#overlay_image_container').is_visible();
+        // The active camera cannot be undefined.
+        var _next = null;
+        if (this.selected_camera == this.active_camera) {
+            _next = this.active_camera == 'front'? (_overlay? 'rear': null): (_overlay? 'front': null);
+        } else {
+            _next = this.selected_camera == undefined? this.active_camera: null;
+        }
+        this.selected_camera = _next;
+        this.camera_selection_listeners.forEach(function(cb) {cb();});
     },
 
     _cycle_camera_selection: function(direction) {
-        if (this.selected_camera == this.active_camera) {
-            this._select_camera(null);
-        } else {
-            this._select_camera(this.active_camera);
-        }
+        this._select_next_camera();
         if (this.selected_camera != undefined) {
             console.log("Camera " + this.selected_camera + " is selected for ptz control.")
         }
@@ -171,7 +186,7 @@ var teleop_screen = {
 
     _schedule_camera_cycle: function(direction) {
         if (this.camera_cycle_timer == undefined) {
-            this.camera_cycle_timer = setTimeout(function() {teleop_screen._cycle_camera_selection();}, 250);
+            this.camera_cycle_timer = setTimeout(function() {teleop_screen._cycle_camera_selection();}, 200);
         }
     },
 
@@ -254,9 +269,10 @@ var teleop_screen = {
         this.camera_selection_listeners.push(cb);
     },
 
-    activate_camera: function(name) {
+    toggle_camera: function() {
+        const name = this.active_camera == 'front'? 'rear': 'front';
         this.active_camera = name;
-        this._select_camera(null);
+        this.selected_camera = null;
         this.camera_activation_listeners.forEach(function(cb) {cb(name);});
     },
 
@@ -286,7 +302,7 @@ var teleop_screen = {
             show_message = true;
         }
         if (show_message) {
-            viewport_container.height('calc(83vh - 0px)');
+            viewport_container.height('calc(87vh - 0px)');
             message_box.show();
         } else {
             viewport_container.height('calc(91vh - 0px)');
@@ -320,10 +336,19 @@ var teleop_screen = {
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
 screen_utils._init();
 
-teleop_screen.add_camera_selection_listener(function(is_selected) {
-    $("div#viewport_container").removeClass('selected');
-    if (is_selected) {
-        $("div#viewport_container").addClass('selected');
+teleop_screen.add_camera_selection_listener(function() {
+    const _active = teleop_screen.active_camera;
+    const _selected = teleop_screen.selected_camera;
+    const viewport_container = $("div#viewport_container");
+    const overlay_container = $('div#overlay_image_container');
+    const overlay_image = $('img#overlay_image');
+
+    viewport_container.removeClass('selected');
+    overlay_image.removeClass('selected');
+    if (_selected == _active) {
+        viewport_container.addClass('selected');
+    } else if (_selected != undefined && overlay_container.is_visible()) {
+        overlay_image.addClass('selected');
     }
 });
 
