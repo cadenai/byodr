@@ -140,6 +140,9 @@ var teleop_screen = {
     el_drive_values: null,
     el_pilot_bar: null,
     el_message_box: null,
+    overlay_center_markers: null,
+    overlay_left_markers: null,
+    overlay_right_markers: null,
     command_turn: null,
     command_ctl: null,
     server_message_listeners: [],
@@ -162,6 +165,50 @@ var teleop_screen = {
         this.el_drive_values = $("div#debug_drive_values");
         this.el_pilot_bar = $("div#pilot_drive_values");
         this.el_message_box = $("div#message_box");
+        this.overlay_center_markers = [$("div#overlay_center_distance0"), $("div#overlay_center_distance1")];
+        this.overlay_left_markers = [$("div#overlay_left_marker0"), $("div#overlay_left_marker1")];
+        this.overlay_right_markers = [$("div#overlay_right_marker0"), $("div#overlay_right_marker1")];
+        this.add_camera_selection_listener(function() {
+            teleop_screen._on_camera_selection();
+        });
+        this.toggle_debug_values(true);
+        this.el_pilot_bar.click(function() {
+            teleop_screen.toggle_debug_values();
+        });
+        this._set_distance_indicators();
+        this._render_distance_indicators();
+    },
+
+    _set_distance_indicators: function() {
+        switch(dev_tools._vehicle) {
+            case "rover1":
+                this.overlay_center_markers[0].css('bottom', 'calc(45vh - 0px)');
+                this.overlay_center_markers[1].css('bottom', 'calc(22vh - 0px)');
+                this.overlay_left_markers[0].css('bottom', 'calc(30vh - 0px)');
+                this.overlay_left_markers[1].css('bottom', 'calc(40vh - 0px)');
+                this.overlay_right_markers[0].css('bottom', 'calc(30vh - 0px)');
+                this.overlay_right_markers[1].css('bottom', 'calc(40vh - 0px)');
+                break;
+            default:
+                this.overlay_center_markers[0].css('bottom', 'calc(20vh - 0px)');
+                this.overlay_center_markers[1].css('bottom', 'calc(10vh - 0px)');
+                this.overlay_left_markers[0].css('bottom', 'calc(10vh - 0px)');
+                this.overlay_left_markers[1].css('bottom', 'calc(15vh - 0px)');
+                this.overlay_right_markers[0].css('bottom', 'calc(10vh - 0px)');
+                this.overlay_right_markers[1].css('bottom', 'calc(15vh - 0px)');
+        }
+    },
+
+    _render_distance_indicators: function() {
+        const _show = this.in_debug && this.active_camera == 'front'? true: false;
+        const _markers = [this.overlay_center_markers, this.overlay_left_markers, this.overlay_right_markers];
+        _markers.flat().forEach(function(_m) {
+            if (_show) {
+                _m.show();
+            } else {
+                _m.hide();
+            }
+        });
     },
 
     _select_next_camera: function() {
@@ -276,6 +323,7 @@ var teleop_screen = {
             this.el_pilot_bar.css({'cursor': 'zoom-in'});
         }
         this.in_debug = show? 1: 0;
+        this._render_distance_indicators();
         this._debug_values_listeners.forEach(function(cb) {cb(show);});
     },
 
@@ -291,6 +339,7 @@ var teleop_screen = {
         const name = this.active_camera == 'front'? 'rear': 'front';
         this.active_camera = name;
         this.selected_camera = null;
+        this._render_distance_indicators();
         this.camera_activation_listeners.forEach(function(cb) {cb(name);});
         this.camera_selection_listeners.forEach(function(cb) {cb();});
     },
@@ -354,12 +403,13 @@ var teleop_screen = {
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
 screen_utils._init();
 
-teleop_screen.add_camera_selection_listener(function() {
-    teleop_screen._on_camera_selection();
-});
-
 document.addEventListener("DOMContentLoaded", function() {
+    if (page_utils.get_stream_type() == 'mjpeg') {
+        $('a#video_stream_mjpeg').addClass('active');
+        $('a#video_stream_h264').addClass('inactive');
+    } else {
+        $('a#video_stream_mjpeg').addClass('inactive');
+        $('a#video_stream_h264').addClass('active');
+    }
     teleop_screen._init();
-    teleop_screen.toggle_debug_values(true);
-    teleop_screen.el_pilot_bar.click(function() {teleop_screen.toggle_debug_values()});
 });

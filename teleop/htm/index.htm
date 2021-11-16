@@ -247,28 +247,22 @@ div.overlay_distance {
                      style="margin: 5px 0 0 5px; opacity: 0.5; border-radius: 5px;"/>
             </div>
             <div id="overlay_center_distance0" class="overlay_distance"
-                 style="width: 360px; border-bottom: 2px solid rgba(255, 255, 120, 0.5); bottom: calc(45vh - 0px); left: calc(50vw - 180px);">
-                1.0
+                 style="width: 360px; border-bottom: 2px solid rgba(255, 255, 120, 0.5); left: calc(50vw - 180px);">1.0
             </div>
             <div id="overlay_center_distance1" class="overlay_distance"
-                 style="width: 600px; border-bottom: 3px solid rgba(255, 255, 120, 0.5); bottom: calc(22vh - 0px); left: calc(50vw - 300px);">
-                0.5
+                 style="width: 600px; border-bottom: 3px solid rgba(255, 255, 120, 0.5); left: calc(50vw - 300px);">0.5
             </div>
             <div id="overlay_left_marker0" class="overlay_distance"
-                 style="width: 40px; border-bottom: 3px solid rgba(255, 255, 120, 0.95); bottom: calc(30vh - 0px); left: 0;">
-                0.25
+                 style="width: 40px; border-bottom: 3px solid rgba(255, 255, 120, 0.95); left: 0;">0.25
             </div>
             <div id="overlay_left_marker1" class="overlay_distance"
-                 style="width: 35px; border-bottom: 2px solid rgba(255, 255, 120, 0.95); bottom: calc(40vh - 0px); left: 0;">
-                0.5
+                 style="width: 35px; border-bottom: 2px solid rgba(255, 255, 120, 0.95); left: 0;">0.5
             </div>
             <div id="overlay_right_marker0" class="overlay_distance"
-                 style="width: 40px; border-bottom: 3px solid rgba(255, 255, 120, 0.95); bottom: calc(30vh - 0px); right: 0;">
-                0.25
+                 style="width: 40px; border-bottom: 3px solid rgba(255, 255, 120, 0.95); right: 0;">0.25
             </div>
             <div id="overlay_right_marker1" class="overlay_distance"
-                 style="width: 35px; border-bottom: 2px solid rgba(255, 255, 120, 0.95); bottom: calc(40vh - 0px); right: 0;">
-                0.5
+                 style="width: 35px; border-bottom: 2px solid rgba(255, 255, 120, 0.95); right: 0;">0.5
             </div>
         </div>
     </div>
@@ -313,14 +307,6 @@ $(function () {
     if (!dev_tools.is_develop()) {
         window.history.pushState({}, 'application_index_loaded', '/');
     }
-    if (page_utils.get_stream_type() == 'mjpeg') {
-        $('a#video_stream_mjpeg').addClass('active');
-        $('a#video_stream_h264').addClass('inactive');
-    } else {
-        $('a#video_stream_mjpeg').addClass('inactive');
-        $('a#video_stream_h264').addClass('active');
-    }
-    mjpeg_page_controller.refresh_page_values();
     document.addEventListener(visibilityChange, handleVisibilityChange, false);
     window.addEventListener('focus', start_all_handlers);
     window.addEventListener('blur', stop_all_handlers);
