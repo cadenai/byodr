@@ -139,6 +139,7 @@ var teleop_screen = {
     el_drive_bar: null,
     el_drive_values: null,
     el_pilot_bar: null,
+    el_message_box: null,
     command_turn: null,
     command_ctl: null,
     server_message_listeners: [],
@@ -160,6 +161,7 @@ var teleop_screen = {
         this.el_drive_bar = $("div#debug_drive_bar");
         this.el_drive_values = $("div#debug_drive_values");
         this.el_pilot_bar = $("div#pilot_drive_values");
+        this.el_message_box = $("div#message_box");
     },
 
     _select_next_camera: function() {
@@ -242,6 +244,22 @@ var teleop_screen = {
         el_steering_wheel.css('transform', "rotate(" + display_rotation + "deg)");
     },
 
+    _on_camera_selection: function() {
+        const _active = this.active_camera;
+        const _selected = this.selected_camera;
+        const viewport_container = $("div#viewport_container");
+        const overlay_container = $('div#overlay_image_container');
+        const overlay_image = $('img#overlay_image');
+
+        viewport_container.removeClass('selected');
+        overlay_image.removeClass('selected');
+        if (_selected == _active) {
+            viewport_container.addClass('selected');
+        } else if (_selected != undefined && overlay_container.is_visible()) {
+            overlay_image.addClass('selected');
+        }
+    },
+
     add_toggle_debug_values_listener: function(cb) {
         this._debug_values_listeners.push(cb);
     },
@@ -274,17 +292,17 @@ var teleop_screen = {
         this.active_camera = name;
         this.selected_camera = null;
         this.camera_activation_listeners.forEach(function(cb) {cb(name);});
+        this.camera_selection_listeners.forEach(function(cb) {cb();});
     },
 
     controller_update: function(command) {
-        is_connection_ok = this.is_connection_ok;
-        controller_status = this.controller_status;
-        c_msg_connection_lost = this.c_msg_connection_lost;
-        c_msg_controller_err = this.c_msg_controller_err;
-        c_msg_teleop_view_only = this.c_msg_teleop_view_only;
+        const message_box = this.el_message_box;
+        const is_connection_ok = this.is_connection_ok;
+        const controller_status = this.controller_status;
+        const c_msg_connection_lost = this.c_msg_connection_lost;
+        const c_msg_controller_err = this.c_msg_controller_err;
+        const c_msg_teleop_view_only = this.c_msg_teleop_view_only;
         var show_message = false;
-        var message_box = $('div#message_box');
-        var viewport_container = $('div#viewport_container');
         if (!is_connection_ok) {
             message_box.text(c_msg_connection_lost);
             message_box.removeClass();
@@ -302,11 +320,11 @@ var teleop_screen = {
             show_message = true;
         }
         if (show_message) {
-            viewport_container.height('calc(87vh - 0px)');
             message_box.show();
+            this.el_drive_bar.hide();
         } else {
-            viewport_container.height('calc(91vh - 0px)');
             message_box.hide();
+            this.el_drive_bar.show();
         }
         //
         if (command.arrow_left) {
@@ -337,19 +355,7 @@ var teleop_screen = {
 screen_utils._init();
 
 teleop_screen.add_camera_selection_listener(function() {
-    const _active = teleop_screen.active_camera;
-    const _selected = teleop_screen.selected_camera;
-    const viewport_container = $("div#viewport_container");
-    const overlay_container = $('div#overlay_image_container');
-    const overlay_image = $('img#overlay_image');
-
-    viewport_container.removeClass('selected');
-    overlay_image.removeClass('selected');
-    if (_selected == _active) {
-        viewport_container.addClass('selected');
-    } else if (_selected != undefined && overlay_container.is_visible()) {
-        overlay_image.addClass('selected');
-    }
+    teleop_screen._on_camera_selection();
 });
 
 document.addEventListener("DOMContentLoaded", function() {

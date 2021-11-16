@@ -125,7 +125,7 @@ class RealCameraController {
     start_socket() {
         var _instance = this;
         var _cam_uri = "/ws/cam/" + _instance.camera_position;
-        socket_utils.create_socket(_cam_uri, true, 100, function(ws) {
+        socket_utils.create_socket(_cam_uri, true, 250, function(ws) {
             _instance.socket = ws;
             ws.attempt_reconnect = true;
             ws.is_reconnect = function() {

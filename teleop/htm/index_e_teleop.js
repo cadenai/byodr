@@ -21,7 +21,7 @@ class RealServerSocket {
         const _instance = this;
         const _socket = _instance.socket;
         if (_socket == undefined) {
-            socket_utils.create_socket("/ws/log", false, 100, function(ws) {
+            socket_utils.create_socket("/ws/log", false, 250, function(ws) {
                 _instance.socket = ws;
                 ws.attempt_reconnect = true;
                 ws.is_reconnect = function() {
@@ -155,7 +155,7 @@ class RealGamepadSocket {
     _start_socket() {
         const _instance = this;
         if (_instance.socket == undefined) {
-            socket_utils.create_socket("/ws/ctl", false, 100, function(ws) {
+            socket_utils.create_socket("/ws/ctl", false, 250, function(ws) {
                 _instance.socket = ws;
                 ws.attempt_reconnect = true;
                 ws.is_reconnect = function() {
@@ -214,6 +214,7 @@ class FakeGamepadSocket extends RealGamepadSocket {
     _stop_socket() {
         this._running = false;
         teleop_screen.is_connection_ok = 0;
+        teleop_screen.controller_update({});
     }
 }
 

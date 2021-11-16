@@ -21,16 +21,6 @@ body {
   transform: translate(-50%, 0);
 }
 
-#message_box {
-  color: #000;
-  font-family: Verdana;
-  font-size; 13px;
-  border: 1px solid #ccc;
-  margin-top: 5px;
-  margin-bottom: 5px;
-  padding: 10px;
-  display: none;
-}
 #message_box.warning_message {
   background-color: #ffffcc;
 }
@@ -104,6 +94,13 @@ div#navigation_route_container > p {
   margin-block-end: 0;
   text-align: center;
 }
+
+div.overlay_distance {
+    position: absolute;
+    z-index: 25;
+    text-align: center;
+    color: rgba(0, 0, 0, 0.5);
+}
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
@@ -121,7 +118,38 @@ div#navigation_route_container > p {
 <body>
 <div id="main_container">
     <div style="float: left;">
-        <div id="message_box"></div>
+        <div id="message_box"
+             style="height: 30px;
+                    color: #000; font-family: Verdana; font-size; 13px;
+                    border: 1px solid #ccc;
+                    padding: 8px 0 0 8px;
+                    display: none;">
+        </div>
+        <div id="debug_drive_bar"
+             style="height: 30px;
+                    color: white; font-size: 15px;
+                    padding: 10px 0 0 10px;
+                    font-family: Lucida Console;"
+             title="Drive values">
+            <div id="debug_drive_values" style="margin-top: -14px;">
+                <p class="drive_value_text" style="min-width:80px;">front&nbsp;<span id="front_camera_framerate">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">rear&nbsp;<span id="rear_camera_framerate">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">inference&nbsp;<span id="inference_fps">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">st-mu&nbsp;<span id="inference_surprise">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">st-cri&nbsp;<span id="inference_critic">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">ob&nbsp;<span id="inference_obstacle">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">ob-mu&nbsp;<span id="inference_brake_critic">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">lat&nbsp;<span id="navigation_geo_lat">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">lon&nbsp;<span id="navigation_geo_long">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">bea&nbsp;<span id="navigation_heading">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">dist&nbsp;<span id="navigation_match_image_distance">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">cmd&nbsp;<span id="navigation_current_command">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">dir&nbsp;<span id="navigation_direction">0</span></p>
+                <p class="drive_value_text" style="min-width:80px; float:right; font-size: 12px; min-width: 0; margin: 15px 8px 0 0;">
+                    <span id="debug_screen_dimension"></span>
+                </p>
+            </div>
+        </div>
         <div id="horizontal_bar">
             <div id="home_menu"
                  style="float: left;"
@@ -210,39 +238,37 @@ div#navigation_route_container > p {
                 <p><span id="navigation_point_name"></span></p>
             </div>
         </div>
-        <div id="viewport_container" style="width: calc(99vw - 0px); height: calc(91vh - 0px); position: relative;">
+        <div id="viewport_container" style="width: calc(99vw - 0px); height: calc(88vh - 0px); position: relative;">
             <canvas id="viewport_canvas" width="640" height="480"
                     style="width: 100% !important; height: 100% !important; position: absolute;">
             </canvas>
-            <div id="debug_drive_bar"
-                     style="width: 99.3% !important; z-index: 100; height: 30px;
-                            background: rgba(100, 217, 255, 0.3);
-                            position: absolute;
-                            color: white; font-size: 15px; padding: 10px 0 0 10px;
-                            font-family: Lucida Console;"
-                    title="Drive values">
-                <div id="debug_drive_values" style="margin-top: -14px;">
-                    <p class="drive_value_text" style="min-width:80px;">front&nbsp;<span id="front_camera_framerate">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">rear&nbsp;<span id="rear_camera_framerate">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">inference&nbsp;<span id="inference_fps">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">st-mu&nbsp;<span id="inference_surprise">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">st-cri&nbsp;<span id="inference_critic">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">ob&nbsp;<span id="inference_obstacle">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">ob-mu&nbsp;<span id="inference_brake_critic">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">lat&nbsp;<span id="navigation_geo_lat">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">lon&nbsp;<span id="navigation_geo_long">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">bea&nbsp;<span id="navigation_heading">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">dist&nbsp;<span id="navigation_match_image_distance">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">cmd&nbsp;<span id="navigation_current_command">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px;">dir&nbsp;<span id="navigation_direction">0</span></p>
-                    <p class="drive_value_text" style="min-width:80px; float:right; font-size: 12px; min-width: 0; margin: 15px 8px 0 0;">
-                        <span id="debug_screen_dimension"></span>
-                    </p>
-                </div>
-            </div>
             <div id="overlay_image_container" style="position: absolute; z-index: 50;">
                 <img id="overlay_image" width="320" height="240"
                      style="margin: 5px 0 0 5px; opacity: 0.5; border-radius: 5px;"/>
+            </div>
+            <div id="overlay_center_distance0" class="overlay_distance"
+                 style="width: 360px; border-bottom: 2px solid rgba(255, 255, 120, 0.5); bottom: calc(45vh - 0px); left: calc(50vw - 180px);">
+                1.0
+            </div>
+            <div id="overlay_center_distance1" class="overlay_distance"
+                 style="width: 600px; border-bottom: 3px solid rgba(255, 255, 120, 0.5); bottom: calc(22vh - 0px); left: calc(50vw - 300px);">
+                0.5
+            </div>
+            <div id="overlay_left_marker0" class="overlay_distance"
+                 style="width: 40px; border-bottom: 3px solid rgba(255, 255, 120, 0.95); bottom: calc(30vh - 0px); left: 0;">
+                0.25
+            </div>
+            <div id="overlay_left_marker1" class="overlay_distance"
+                 style="width: 35px; border-bottom: 2px solid rgba(255, 255, 120, 0.95); bottom: calc(40vh - 0px); left: 0;">
+                0.5
+            </div>
+            <div id="overlay_right_marker0" class="overlay_distance"
+                 style="width: 40px; border-bottom: 3px solid rgba(255, 255, 120, 0.95); bottom: calc(30vh - 0px); right: 0;">
+                0.25
+            </div>
+            <div id="overlay_right_marker1" class="overlay_distance"
+                 style="width: 35px; border-bottom: 2px solid rgba(255, 255, 120, 0.95); bottom: calc(40vh - 0px); right: 0;">
+                0.5
             </div>
         </div>
     </div>
