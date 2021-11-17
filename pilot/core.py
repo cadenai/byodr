@@ -59,6 +59,7 @@ class Blob(AttrDict):
         self.cruise_speed = kwargs.get('cruise_speed')
         self.desired_speed = kwargs.get('desired_speed')
         self.driver = kwargs.get('driver')
+        self.driver_activation_time = kwargs.get('driver_activation_time')
         self.forced_acceleration = kwargs.get('forced_acceleration')
         self.forced_deceleration = kwargs.get('forced_deceleration')
         self.forced_steering = kwargs.get('forced_steering')
@@ -126,6 +127,7 @@ class AbstractDriverBase(object):
         self._control = control
         self._lock = multiprocessing.Lock()
         self._active = False
+        self._activation_timestamp = None
 
     @staticmethod
     def _apply_dead_zone(value, dead_zone=0.):
@@ -146,9 +148,12 @@ class AbstractDriverBase(object):
         blob.speed_driver = OriginType.UNDETERMINED
         blob.save_event = False
 
+    def get_activation_timestamp(self):
+        return self._activation_timestamp
+
     def next_action(self, *args):
-        blob = args[0]
-        self.get_action(*args) if self._active else self.noop(blob)
+        with self._lock:
+            self.get_action(*args) if self._active else self.noop(args[0])
 
     @abstractmethod
     def get_action(self, *args):
@@ -163,11 +168,13 @@ class AbstractDriverBase(object):
     def activate(self):
         with self._lock:
             self._activate()
+            self._activation_timestamp = timestamp()
             self._active = True
 
     def deactivate(self):
         with self._lock:
             self._deactivate()
+            self._activation_timestamp = None
             self._active = False
 
     def quit(self):
@@ -705,7 +712,11 @@ class DriverManager(Configurable):
             _nav_match_distance = self._navigator.get_match_distance() if _nav_active else None
             _nav_match_point = self._navigator.get_match_point() if _nav_active else None
             _inference_brake = 0. if inference is None else inference.get('obstacle', 0.)
+            # Report the driver activation time in milliseconds.
+            _driver_activation_time = self._driver.get_activation_timestamp()
+            _driver_activation_time = None if _driver_activation_time is None else _driver_activation_time * 1e-3
             blob = Blob(driver=self._driver_ctl,
+                        driver_activation_time=_driver_activation_time,
                         cruise_speed=self._pilot_state.cruise_speed,
                         instruction=self._pilot_state.instruction,
                         navigation_active=_nav_active,

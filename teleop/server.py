@@ -155,6 +155,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             nav_direction, nav_path = self._translate_navigation_path(inference_path)
             response = {
                 'ctl': self._translate_driver(pilot, inference),
+                'ctl_activation': 0 if pilot is None else pilot.get('driver_activation_time', 0),
                 'inf_brake_critic': 0 if inference is None else inference.get('brake_critic_out'),
                 'inf_brake': 0 if inference is None else inference.get('obstacle'),
                 'inf_total_penalty': 0 if inference is None else inference.get('total_penalty'),

@@ -65,7 +65,7 @@ class FakeServerSocket extends RealServerSocket {
         this._running = false;
         this._num_steps = 0;
         this._navigation_path_x = [0, 0, 0, 0, 0];
-        this._navigation_path_dx = [0.005, 0.005, 0.005, 0.005, 0.005];
+        this._navigation_path_dx = [0.10, 0.10, 0.10, 0.10, 0.10];
     }
     _create_message() {
         // Update the navigation path.
@@ -84,6 +84,7 @@ class FakeServerSocket extends RealServerSocket {
         const gamepad_command = gamepad_controller.is_active()? gamepad_controller.get_command(): {};
         return {
             'ctl': gamepad_command.button_y? 5: 2,
+            'ctl_activation': new Date().getTime() - Math.floor(Math.random() * 1e7),
             'geo_head': -85.13683911988542,
             'geo_lat': 49.00155759398021,
             'geo_long': 8.002592177745152,
@@ -116,7 +117,7 @@ class FakeServerSocket extends RealServerSocket {
         if (_instance._running) {
             var message = _instance._create_message();
             super._notify_server_message_listeners(screen_utils._decorate_server_message(message));
-            setTimeout(function() {_instance._capture();}, 50);
+            setTimeout(function() {_instance._capture();}, 250);
         }
     }
     _start_socket() {

@@ -1,5 +1,5 @@
 var screen_utils = {
-    _version: '0.50.0',
+    _version: '0.55.0',
     _arrow_images: {},
     _wheel_images: {},
     _navigation_icons: {},
@@ -292,12 +292,21 @@ var teleop_screen = {
             if (message._is_on_autopilot) {
                 el_alpha_speed_label.text('MAX');
                 el_beta_speed_container.show();
-                el_autopilot_status.text('AUTO');
             } else {
                 el_alpha_speed_label.text('km/h');
                 el_beta_speed_container.hide();
-                el_autopilot_status.text('TELE');
+                el_autopilot_status.text('00:00:00');
             }
+        }
+        if (message._is_on_autopilot && message.ctl_activation > 0) {
+            const _diff = 1e-3 * (new Date().getTime() - message.ctl_activation);
+            const _hours = Math.floor(_diff / 3600);
+            const _mins = Math.floor((_diff - _hours * 3600) / 60);
+            const _secs = Math.floor(_diff - _hours * 3600 - _mins * 60);
+            const _zf_h = ('00' + _hours).slice(-2)
+            const _zf_m = ('00' + _mins).slice(-2)
+            const _zf_s = ('00' + _secs).slice(-2)
+            el_autopilot_status.text(`${_zf_h}:${_zf_m}:${_zf_s}`);
         }
         var display_rotation = Math.floor(message.ste * 90.0)
         el_steering_wheel.css('transform', "rotate(" + display_rotation + "deg)");
