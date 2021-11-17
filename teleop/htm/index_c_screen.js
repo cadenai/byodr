@@ -24,7 +24,7 @@ var screen_utils = {
 
     _decorate_server_message: function(message) {
         message._is_on_autopilot = message.ctl == 5;
-        message._has_passage = message.inf_penalty < 1;
+        message._has_passage = message.inf_total_penalty < 1;
         return message;
     },
 
@@ -136,6 +136,7 @@ var path_renderer = {
 }
 
 var teleop_screen = {
+    el_viewport_container: null,
     el_drive_bar: null,
     el_drive_values: null,
     el_pilot_bar: null,
@@ -161,6 +162,7 @@ var teleop_screen = {
     last_server_message: null,
 
     _init() {
+        this.el_viewport_container = $("div#viewport_container");
         this.el_drive_bar = $("div#debug_drive_bar");
         this.el_drive_values = $("div#debug_drive_values");
         this.el_pilot_bar = $("div#pilot_drive_values");
@@ -175,28 +177,29 @@ var teleop_screen = {
         this.el_pilot_bar.click(function() {
             teleop_screen.toggle_debug_values();
         });
-        this._set_distance_indicators();
-        this._render_distance_indicators();
     },
 
-    _set_distance_indicators: function() {
-        switch(dev_tools._vehicle) {
-            case "rover1":
-                this.overlay_center_markers[0].css('bottom', 'calc(45vh - 0px)');
-                this.overlay_center_markers[1].css('bottom', 'calc(22vh - 0px)');
-                this.overlay_left_markers[0].css('bottom', 'calc(30vh - 0px)');
-                this.overlay_left_markers[1].css('bottom', 'calc(40vh - 0px)');
-                this.overlay_right_markers[0].css('bottom', 'calc(30vh - 0px)');
-                this.overlay_right_markers[1].css('bottom', 'calc(40vh - 0px)');
-                break;
-            default:
-                this.overlay_center_markers[0].css('bottom', 'calc(20vh - 0px)');
-                this.overlay_center_markers[1].css('bottom', 'calc(10vh - 0px)');
-                this.overlay_left_markers[0].css('bottom', 'calc(10vh - 0px)');
-                this.overlay_left_markers[1].css('bottom', 'calc(15vh - 0px)');
-                this.overlay_right_markers[0].css('bottom', 'calc(10vh - 0px)');
-                this.overlay_right_markers[1].css('bottom', 'calc(15vh - 0px)');
+    _on_viewport_container_resize: function() {
+        // Must use the singleton reference because async functions call us.
+        const _instance = teleop_screen;
+        const vh = window.innerHeight - _instance.el_viewport_container.offset().top;
+        // Leave a little space at the very bottom.
+        _instance.el_viewport_container.height(vh - 2);
+        // Calculate the new marker locations.
+        var _markers = [0.20 * vh, 0.10 * vh, 0.10 * vh, 0.15 * vh, 0.10 * vh, 0.15 * vh];
+        if (dev_tools._vehicle == 'rover1') {
+            _markers = [0.45 * vh, 0.22 * vh, 0.30 * vh, 0.40 * vh, 0.30 * vh, 0.40 * vh];
         }
+        _instance._set_distance_indicators(_markers);
+    },
+
+    _set_distance_indicators: function(values) {
+        this.overlay_center_markers[0].css('bottom', values[0]);
+        this.overlay_center_markers[1].css('bottom', values[1]);
+        this.overlay_left_markers[0].css('bottom', values[2]);
+        this.overlay_left_markers[1].css('bottom', values[3]);
+        this.overlay_right_markers[0].css('bottom', values[4]);
+        this.overlay_right_markers[1].css('bottom', values[5]);
     },
 
     _render_distance_indicators: function() {
@@ -249,9 +252,18 @@ var teleop_screen = {
         if (message.inf_surprise != undefined) {
             $('span#inference_brake_critic').text(message.inf_brake_critic.toFixed(2));
             $('span#inference_obstacle').text(message.inf_brake.toFixed(2));
-            $('span#inference_surprise').text(message.inf_surprise.toFixed(3));
-            $('span#inference_critic').text(message.inf_critic.toFixed(3));
+            $('span#inference_surprise').text(message.inf_surprise.toFixed(2));
+            $('span#inference_critic').text(message.inf_critic.toFixed(2));
             $('span#inference_fps').text(message.inf_hz.toFixed(0));
+            // Calculate the color schemes.
+            const red_brake = Math.min(255., message.inf_brake_penalty * 2. * 255.);
+            const green_brake = (1. - 2. * Math.max(0., message.inf_brake_penalty - 0.5)) * 255.;
+            $('span#inference_brake_critic').css('color', `rgb(${red_brake}, ${green_brake}, 0)`);
+            $('span#inference_obstacle').css('color', `rgb(${red_brake}, ${green_brake}, 0)`);
+            const red_steer = Math.min(255., message.inf_steer_penalty * 2. * 255.);
+            const green_steer = (1. - 2. * Math.max(0., message.inf_steer_penalty - 0.5)) * 255.;
+            $('span#inference_surprise').css('color', `rgb(${red_steer}, ${green_steer}, 0)`);
+            $('span#inference_critic').css('color', `rgb(${red_steer}, ${green_steer}, 0)`);
         }
         //
         if (this.command_turn != message.turn) {
@@ -294,7 +306,7 @@ var teleop_screen = {
     _on_camera_selection: function() {
         const _active = this.active_camera;
         const _selected = this.selected_camera;
-        const viewport_container = $("div#viewport_container");
+        const viewport_container = this.el_viewport_container;
         const overlay_container = $('div#overlay_image_container');
         const overlay_image = $('img#overlay_image');
 
@@ -316,10 +328,12 @@ var teleop_screen = {
             show = !this.in_debug;
         }
         if (show) {
-            this.el_drive_bar.visible();
+            this.el_drive_bar.show();
+            this._on_viewport_container_resize();
             this.el_pilot_bar.css({'cursor': 'zoom-out'});
         } else {
-            this.el_drive_bar.invisible();
+            this.el_drive_bar.hide();
+            this._on_viewport_container_resize();
             this.el_pilot_bar.css({'cursor': 'zoom-in'});
         }
         this.in_debug = show? 1: 0;
@@ -370,10 +384,10 @@ var teleop_screen = {
         }
         if (show_message) {
             message_box.show();
-            this.el_drive_bar.hide();
+            this._on_viewport_container_resize();
         } else {
             message_box.hide();
-            this.el_drive_bar.show();
+            this._on_viewport_container_resize();
         }
         //
         if (command.arrow_left) {
@@ -383,7 +397,9 @@ var teleop_screen = {
         }
         //
         if (command.button_left) {
-            setTimeout(function() {viewport_container.fadeOut(100).fadeIn(100);}, 0);
+            setTimeout(function() {
+                teleop_screen.el_viewport_container.fadeOut(100).fadeIn(100);
+            }, 0);
         }
     },
 
@@ -400,6 +416,36 @@ var teleop_screen = {
 }
 
 
+function screen_set_distance_indicators() {
+    switch(dev_tools._vehicle) {
+        case "rover1":
+            this.overlay_center_markers[0].css('bottom', 'calc(45vh - 0px)');
+            this.overlay_center_markers[1].css('bottom', 'calc(22vh - 0px)');
+            this.overlay_left_markers[0].css('bottom', 'calc(30vh - 0px)');
+            this.overlay_left_markers[1].css('bottom', 'calc(40vh - 0px)');
+            this.overlay_right_markers[0].css('bottom', 'calc(30vh - 0px)');
+            this.overlay_right_markers[1].css('bottom', 'calc(40vh - 0px)');
+            break;
+        default:
+            this.overlay_center_markers[0].css('bottom', 'calc(20vh - 0px)');
+            this.overlay_center_markers[1].css('bottom', 'calc(10vh - 0px)');
+            this.overlay_left_markers[0].css('bottom', 'calc(10vh - 0px)');
+            this.overlay_left_markers[1].css('bottom', 'calc(15vh - 0px)');
+            this.overlay_right_markers[0].css('bottom', 'calc(10vh - 0px)');
+            this.overlay_right_markers[1].css('bottom', 'calc(15vh - 0px)');
+    }
+}
+
+
+function screen_poll_platform() {
+    if (dev_tools._vehicle == undefined) {
+        setTimeout(function() {screen_poll_platform();}, 200);
+    } else {
+        teleop_screen._on_viewport_container_resize();
+        teleop_screen._render_distance_indicators();
+    }
+}
+
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
 screen_utils._init();
 
@@ -412,4 +458,7 @@ document.addEventListener("DOMContentLoaded", function() {
         $('a#video_stream_h264').addClass('active');
     }
     teleop_screen._init();
+    screen_poll_platform();
+    teleop_screen._on_viewport_container_resize();
+    window.onresize = teleop_screen._on_viewport_container_resize;
 });

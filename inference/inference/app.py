@@ -253,7 +253,6 @@ class TFRunner(Configurable):
         self._steering_scale_left = 1
         self._steering_scale_right = 1
         self._penalty_filter = None
-        self._debug_filter = None
         self._fn_steer_mu = None
         self._fn_brake_mu = None
 
@@ -279,7 +278,6 @@ class TFRunner(Configurable):
         _penalty_down_momentum = parse_option('driver.autopilot.filter.momentum.down', float, 0.25, _errors, **kwargs)
         _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 2.0, _errors, **kwargs)
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
-        self._debug_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
         self._fn_steer_mu = _build_expression(
             'driver.dnn.steer.mu.equation', '(7.0 * (-0.50 + surprise + loss)) **7', _errors, **kwargs
         )
@@ -309,13 +307,14 @@ class TFRunner(Configurable):
         _total_penalty = max(0, min(1, self._penalty_filter.calculate(_steer_penalty + _obstacle_penalty)))
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action)),
-                    corridor=float(self._debug_filter.calculate(_steer_penalty)),
+                    obstacle=float(brake),
                     surprise_out=float(surprise),
                     critic_out=float(critic),
                     brake_critic_out=float(brake_critic),
+                    steer_penalty=float(_steer_penalty),
+                    brake_penalty=float(_obstacle_penalty),
+                    total_penalty=float(_total_penalty),
                     dagger=int(0),
-                    obstacle=float(brake),
-                    penalty=float(_total_penalty),
                     internal=[float(0)],
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),

@@ -118,13 +118,6 @@ div.overlay_distance {
 <body>
 <div id="main_container">
     <div style="float: left;">
-        <div id="message_box"
-             style="height: 30px;
-                    color: #000; font-family: Verdana; font-size; 13px;
-                    border: 1px solid #ccc;
-                    padding: 8px 0 0 8px;
-                    display: none;">
-        </div>
         <div id="debug_drive_bar"
              style="height: 30px;
                     color: white; font-size: 15px;
@@ -137,8 +130,8 @@ div.overlay_distance {
                 <p class="drive_value_text" style="min-width:80px;">inference&nbsp;<span id="inference_fps">0</span></p>
                 <p class="drive_value_text" style="min-width:80px;">st-mu&nbsp;<span id="inference_surprise">0</span></p>
                 <p class="drive_value_text" style="min-width:80px;">st-cri&nbsp;<span id="inference_critic">0</span></p>
-                <p class="drive_value_text" style="min-width:80px;">ob&nbsp;<span id="inference_obstacle">0</span></p>
                 <p class="drive_value_text" style="min-width:80px;">ob-mu&nbsp;<span id="inference_brake_critic">0</span></p>
+                <p class="drive_value_text" style="min-width:80px;">ob&nbsp;<span id="inference_obstacle">0</span></p>
                 <p class="drive_value_text" style="min-width:80px;">lat&nbsp;<span id="navigation_geo_lat">0</span></p>
                 <p class="drive_value_text" style="min-width:80px;">lon&nbsp;<span id="navigation_geo_long">0</span></p>
                 <p class="drive_value_text" style="min-width:80px;">bea&nbsp;<span id="navigation_heading">0</span></p>
@@ -149,6 +142,13 @@ div.overlay_distance {
                     <span id="debug_screen_dimension"></span>
                 </p>
             </div>
+        </div>
+        <div id="message_box"
+             style="height: 30px;
+                    color: #000; font-family: Verdana; font-size; 13px;
+                    border: 1px solid #ccc;
+                    padding: 8px 0 0 8px;
+                    display: none;">
         </div>
         <div id="horizontal_bar">
             <div id="home_menu"
@@ -238,7 +238,7 @@ div.overlay_distance {
                 <p><span id="navigation_point_name"></span></p>
             </div>
         </div>
-        <div id="viewport_container" style="width: calc(99vw - 0px); height: calc(88vh - 0px); position: relative;">
+        <div id="viewport_container" style="width: calc(99vw - 0px); position: relative;">
             <canvas id="viewport_canvas" width="640" height="480"
                     style="width: 100% !important; height: 100% !important; position: absolute;">
             </canvas>

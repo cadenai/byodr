@@ -349,7 +349,7 @@ class BackendAutopilotDriver(AbstractCruiseControl):
         blob.throttle = vehicle.get('auto_throttle')
         blob.steering_driver = OriginType.BACKEND_AUTOPILOT
         blob.speed_driver = OriginType.BACKEND_AUTOPILOT
-        blob.save_event = inference.get('corridor') > .95 or inference.get('surprise') > .95
+        blob.save_event = inference.get('steer_penalty') > .95 or inference.get('surprise_out') > .95
 
     def _action_v3(self, *args):
         blob, vehicle, inference = args
@@ -401,7 +401,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
 
         action_out = inference.get('action')
         _dagger = inference.get('dagger', 0) == 1
-        _total_penalty = inference.get('penalty')
+        _total_penalty = inference.get('total_penalty')
         # Handle speed.
         desired_speed = blob.cruise_speed if _dagger else blob.cruise_speed * (1 - _total_penalty)
         blob.desired_speed = max(0, self.calculate_desired_speed(desired_speed=desired_speed,

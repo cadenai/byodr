@@ -137,8 +137,8 @@ class RealNavigatorController {
         if (this.started) {
             if (message.inf_surprise != undefined) {
                 $('span#navigation_match_image_distance').text(message.nav_distance[1].toFixed(3));
-                $('span#navigation_current_command').text(message.nav_command.toFixed(2));
-                $('span#navigation_direction').text(message.nav_direction.toFixed(3));
+                $('span#navigation_current_command').text(message.nav_command.toFixed(1));
+                $('span#navigation_direction').text(message.nav_direction.toFixed(2));
             }
             const backend_active = message.nav_active;
             const is_backend_change = backend_active != this.backend_active;

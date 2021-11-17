@@ -41,7 +41,7 @@ var socket_utils = {
 
 var dev_tools = {
     _develop: null,
-    _vehicle: 'rover1',
+    _vehicle: null,
     _image_cache: new Map(),
 
     _random_choice: function(arr) {
