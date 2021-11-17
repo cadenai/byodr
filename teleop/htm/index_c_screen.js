@@ -186,9 +186,9 @@ var teleop_screen = {
         // Leave a little space at the very bottom.
         _instance.el_viewport_container.height(vh - 2);
         // Calculate the new marker locations.
-        var _markers = [0.20 * vh, 0.10 * vh, 0.10 * vh, 0.15 * vh, 0.10 * vh, 0.15 * vh];
+        var _markers = [0.24 * vh, 0.12 * vh, 0.18 * vh, 0.12 * vh];
         if (dev_tools._vehicle == 'rover1') {
-            _markers = [0.45 * vh, 0.22 * vh, 0.30 * vh, 0.40 * vh, 0.30 * vh, 0.40 * vh];
+            _markers = [0.52 * vh, 0.25 * vh, 0.45 * vh, 0.34 * vh];
         }
         _instance._set_distance_indicators(_markers);
     },
@@ -198,8 +198,8 @@ var teleop_screen = {
         this.overlay_center_markers[1].css('bottom', values[1]);
         this.overlay_left_markers[0].css('bottom', values[2]);
         this.overlay_left_markers[1].css('bottom', values[3]);
-        this.overlay_right_markers[0].css('bottom', values[4]);
-        this.overlay_right_markers[1].css('bottom', values[5]);
+        this.overlay_right_markers[0].css('bottom', values[2]);
+        this.overlay_right_markers[1].css('bottom', values[3]);
     },
 
     _render_distance_indicators: function() {
