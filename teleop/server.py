@@ -118,14 +118,14 @@ class MessageServerSocket(websocket.WebSocketHandler):
 
     @staticmethod
     def _translate_instruction(index):
-        # if index == 3:
-        #     return 'intersection.ahead'
-        # elif index in (1, 2):
-        #     return 'intersection.left'
-        # elif index in (4, 5):
-        #     return 'intersection.right'
-        # else:
-        return 'general.fallback'
+        if index == 3:
+            return 'intersection.ahead'
+        elif index in (1, 2):
+            return 'intersection.left'
+        elif index in (4, 5):
+            return 'intersection.right'
+        else:
+            return 'general.fallback'
 
     @staticmethod
     def _translate_navigation_path(path, scope=5):

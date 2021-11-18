@@ -151,6 +151,9 @@ class AbstractDriverBase(object):
     def get_activation_timestamp(self):
         return self._activation_timestamp
 
+    def on_cruise_speed_change(self, speed):
+        pass
+
     def next_action(self, *args):
         with self._lock:
             self.get_action(*args) if self._active else self.noop(args[0])
@@ -158,6 +161,12 @@ class AbstractDriverBase(object):
     @abstractmethod
     def get_action(self, *args):
         raise NotImplementedError()
+
+    def _reset_activation_timestamp(self):
+        self._activation_timestamp = timestamp()
+
+    def _clear_activation_timestamp(self):
+        self._activation_timestamp = None
 
     def _activate(self):
         pass
@@ -168,13 +177,11 @@ class AbstractDriverBase(object):
     def activate(self):
         with self._lock:
             self._activate()
-            self._activation_timestamp = timestamp()
             self._active = True
 
     def deactivate(self):
         with self._lock:
             self._deactivate()
-            self._activation_timestamp = None
             self._active = False
 
     def quit(self):
@@ -395,10 +402,16 @@ class DeepNetworkDriver(AbstractCruiseControl):
         self._piv_count = 0
 
     def _activate(self):
-        pass
+        self._clear_activation_timestamp()
 
     def _deactivate(self):
-        pass
+        self._clear_activation_timestamp()
+
+    def on_cruise_speed_change(self, speed):
+        if speed > 0 and self.get_activation_timestamp() is None:
+            self._reset_activation_timestamp()
+        elif speed < 1e-6:
+            self._clear_activation_timestamp()
 
     def get_action(self, *args):
         blob, vehicle, inference = args
@@ -667,6 +680,7 @@ class DriverManager(Configurable):
             new_val = (value / self._speed_scale)
             new_val = max(0., self._pilot_state.cruise_speed + new_val if relative else new_val)
             self._pilot_state.cruise_speed = new_val
+            self._driver.on_cruise_speed_change(new_val)
 
     def _set_direction(self, turn='general.fallback'):
         pass
@@ -687,6 +701,8 @@ class DriverManager(Configurable):
             with self._lock:
                 # There is not feedback of this speed in teleop mode. Reset at driver changes.
                 self._pilot_state.cruise_speed = 0
+                if self._driver is not None:
+                    self._driver.on_cruise_speed_change(0)
                 # The switch must be immediate. Do not force wait on the previous driver to deactivate.
                 if control != self._driver_ctl:
                     if self._driver is not None:

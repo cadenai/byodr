@@ -97,7 +97,7 @@ class FakeServerSocket extends RealServerSocket {
             'inf_brake_penalty': Math.random(),
             'inf_total_penalty': 0.031138078539692818,
             'inf_surprise': 0.24887815117835999,
-            'max_speed': 0,
+            'max_speed': dev_tools._random_choice([0, 1, 2]),
             'nav_active': 0,
             'nav_command': 0,
             'nav_direction': -0.05672478172928095,
@@ -105,11 +105,11 @@ class FakeServerSocket extends RealServerSocket {
             'nav_image': [-1, -1],
             'nav_path': _navigation_path,
             'nav_point': "",
-            'speed': 0,
+            'speed': Math.floor(Math.random() * 10),
             'ste': gamepad_command.steering? gamepad_command.steering: 0,
             'thr': gamepad_command.throttle? gamepad_command.throttle: 0,
             'turn': "general.fallback",
-            'vel_y': 0
+            'vel_y': Math.floor(Math.random() * 10)
         };
     }
     _capture() {

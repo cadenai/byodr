@@ -186,9 +186,9 @@ var teleop_screen = {
         // Leave a little space at the very bottom.
         _instance.el_viewport_container.height(vh - 2);
         // Calculate the new marker locations.
-        var _markers = [0.24 * vh, 0.12 * vh, 0.18 * vh, 0.12 * vh];
+        var _markers = [0.24 * vh, 0.12 * vh, 0.18 * vh, 0.10 * vh];
         if (dev_tools._vehicle == 'rover1') {
-            _markers = [0.52 * vh, 0.25 * vh, 0.45 * vh, 0.34 * vh];
+            _markers = [0.52 * vh, 0.25 * vh, 0.45 * vh, 0.31 * vh];
         }
         _instance._set_distance_indicators(_markers);
     },
@@ -204,8 +204,25 @@ var teleop_screen = {
 
     _render_distance_indicators: function() {
         const _show = this.in_debug && this.active_camera == 'front'? true: false;
-        const _markers = [this.overlay_center_markers, this.overlay_left_markers, this.overlay_right_markers];
-        _markers.flat().forEach(function(_m) {
+        const _hard_yellow = 'rgba(255, 255, 120, 0.99)';
+        const _soft_yellow = 'rgba(255, 255, 120, 0.50)';
+        if (_show) {
+            const _m = this.last_server_message;
+            const _color = _m != undefined && _m._is_on_autopilot && _m.max_speed < 1e-3? _hard_yellow: _soft_yellow;
+            this.overlay_center_markers[0].css('color', `${_color}`);
+            this.overlay_center_markers[1].css('color', `${_color}`);
+            this.overlay_left_markers[0].css('color', `${_color}`);
+            this.overlay_left_markers[1].css('color', `${_color}`);
+            this.overlay_right_markers[0].css('color', `${_color}`);
+            this.overlay_right_markers[1].css('color', `${_color}`);
+            this.overlay_center_markers[0].css('border-bottom', `2px solid ${_color}`);
+            this.overlay_center_markers[1].css('border-bottom', `3px solid ${_color}`);
+            this.overlay_left_markers[0].css('border-bottom', `3px solid ${_color}`);
+            this.overlay_left_markers[1].css('border-top', `2px solid ${_color}`);
+            this.overlay_right_markers[0].css('border-bottom', `3px solid ${_color}`);
+            this.overlay_right_markers[1].css('border-top', `2px solid ${_color}`);
+        }
+        [this.overlay_center_markers, this.overlay_left_markers, this.overlay_right_markers].flat().forEach(function(_m) {
             if (_show) {
                 _m.show();
             } else {
@@ -278,7 +295,7 @@ var teleop_screen = {
         var el_beta_speed = $('div#beta_speed_value');
         if (message._is_on_autopilot) {
             el_alpha_speed.text(message.max_speed.toFixed(1));
-            el_beta_speed.text(message.speed.toFixed(1));
+            el_beta_speed.text(message.vel_y.toFixed(1));
         } else {
             el_alpha_speed.text(message.vel_y.toFixed(1));
         }
@@ -296,7 +313,9 @@ var teleop_screen = {
                 el_alpha_speed_label.text('km/h');
                 el_beta_speed_container.hide();
                 el_autopilot_status.text('00:00:00');
+                el_autopilot_status.css('color', 'white');
             }
+            this._render_distance_indicators();
         }
         if (message._is_on_autopilot && message.ctl_activation > 0) {
             const _diff = 1e-3 * (new Date().getTime() - message.ctl_activation);
@@ -307,6 +326,7 @@ var teleop_screen = {
             const _zf_m = ('00' + _mins).slice(-2)
             const _zf_s = ('00' + _secs).slice(-2)
             el_autopilot_status.text(`${_zf_h}:${_zf_m}:${_zf_s}`);
+            el_autopilot_status.css('color', 'rgb(100, 217, 255)');
         }
         var display_rotation = Math.floor(message.ste * 90.0)
         el_steering_wheel.css('transform', "rotate(" + display_rotation + "deg)");
