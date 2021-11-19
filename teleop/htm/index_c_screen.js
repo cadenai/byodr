@@ -30,12 +30,12 @@ var screen_utils = {
 
     _turn_arrow_img: function(turn) {
         switch(turn) {
-            case "intersection.left":
-                return this._arrow_images.left;
-            case "intersection.right":
-                return this._arrow_images.right;
-            case "intersection.ahead":
-                return this._arrow_images.ahead;
+//            case "intersection.left":
+//                return this._arrow_images.left;
+//            case "intersection.right":
+//                return this._arrow_images.right;
+//            case "intersection.ahead":
+//                return this._arrow_images.ahead;
             default:
                 return this._arrow_images.none;
         }
@@ -318,7 +318,8 @@ var teleop_screen = {
             this._render_distance_indicators();
         }
         if (message._is_on_autopilot && message.ctl_activation > 0) {
-            const _diff = 1e-3 * (new Date().getTime() - message.ctl_activation);
+            // Convert the time from milliseconds to seconds.
+            const _diff = 1e-3 * message.ctl_activation;
             const _hours = Math.floor(_diff / 3600);
             const _mins = Math.floor((_diff - _hours * 3600) / 60);
             const _secs = Math.floor(_diff - _hours * 3600 - _mins * 60);

@@ -136,9 +136,13 @@ class RealNavigatorController {
         $('span#navigation_heading').text(message.geo_head.toFixed(2));
         if (this.started) {
             if (message.inf_surprise != undefined) {
-                $('span#navigation_match_image_distance').text(message.nav_distance[1].toFixed(3));
+                const _nni_dist = Math.min(1, message.nav_distance[1]);
+                $('span#navigation_match_image_distance').text(_nni_dist.toFixed(2));
                 $('span#navigation_current_command').text(message.nav_command.toFixed(1));
                 $('span#navigation_direction').text(message.nav_direction.toFixed(2));
+                // Make the next expected navigation image stand out more as it comes closer.
+                $('img#next_navigation_image').css('opacity', 1. - 0.67 * _nni_dist);
+
             }
             const backend_active = message.nav_active;
             const is_backend_change = backend_active != this.backend_active;

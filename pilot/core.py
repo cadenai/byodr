@@ -730,7 +730,8 @@ class DriverManager(Configurable):
             _inference_brake = 0. if inference is None else inference.get('obstacle', 0.)
             # Report the driver activation time in milliseconds.
             _driver_activation_time = self._driver.get_activation_timestamp()
-            _driver_activation_time = None if _driver_activation_time is None else _driver_activation_time * 1e-3
+            if _driver_activation_time is not None:
+                _driver_activation_time = (timestamp() - _driver_activation_time) * 1e-3
             blob = Blob(driver=self._driver_ctl,
                         driver_activation_time=_driver_activation_time,
                         cruise_speed=self._pilot_state.cruise_speed,
