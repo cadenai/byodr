@@ -141,7 +141,7 @@ class RealNavigatorController {
                 $('span#navigation_current_command').text(message.nav_command.toFixed(1));
                 $('span#navigation_direction').text(message.nav_direction.toFixed(2));
                 // Make the next expected navigation image stand out more as it comes closer.
-                $('img#next_navigation_image').css('opacity', 1. - 0.67 * _nni_dist);
+                $('img#next_navigation_image').css('opacity', 1. - 0.85 * _nni_dist);
 
             }
             const backend_active = message.nav_active;
