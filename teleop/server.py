@@ -172,7 +172,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
                 'geo_lat': 0 if vehicle is None else vehicle.get('latitude_geo'),
                 'geo_long': 0 if vehicle is None else vehicle.get('longitude_geo'),
                 'geo_head': 0 if vehicle is None else vehicle.get('heading'),
-                'speed': 0 if pilot is None else pilot.get('desired_speed') * speed_scale,
+                'des_speed': 0 if pilot is None else pilot.get('desired_speed') * speed_scale,
                 'max_speed': 0 if pilot is None else pilot.get('cruise_speed') * speed_scale,
                 'head': 0 if vehicle is None else vehicle.get('heading'),
                 'nav_active': pilot_navigation_active,

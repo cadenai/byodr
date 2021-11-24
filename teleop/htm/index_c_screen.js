@@ -24,6 +24,7 @@ var screen_utils = {
 
     _decorate_server_message: function(message) {
         message._is_on_autopilot = message.ctl == 5;
+        message._is_on_autopilot_trainer = message.ctl == 5 && message.max_speed != undefined && Math.abs(message.max_speed) < 1e-3;
         message._has_passage = message.inf_total_penalty < 1;
         return message;
     },
@@ -272,6 +273,7 @@ var teleop_screen = {
             $('span#inference_surprise').text(message.inf_surprise.toFixed(2));
             $('span#inference_critic').text(message.inf_critic.toFixed(2));
             $('span#inference_fps').text(message.inf_hz.toFixed(0));
+            $('span#inference_desired_speed').text(message.des_speed.toFixed(1));
             // Calculate the color schemes.
             const red_brake = Math.min(255., message.inf_brake_penalty * 2. * 255.);
             const green_brake = (1. - 2. * Math.max(0., message.inf_brake_penalty - 0.5)) * 255.;
@@ -287,7 +289,7 @@ var teleop_screen = {
             this.command_turn = message.turn;
             $('img#arrow').attr('src', screen_utils._turn_arrow_img(message.turn).src);
         }
-        // speed is the desired speed
+        // des_speed is the desired speed
         // vel_y is the actual vehicle speed
         var el_alpha_speed = $('div#alpha_speed_value');
         var el_alpha_speed_label = $('div#alpha_speed_label');
@@ -439,7 +441,8 @@ var teleop_screen = {
 
     canvas_update: function(ctx) {
         const message = this.last_server_message;
-        if (message != undefined && this.active_camera == 'front' && message._is_on_autopilot) {
+        const _ap = message != undefined && message._is_on_autopilot && !message._is_on_autopilot_trainer;
+        if (_ap && this.active_camera == 'front' && this.in_debug) {
             path_renderer._render_path(ctx, message.nav_path);
         }
     }

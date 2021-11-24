@@ -105,7 +105,7 @@ class FakeServerSocket extends RealServerSocket {
             'nav_image': [-1, -1],
             'nav_path': _navigation_path,
             'nav_point': "",
-            'speed': Math.floor(Math.random() * 10),
+            'des_speed': Math.floor(Math.random() * 10),
             'ste': gamepad_command.steering? gamepad_command.steering: 0,
             'thr': gamepad_command.throttle? gamepad_command.throttle: 0,
             'turn': "general.fallback",
