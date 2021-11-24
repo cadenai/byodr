@@ -19,16 +19,22 @@ log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 
 class RasSpeedOdometer(object):
-    def __init__(self, master_uri):
+    def __init__(self, master_uri, speed_factor):
         self._ras_uri = master_uri
-        self._motor_effort_speed_factor = 2.5 / 3.6
+        # The speed factor should be in m/s.
+        self._motor_effort_speed_factor = speed_factor
         self._values = collections.deque(maxlen=1)
         self._receiver = None
 
     def _on_receive(self, msg):
+        # Some robots do not have a sensor for speed.
+        # If velocity is not part of the ras message try to come up with a proxy for speed.
         if 'velocity' in msg.keys():
             value = float(msg.get('velocity'))
         else:
+            # The motor effort is calculated as the motor scale * the actual throttle.
+            # In case the robot's maximum speed is hardware limited to 10km/h and the motor scale is 4
+            # the speed factor is set to 10 / 4 / 3.6.
             value = float(msg.get('motor_effort')) * self._motor_effort_speed_factor
         self._values.append((value, timestamp()))
 
@@ -92,7 +98,8 @@ class Platform(Configurable):
     def internal_start(self, **kwargs):
         errors = []
         _master_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **kwargs)
-        self._odometer = RasSpeedOdometer(_master_uri)
+        _speed_factor = parse_option('ras.non.sensor.speed.factor', float, 0.50, errors, **kwargs)
+        self._odometer = RasSpeedOdometer(_master_uri, _speed_factor)
         self._odometer.start()
         if not self._gps_poller.is_alive():
             self._gps_poller.start()
