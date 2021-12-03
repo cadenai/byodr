@@ -225,7 +225,7 @@ class PTZCamera(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', (lambda x: bool(int(x))), 1, errors, **kwargs)
+        ptz_enabled = parse_option(self._name + '.camera.ptz.enabled', int, 1, errors=errors, **kwargs)
         if ptz_enabled:
             _server = parse_option(self._name + '.camera.ip', str, '192.168.1.64', errors=errors, **kwargs)
             _user = parse_option(self._name + '.camera.user', str, 'user1', errors=errors, **kwargs)
