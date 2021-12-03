@@ -1,5 +1,5 @@
 # Must be run from directory root so the python common directory is included in the build context.
-# docker build -f docker/pi-cp37-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.23.0 .
+# docker build -f docker/pi-cp37-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.23.3 .
 
 FROM raspbian/stretch
 
@@ -32,7 +32,12 @@ RUN pip3 install "pymodbus==2.3.0" && \
     pip3 install "pyusb==1.1.1" && \
     pip3 install "pytest==4.6.11"
 
-RUN pip3 install "pythoncrc" && \
-    pip3 install "pyvesc"
+RUN pip3 install "crccheck"
+
+RUN git clone https://github.com/LiamBindle/PyVESC.git \
+    && cd PyVESC \
+    && sed -i 's/return f"{self.comm_fw_version}.{self.fw_version_major}.{self.fw_version_minor}"/return "{self.comm_fw_version}.{self.fw_version_major}.{self.fw_version_minor}"/' pyvesc/VESC/messages/getters.py \
+    && python3 setup.py build \
+    && python3 setup.py install
 
 COPY ./common common/
