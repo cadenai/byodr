@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 import logging
 
 import usb.core
@@ -165,13 +166,13 @@ class SearchUsbRelayFactory(object):
         return self._relay
 
 
-class StaticChannelRelayHolder(object):
-    def __init__(self, relay, channel=0):
+class StaticRelayHolder(object):
+    def __init__(self, relay, channels=(0,)):
         self._relay = relay
-        self._channel = channel
+        self._channels = channels if isinstance(channels, tuple) or isinstance(channels, list) else (channels,)
 
     def open(self):
-        self._relay.open(self._channel)
+        [self._relay.open(ch) for ch in self._channels]
 
     def close(self):
-        self._relay.close(self._channel)
+        [self._relay.close(ch) for ch in self._channels]
