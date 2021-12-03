@@ -10,7 +10,7 @@ from relay import NoopRelay, RealMonitoringRelay
 from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
-from byodr.utils.usbrelay import StaticChannelRelayHolder, SearchUsbRelayFactory
+from byodr.utils.usbrelay import StaticRelayHolder, SearchUsbRelayFactory
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def main():
     logger.info("The USB Relay is {} attached.".format('well' if _relay.is_attached() else 'not'))
 
     if _relay.is_attached():
-        _holder = StaticChannelRelayHolder(relay=_relay, channel=0)
+        _holder = StaticRelayHolder(relay=_relay, channels=(0, 1))
         monitoring_relay = RealMonitoringRelay(relay=_holder, config_dir=args.config)
     else:
         monitoring_relay = NoopRelay()
