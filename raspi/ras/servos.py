@@ -4,51 +4,24 @@ import argparse
 import collections
 import logging
 import os
-import threading
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from configparser import ConfigParser as SafeConfigParser
 
 import numpy as np
-import serial
-import six
-from gpiozero import AngularServo, DigitalInputDevice
+from gpiozero import AngularServo
 
 from byodr.utils import timestamp, Application
 from byodr.utils.ipc import JSONPublisher, JSONServerThread
 from byodr.utils.option import parse_option
 from byodr.utils.protocol import MessageStreamProtocol
-from byodr.utils.usbrelay import SearchUsbRelayFactory
+from byodr.utils.usbrelay import SearchUsbRelayFactory, StaticRelayHolder
+from .core import CommandHistory, HallOdometer, VESCDrive
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
 
 
-class CommandHistory(object):
-    def __init__(self, timeout_seconds=180, hz=25):
-        self._threshold = timeout_seconds * hz
-        self._num_missing = None
-        self.reset()
-
-    def touch(self, steering, throttle, wakeup=False):
-        if wakeup:
-            self._num_missing = 0
-        else:
-            has_steering = steering is not None and abs(steering) > 1e-3
-            has_throttle = throttle is not None and abs(throttle) > 1e-3
-            if not has_steering and not has_throttle:
-                self._num_missing += 1
-            elif not self.is_missing():
-                # After the missing state is reached a wakeup is required to reset.
-                self._num_missing = 0
-
-    def reset(self):
-        self._num_missing = self._threshold + 1
-
-    def is_missing(self):
-        return self._num_missing > self._threshold
-
-
-class AbstractDriver(six.with_metaclass(ABCMeta, object)):
+class AbstractDriver(ABC):
     def __init__(self, relay):
         self._relay = relay
 
@@ -58,6 +31,10 @@ class AbstractDriver(six.with_metaclass(ABCMeta, object)):
         if config is not None and not version_ok:
             logger.warning("Received incompatible application version - configuration aborted.")
         return version_ok
+
+    @abstractmethod
+    def has_sensors(self):
+        raise NotImplementedError()
 
     @abstractmethod
     def relay_ok(self):
@@ -76,6 +53,10 @@ class AbstractDriver(six.with_metaclass(ABCMeta, object)):
         raise NotImplementedError()
 
     @abstractmethod
+    def velocity(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def drive(self, steering, throttle):
         raise NotImplementedError()
 
@@ -84,33 +65,45 @@ class AbstractDriver(six.with_metaclass(ABCMeta, object)):
         raise NotImplementedError()
 
 
-class GPIODriver(AbstractDriver):
+class NoopDriver(AbstractDriver):
+    def __init__(self, relay):
+        super().__init__(relay)
+        self._relay.close()
+
+    def has_sensors(self):
+        return False
+
+    def relay_ok(self):
+        pass
+
+    def relay_violated(self):
+        pass
+
+    def set_configuration(self, config):
+        pass
+
+    def is_configured(self):
+        return True
+
+    def velocity(self):
+        return 0
+
+    def drive(self, steering, throttle):
+        return 0
+
+    def quit(self):
+        pass
+
+
+class AbstractSteerServoDriver(AbstractDriver, ABC):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
-        # Our relay is expected to be wired on the motor power line.
-        self._relay.open()
         self._steer_servo_config = dict(pin=parse_option('servo.steering.pin.nr', int, 13, **kwargs),
                                         min_pw=parse_option('servo.steering.min_pulse_width.ms', float, 0.5, **kwargs),
                                         max_pw=parse_option('servo.steering.max_pulse_width.ms', float, 2.5, **kwargs),
                                         frame=parse_option('servo.steering.frame_width.ms', float, 20.0, **kwargs))
-        self._motor_servo_config = dict(pin=parse_option('servo.motor.pin.nr', int, 12, **kwargs),
-                                        min_pw=parse_option('servo.motor.min_pulse_width.ms', float, 0.5, **kwargs),
-                                        max_pw=parse_option('servo.motor.max_pulse_width.ms', float, 2.5, **kwargs),
-                                        frame=parse_option('servo.motor.frame_width.ms', float, 20.0, **kwargs))
         self._steering_config = dict(scale=parse_option('steering.domain.scale', float, 1.0, **kwargs))
-        self._throttle_config = dict(reverse=parse_option('throttle.reverse.gear', int, 0.0, **kwargs),
-                                     forward_shift=parse_option('throttle.domain.forward.shift', float, 0.0, **kwargs),
-                                     backward_shift=parse_option('throttle.domain.backward.shift', float, 0.0, **kwargs),
-                                     scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
         self._steer_servo = None
-        self._motor_servo = None
-
-    def _create_servo(self, servo, name, message):
-        logger.info("Creating servo {} with config {}".format(name, message))
-        if servo is not None:
-            servo.close()
-        servo = self._angular_servo(message=message)
-        return servo
 
     @staticmethod
     def _angular_servo(message):
@@ -119,13 +112,72 @@ class GPIODriver(AbstractDriver):
         pin, min_pw, max_pw, frame = [m_config[0]] + [1e-3 * x for x in m_config[1:]]
         return AngularServo(pin=pin, min_pulse_width=min_pw, max_pulse_width=max_pw, frame_width=frame)
 
+    def _create_servo(self, servo, name, message):
+        logger.info("Creating servo {} with config {}".format(name, message))
+        if servo is not None:
+            servo.close()
+        servo = self._angular_servo(message=message)
+        return servo
+
     def _apply_steering(self, steering):
         if self._steer_servo is not None:
             config = self._steering_config
             scale = config.get('scale')
             self._steer_servo.angle = scale * 90. * min(1, max(-1, steering))
 
-    def _apply_throttle(self, throttle):
+    def set_configuration(self, config):
+        # Translate the values into our domain.
+        _steer_servo_config = self._steer_servo_config
+        _steer_servo_config['min_pw'] = 0.5 + .5 * max(-2, min(2, config.get('steering_offset')))
+        self._steer_servo = self._create_servo(self._steer_servo, 'steering', _steer_servo_config)
+
+    def is_configured(self):
+        return self._steer_servo is not None
+
+    def quit(self):
+        if self._steer_servo is not None:
+            self._steer_servo.close()
+
+
+class GPIODriver(AbstractSteerServoDriver):
+    def __init__(self, relay, **kwargs):
+        super().__init__(relay)
+        # Our relay is expected to be wired on the motor power line.
+        self._relay.open()
+        self._motor_servo_config = dict(pin=parse_option('servo.motor.pin.nr', int, 12, **kwargs),
+                                        min_pw=parse_option('servo.motor.min_pulse_width.ms', float, 0.5, **kwargs),
+                                        max_pw=parse_option('servo.motor.max_pulse_width.ms', float, 2.5, **kwargs),
+                                        frame=parse_option('servo.motor.frame_width.ms', float, 20.0, **kwargs))
+        self._throttle_config = dict(reverse=parse_option('throttle.reverse.gear', int, 0.0, **kwargs),
+                                     forward_shift=parse_option('throttle.domain.forward.shift', float, 0.0, **kwargs),
+                                     backward_shift=parse_option('throttle.domain.backward.shift', float, 0.0, **kwargs),
+                                     scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
+        self._motor_servo = None
+
+    def has_sensors(self):
+        return False
+
+    def relay_ok(self):
+        self._relay.close()
+
+    def relay_violated(self):
+        self._relay.open()
+
+    def set_configuration(self, config):
+        if self.configuration_check(config):
+            logger.info("Received configuration {}.".format(config))
+            super().set_configuration(config)
+            self._throttle_config['scale'] = max(0, config.get('motor_scale'))
+            self._motor_servo = self._create_servo(self._motor_servo, 'motor', self._motor_servo_config)
+
+    def is_configured(self):
+        return super().is_configured() and self._motor_servo is not None
+
+    def velocity(self):
+        raise NotImplementedError()
+
+    def drive(self, steering, throttle):
+        self._apply_steering(steering)
         _motor_effort = 0
         if self._motor_servo is not None:
             config = self._throttle_config
@@ -139,254 +191,140 @@ class GPIODriver(AbstractDriver):
             self._motor_servo.angle = _motor_angle
         return _motor_effort
 
-    def relay_ok(self):
-        self._relay.close()
-
-    def relay_violated(self):
-        self._relay.open()
-
-    def set_configuration(self, config):
-        if self.configuration_check(config):
-            logger.info("Received configuration {}.".format(config))
-            _steer_servo_config = self._steer_servo_config
-            _motor_servo_config = self._motor_servo_config
-            # Translate the values into our domain.
-            _steer_servo_config['min_pw'] = 0.5 + .5 * max(-2, min(2, config.get('steering_offset')))
-            self._throttle_config['scale'] = max(0, config.get('motor_scale'))
-            self._steer_servo = self._create_servo(self._steer_servo, 'steering', _steer_servo_config)
-            self._motor_servo = self._create_servo(self._motor_servo, 'motor', _motor_servo_config)
-
-    def is_configured(self):
-        return None not in (self._steer_servo, self._motor_servo)
-
-    def drive(self, steering, throttle):
-        self._apply_steering(steering)
-        return self._apply_throttle(throttle)
-
     def quit(self):
         self._relay.open()
-        if self._steer_servo is not None:
-            self._steer_servo.close()
+        super().quit()
         if self._motor_servo is not None:
             self._motor_servo.close()
 
 
-class ODriveSerialDriver(AbstractDriver):
+class SingularVescDriver(AbstractSteerServoDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
-        # Our relay is expected to be wired on the o-drive supply line.
-        self._relay.close()
-        # Must not block in our methods to ensure the communication protocol remains timely and responsive.
-        self._drive_lock = threading.Lock()
-        self._steering_offset = 0
-        self._motor_scale = 1
-        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 1.0)))
-        self._axes_ordered = kwargs.get('drive.axes.mount.order', 'normal') == 'normal'
-        self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction', 'reverse') == 'forward' else -1
-        self._axis1_multiplier = 1 if kwargs.get('drive.axis1.mount.direction', 'forward') == 'forward' else -1
-        self._drive = None
-        logger.info(kwargs)
+        # Our relay is expected to be wired on the motor power line.
+        self._relay.open()
+        self._drive = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs),
+                                cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 1, **kwargs))
+        self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
 
-    def _serial_read(self, cmd):
-        self._drive.write(cmd)
-        return self._drive.readline()
-
-    def _drive_check(self):
-        # noinspection PyBroadException
-        try:
-            _open = self._drive.isOpen()
-            if _open:
-                if int(self._serial_read(b'r axis0.error\n'), 16) == 13 and int(self._serial_read(b'r axis1.error\n'), 16) == 13:
-                    return True
-                else:
-                    # Collect the error codes and report on them.
-                    m = {
-                        'axis0.controller': self._serial_read(b'r axis0.controller.error\n'),
-                        'axis0.encoder': self._serial_read(b'r axis0.encoder.error\n'),
-                        'axis0.motor': self._serial_read(b'r axis0.motor.error\n'),
-                        'axis1.controller': self._serial_read(b'r axis1.controller.error\n'),
-                        'axis1.encoder': self._serial_read(b'r axis1.encoder.error\n'),
-                        'axis1.motor': self._serial_read(b'r axis1.motor.error\n'),
-                    }
-                    logger.warning(m)
-            return False
-        except Exception:
-            return False
-
-    def _live(self):
-        return self._drive is not None and self._drive_check()
-
-    def _setup(self):
-        with self._drive_lock:
-            if not self._live():
-                try:
-                    self._drive = serial.Serial('/dev/ttyACM0', 115200, timeout=2)  # seconds
-                    self._drive.write(b'w axis0.requested_state 8\n')
-                    self._drive.write(b'w axis1.requested_state 8\n')
-                    _voltage = float(self._serial_read(b'r vbus_voltage\n'))
-                    logger.info("Setup drive - bus voltage is {:2.3f}V".format(_voltage))
-                except (FileNotFoundError, serial.serialutil.SerialException):
-                    pass
+    def has_sensors(self):
+        return self.is_configured()
 
     def relay_ok(self):
-        pass
+        self._relay.close()
 
     def relay_violated(self):
-        # noinspection PyBroadException
-        try:
-            self.drive(0, 0)
-        except Exception as e:
-            logger.warning(e)
+        self._relay.open()
 
     def set_configuration(self, config):
         if self.configuration_check(config):
             logger.info("Received configuration {}.".format(config))
-            threading.Thread(target=self._setup).start()
-            self._steering_offset = max(-1., min(1., config.get('steering_offset')))
-            self._motor_scale = max(0., config.get('motor_scale'))
+            super().set_configuration(config)
+            self._throttle_config['scale'] = max(0, config.get('motor_scale'))
 
     def is_configured(self):
-        if self._drive_lock.acquire(blocking=False):
-            try:
-                return self._live()
-            finally:
-                self._drive_lock.release()
-        return True
-
-    def drive(self, steering, throttle):
-        _effort = 0
-        if self._drive_lock.acquire(blocking=False):
-            try:
-                # Scale down throttle for one wheel, the other retains its value.
-                steering = min(1., max(-1., steering + self._steering_offset))
-                throttle = min(1., max(-1., throttle))
-                effect = 1 - min(1., abs(steering) * self._steering_effect)
-                left = throttle if steering >= 0 else throttle * effect
-                right = throttle if steering < 0 else throttle * effect
-                a = (right if self._axes_ordered else left) * self._axis0_multiplier * self._motor_scale
-                b = (left if self._axes_ordered else right) * self._axis1_multiplier * self._motor_scale
-                self._drive.write('v 0 {:2.6f}\n'.format(a).encode())
-                self._drive.write('v 1 {:2.6f}\n'.format(b).encode())
-                _effort = np.mean([a, b])
-            except AttributeError:
-                pass
-            finally:
-                self._drive_lock.release()
-        return _effort
-
-    def quit(self):
-        if self._drive_lock.acquire(blocking=False):
-            try:
-                if self._live():
-                    self._drive.write(b'w axis0.requested_state 1\n')
-                    self._drive.write(b'w axis1.requested_state 1\n')
-            finally:
-                self._drive_lock.release()
-
-
-class NoopDriver(AbstractDriver):
-    def __init__(self, relay):
-        super().__init__(relay)
-        self._relay.close()
-
-    def relay_ok(self):
-        pass
-
-    def relay_violated(self):
-        pass
-
-    def set_configuration(self, config):
-        pass
-
-    def is_configured(self):
-        return True
-
-    def drive(self, steering, throttle):
-        return 0
-
-    def quit(self):
-        pass
-
-
-class HallRps(object):
-    def __init__(self, pin=16, moment=0.05, debug=False):
-        self._moment = moment
-        self._debug = debug
-        self._lock = threading.Lock()
-        self._rps = 0
-        self._detect_time = 0
-        self._detect_duration = 0
-        self._num_detections = 0
-        self._sensor = DigitalInputDevice(pin=pin, pull_up=True)
-        self._sensor.when_activated = self._detect
-
-    def tick(self):
-        with self._lock:
-            # Drop to zero when stopped.
-            _elapsed = timestamp() - self._detect_time
-            if self._detect_duration > 0 and _elapsed / self._detect_duration > 1:
-                self._rps *= (1 - self._moment) if self._rps > 1e-2 else 0
-
-    def rps(self):
-        with self._lock:
-            return self._rps
-
-    def detections(self):
-        with self._lock:
-            return self._num_detections
-
-    def _detect(self):
-        with self._lock:
-            _now = timestamp()
-            self._detect_duration = _now - self._detect_time
-            _rps = 1e6 / self._detect_duration
-            self._rps = (self._moment * _rps + (1. - self._moment) * self._rps) if self._rps > 0 else _rps
-            self._detect_time = _now
-            if self._debug:
-                self._num_detections += 1
-
-
-class HallOdometer(object):
-    def __init__(self, **kwargs):
-        self._cm_per_revolution = parse_option('odometer.distance.cm_per_revolution', float, 15, **kwargs)
-        self._debug = parse_option('odometer.debug', int, 0, **kwargs) == 1
-        self._alpha = parse_option('odometer.moment.alpha', float, 0.10, **kwargs)
-        self._enabled = parse_option('drive.type', str, **kwargs) == 'gpio_with_hall'
-        self._hall = None
-
-    def is_enabled(self):
-        return self._enabled
-
-    def setup(self):
-        if self._enabled:
-            self._hall = HallRps(moment=self._alpha, debug=self._debug)
-            logger.info("Created hall odometer with cm/rev={:2.2f} alpha={:2.2f} and debug={}.".format(
-                self._cm_per_revolution, self._alpha, self._debug
-            ))
-
-    def quit(self):
-        self._enabled = False
-        self._hall = None
+        return super().is_configured() and self._drive.is_open()
 
     def velocity(self):
-        _velocity = self._hall.rps() * self._cm_per_revolution * 1e-2  # Convert to meters per second.
-        self._hall.tick()
-        if self._debug:
-            logger.info("{:2.2f} n={}".format(self._hall.rps(), self._hall.detections()))
-        return _velocity
+        try:
+            return self._drive.get_velocity()
+        except Exception as e:
+            logger.warning(e)
+            return 0
+
+    def drive(self, steering, throttle):
+        self._apply_steering(steering)
+        _motor_effort = self._throttle_config.get('scale') * throttle
+        self._drive.set_effort(_motor_effort)
+        return _motor_effort
+
+    def quit(self):
+        self._relay.open()
+        super().quit()
+        self._drive.close()
+
+
+class DualVescDriver(AbstractDriver):
+    def __init__(self, relay, **kwargs):
+        super().__init__(relay)
+        # Our relay is expected to be wired on the motor power line.
+        self._relay.open()
+        _pp_cm = parse_option('drive.distance.cm_per_pole_pair', float, 1, **kwargs)
+        self._drive1 = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs), cm_per_pole_pair=_pp_cm)
+        self._drive2 = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM1', **kwargs), cm_per_pole_pair=_pp_cm)
+        self._steering_offset = 0
+        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 1.0)))
+        self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
+        self._axes_ordered = kwargs.get('drive.axes.mount.order', 'normal') == 'normal'
+        self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction', 'forward') == 'forward' else -1
+        self._axis1_multiplier = 1 if kwargs.get('drive.axis1.mount.direction', 'forward') == 'forward' else -1
+
+    def has_sensors(self):
+        return self.is_configured()
+
+    def relay_ok(self):
+        self._relay.close()
+
+    def relay_violated(self):
+        self._relay.open()
+
+    def set_configuration(self, config):
+        if self.configuration_check(config):
+            logger.info("Received configuration {}.".format(config))
+            self._steering_offset = max(-1., min(1., config.get('steering_offset')))
+            self._throttle_config['scale'] = max(0, config.get('motor_scale'))
+
+    def is_configured(self):
+        return self._drive1.is_open() and self._drive2.is_open()
+
+    def velocity(self):
+        try:
+            return (self._drive1.get_velocity() + self._drive2.get_velocity()) / 2.
+        except Exception as e:
+            logger.warning(e)
+            return 0
+
+    def drive(self, steering, throttle):
+        _motor_scale = self._throttle_config.get('scale')
+        # Scale down throttle for one wheel, the other retains its value.
+        steering = min(1., max(-1., steering + self._steering_offset))
+        throttle = min(1., max(-1., throttle))
+        effect = 1 - min(1., abs(steering) * self._steering_effect)
+        left = throttle if steering >= 0 else throttle * effect
+        right = throttle if steering < 0 else throttle * effect
+        a = (right if self._axes_ordered else left) * self._axis0_multiplier * _motor_scale
+        b = (left if self._axes_ordered else right) * self._axis1_multiplier * _motor_scale
+        self._drive1.set_effort(a)
+        self._drive2.set_effort(b)
+        return np.mean([a, b])
+
+    def quit(self):
+        self._relay.open()
+        self._drive1.close()
+        self._drive2.close()
 
 
 class MainApplication(Application):
-    def __init__(self, chassis=None, hz=50, **kwargs):
+    def __init__(self, relay, hz=50, **kwargs):
         super(MainApplication, self).__init__(run_hz=hz)
-        self._chassis = chassis
         self._integrity = MessageStreamProtocol(max_age_ms=100, max_delay_ms=100)
         self._cmd_history = CommandHistory(hz=hz)
         self._config_queue = collections.deque(maxlen=1)
         self._drive_queue = collections.deque(maxlen=1)
         self._odometer = HallOdometer(**kwargs)
+        self._chassis = None
         self.platform = None
         self.publisher = None
+        # Setup the chassis.
+        _drive_type = parse_option('drive.type', str, **kwargs)
+        if _drive_type in ('gpio', 'gpio_with_hall'):
+            self._chassis = GPIODriver(relay, **kwargs)
+        elif _drive_type == 'vesc_single':
+            self._chassis = SingularVescDriver(relay, **kwargs)
+        elif _drive_type == 'vesc_dual':
+            self._chassis = DualVescDriver(relay, **kwargs)
+        else:
+            raise AssertionError("Unknown drive type '{}'.".format(_drive_type))
 
     def _pop_config(self):
         return self._config_queue.popleft() if bool(self._config_queue) else None
@@ -435,7 +373,9 @@ class MainApplication(Application):
         v_throttle = 0 if n_violations > 0 else v_throttle
         _effort = self._chassis.drive(v_steering, v_throttle)
         _data = dict(time=timestamp(), configured=int(self._chassis.is_configured()), motor_effort=_effort)
-        if self._odometer.is_enabled():
+        if self._chassis.has_sensors():
+            _data.update(dict(velocity=self._chassis.velocity()))
+        elif self._odometer.is_enabled():
             _data.update(dict(velocity=self._odometer.velocity()))
 
         # Let the communication partner know we are operational.
@@ -454,22 +394,13 @@ def main():
     parser.read(config_file)
     kwargs = dict(parser.items('driver')) if parser.has_section('driver') else {}
     kwargs.update(dict(parser.items('odometer')) if parser.has_section('odometer') else {})
-    drive_type = parse_option('drive.type', str, **kwargs)
 
-    relay = SearchUsbRelayFactory().get_relay()
-    assert relay.is_attached(), "The device is not attached."
+    _relay = SearchUsbRelayFactory().get_relay()
+    assert _relay.is_attached(), "The relay device is not attached."
 
-    if drive_type in ('gpio', 'gpio_with_hall'):
-        driver = GPIODriver(relay, **kwargs)
-    elif drive_type == 'odrive':
-        driver = ODriveSerialDriver(relay, **kwargs)
-    else:
-        raise AssertionError("Unknown drive type '{}'.".format(drive_type))
-
-    # driver = NoopDriver(relay)
-
+    holder = StaticRelayHolder(relay=_relay, channels=(0, 1))
     try:
-        application = MainApplication(chassis=driver, hz=50, **kwargs)
+        application = MainApplication(relay=holder, hz=50, **kwargs)
         quit_event = application.quit_event
 
         application.publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
@@ -485,7 +416,7 @@ def main():
         logger.info("Waiting on threads to stop.")
         [t.join() for t in threads]
     finally:
-        relay.open()
+        holder.open()
 
 
 if __name__ == "__main__":
