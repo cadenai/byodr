@@ -1,5 +1,5 @@
 [driver]
-drive.type = odrive
+drive.type = vesc_dual
 drive.axes.mount.order = normal
 drive.axis0.mount.direction = reverse
 drive.axis1.mount.direction = forward
