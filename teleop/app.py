@@ -21,7 +21,7 @@ from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 
 logger = logging.getLogger(__name__)
 
-log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
+log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 
 io_loop = ioloop.IOLoop.instance()
 signal.signal(signal.SIGINT, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
@@ -173,6 +173,6 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format=log_format)
+    logging.basicConfig(format=log_format, datefmt='%Y%m%d:%H:%M:%S %p %Z')
     logging.getLogger().setLevel(logging.INFO)
     main()

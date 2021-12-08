@@ -108,8 +108,9 @@ class HallOdometer(object):
 class VESCDrive(object):
     def __init__(self, serial_port='/dev/ttyACM0', cm_per_pole_pair=1):
         self._lock = threading.Lock()
-        self._ser = serial.Serial(serial_port, baudrate=115200, timeout=0.05)
         self._cm_per_pp = cm_per_pole_pair
+        self._ser = serial.Serial(serial_port, baudrate=115200, timeout=0.05)
+        logger.info("Using serial port {}.".format(serial_port))
 
     def is_open(self):
         with self._lock:
@@ -137,7 +138,7 @@ class VESCDrive(object):
     def set_effort(self, value):
         with self._lock:
             if self._ser.isOpen():
-                # self._ser.write(pyvesc.encode(SetDutyCycle(float(value * 1e-1))))
-                self._ser.write(pyvesc.encode(SetRPM(int(value * 1e3))))
+                self._ser.write(pyvesc.encode(SetDutyCycle(float(value * 1e-1))))
+                # self._ser.write(pyvesc.encode(SetRPM(int(value * 1e3))))
             else:
                 raise IOError("The serial port is not open.")

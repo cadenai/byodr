@@ -15,7 +15,7 @@ from byodr.utils.location import GeoTracker
 from byodr.utils.option import parse_option, hash_dict
 
 logger = logging.getLogger(__name__)
-log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
+log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 
 
 class RasSpeedOdometer(object):
@@ -277,6 +277,6 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format=log_format)
+    logging.basicConfig(format=log_format, datefmt='%Y%m%d:%H:%M:%S %p %Z')
     logging.getLogger().setLevel(logging.INFO)
     main()

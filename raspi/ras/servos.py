@@ -18,7 +18,7 @@ from byodr.utils.usbrelay import SearchUsbRelayFactory, StaticRelayHolder
 from .core import CommandHistory, HallOdometer, VESCDrive
 
 logger = logging.getLogger(__name__)
-log_format = '%(levelname)s: %(filename)s %(funcName)s %(message)s'
+log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 
 
 class AbstractDriver(ABC):
@@ -41,7 +41,7 @@ class AbstractDriver(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def relay_violated(self):
+    def relay_violated(self, on_integrity=True):
         raise NotImplementedError()
 
     @abstractmethod
@@ -76,7 +76,7 @@ class NoopDriver(AbstractDriver):
     def relay_ok(self):
         pass
 
-    def relay_violated(self):
+    def relay_violated(self, on_integrity=True):
         pass
 
     def set_configuration(self, config):
@@ -160,7 +160,7 @@ class GPIODriver(AbstractSteerServoDriver):
     def relay_ok(self):
         self._relay.close()
 
-    def relay_violated(self):
+    def relay_violated(self, on_integrity=True):
         self._relay.open()
 
     def set_configuration(self, config):
@@ -201,8 +201,7 @@ class GPIODriver(AbstractSteerServoDriver):
 class SingularVescDriver(AbstractSteerServoDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
-        # Our relay is expected to be wired on the motor power line.
-        self._relay.open()
+        self._relay.close()
         self._drive = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs),
                                 cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 1, **kwargs))
         self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
@@ -213,8 +212,9 @@ class SingularVescDriver(AbstractSteerServoDriver):
     def relay_ok(self):
         self._relay.close()
 
-    def relay_violated(self):
-        self._relay.open()
+    def relay_violated(self, on_integrity=True):
+        if on_integrity:
+            self.drive(0, 0)
 
     def set_configuration(self, config):
         if self.configuration_check(config):
@@ -247,11 +247,10 @@ class SingularVescDriver(AbstractSteerServoDriver):
 class DualVescDriver(AbstractDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
-        # Our relay is expected to be wired on the motor power line.
-        self._relay.open()
+        self._relay.close()
         _pp_cm = parse_option('drive.distance.cm_per_pole_pair', float, 1, **kwargs)
-        self._drive1 = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs), cm_per_pole_pair=_pp_cm)
-        self._drive2 = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM1', **kwargs), cm_per_pole_pair=_pp_cm)
+        self._drive1 = VESCDrive(serial_port=parse_option('drive.0.serial.port', str, '/dev/ttyACM0', **kwargs), cm_per_pole_pair=_pp_cm)
+        self._drive2 = VESCDrive(serial_port=parse_option('drive.1.serial.port', str, '/dev/ttyACM1', **kwargs), cm_per_pole_pair=_pp_cm)
         self._steering_offset = 0
         self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 1.0)))
         self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
@@ -265,8 +264,9 @@ class DualVescDriver(AbstractDriver):
     def relay_ok(self):
         self._relay.close()
 
-    def relay_violated(self):
-        self._relay.open()
+    def relay_violated(self, on_integrity=True):
+        if on_integrity:
+            self.drive(0, 0)
 
     def set_configuration(self, config):
         if self.configuration_check(config):
@@ -352,7 +352,7 @@ class MainApplication(Application):
     def step(self):
         n_violations = self._integrity.check()
         if n_violations > 5:
-            self._chassis.relay_violated()
+            self._chassis.relay_violated(on_integrity=True)
             self._integrity.reset()
             return
 
@@ -365,7 +365,7 @@ class MainApplication(Application):
 
         self._cmd_history.touch(steering=v_steering, throttle=v_throttle, wakeup=v_wakeup)
         if self._cmd_history.is_missing():
-            self._chassis.relay_violated()
+            self._chassis.relay_violated(on_integrity=False)
         elif n_violations < -5:
             self._chassis.relay_ok()
 
@@ -420,6 +420,6 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(format=log_format)
+    logging.basicConfig(format=log_format, datefmt='%Y%m%d:%H:%M:%S %p %Z')
     logging.getLogger().setLevel(logging.INFO)
     main()
