@@ -282,7 +282,7 @@ class TFRunner(Configurable):
             'driver.dnn.steer.mu.equation', '(7.0 * (-0.50 + surprise + loss)) **7', _errors, **kwargs
         )
         self._fn_brake_mu = _build_expression(
-            'driver.dnn.brake.mu.equation', '2.0 * surprise + 2.5 * (loss > 0.60) * (loss - 0.60)', _errors, **kwargs
+            'driver.dnn.brake.mu.equation', '2.0 * surprise + 2.5 * (loss > 0.75) * (loss - 0.75)', _errors, **kwargs
         )
         _fn_dave_image = get_registered_function('dnn.image.transform.dave', 'dave__320_240__200_66__0', _errors, **kwargs)
         _fn_alex_image = get_registered_function('dnn.image.transform.alex', 'alex__200_100', _errors, **kwargs)
