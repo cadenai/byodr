@@ -14,8 +14,8 @@ services:
     build:
       context: .
       dockerfile: pi_gpio.dockerfile
-    image: centipede2donald/byodr-ce:pi_servos
-    container_name: servos
+#    image: centipede2donald/byodr-ce:pi_servos
+#    container_name: servos
     privileged: true
     user: root
     restart: always
@@ -33,8 +33,8 @@ services:
     build:
       context: .
       dockerfile: pi_gstreamer.dockerfile
-    image: centipede2donald/byodr-ce:pi_stream
-    container_name: stream0
+#    image: centipede2donald/byodr-ce:pi_stream
+#    container_name: stream0
     privileged: true
     user: root
     restart: always
@@ -47,8 +47,8 @@ services:
     build:
       context: .
       dockerfile: pi_gstreamer.dockerfile
-    image: centipede2donald/byodr-ce:pi_stream
-    container_name: stream1
+#    image: centipede2donald/byodr-ce:pi_stream
+#    container_name: stream1
     privileged: true
     user: root
     restart: always
