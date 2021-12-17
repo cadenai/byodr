@@ -99,9 +99,6 @@ class DynamicMomentum(object):
         self._deceleration = down
         self._ceiling = ceiling
 
-    def reset(self):
-        self._previous_value = 0
-
     def calculate(self, value):
         _momentum = self._acceleration if value > self._previous_value else self._deceleration
         _new_value = min(self._ceiling, _momentum * value + (1. - _momentum) * self._previous_value)
@@ -216,9 +213,8 @@ class AbstractThrottleControl(object):
 
 
 class PidThrottleControl(AbstractThrottleControl):
-    def __init__(self, throttle_momentum, pid_config, stop_p, min_desired_speed, max_desired_speed):
+    def __init__(self, pid_config, stop_p, min_desired_speed, max_desired_speed):
         super(PidThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
-        self._momentum = throttle_momentum
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
         (p, i, d) = pid_config
@@ -234,26 +230,22 @@ class PidThrottleControl(AbstractThrottleControl):
     def calculate_throttle(self, desired_speed, current_speed):
         # Keep both controllers up to date.
         feedback = desired_speed - current_speed
-        _stop = self._pid_stop(feedback=feedback)
-        _throttle = self._pid_throttle(feedback=feedback)
+        stop_throttle_ = self._pid_stop(feedback=feedback)
+        throttle_ = self._pid_throttle(feedback=feedback)
         # A separate pid controller is engaged when the desired speed drops below a threshold.
         # This could be used for emergency braking e.g. when desired speed is zero.
-        if desired_speed < self._min_desired_speed:
-            self._momentum.reset()
-            return min(0, _stop)
-        else:
-            return self._momentum.calculate(max(-1, min(1, _throttle)))
+        return min(0, stop_throttle_) if desired_speed < self._min_desired_speed else max(-1, min(1, throttle_))
 
 
 class DirectThrottleControl(AbstractThrottleControl):
-    def __init__(self, throttle_momentum, min_desired_speed, max_desired_speed, throttle_cutoff):
+    def __init__(self, min_desired_speed, max_desired_speed, throttle_up_momentum, throttle_down_momentum, throttle_cutoff):
         super(DirectThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
-        self._momentum = throttle_momentum
+        self._moment = DynamicMomentum(up=throttle_up_momentum, down=throttle_down_momentum)
         self._throttle_cut = throttle_cutoff
 
     def calculate_throttle(self, desired_speed, current_speed):
         _throttle = desired_speed
-        _throttle = self._momentum.calculate(_throttle)
+        _throttle = self._moment.calculate(_throttle)
         return _throttle if abs(_throttle) > self._throttle_cut else 0
 
 
@@ -269,8 +261,6 @@ class AbstractCruiseControl(AbstractDriverBase):
         self._min_desired_speed = parse_option('driver.cc.static.speed.min', float, (0.1 / 3.6), _errors, **kwargs)
         self._max_desired_speed = parse_option('driver.cc.static.speed.max', float, (5.0 / 3.6), _errors, **kwargs)
         #
-        _throttle_up_momentum = parse_option('driver.throttle.direct.up.momentum', float, 0.01, _errors, **kwargs)
-        _throttle_down_momentum = parse_option('driver.throttle.direct.down.momentum', float, 0.20, _errors, **kwargs)
         _control_type = parse_option('driver.cc.control.type', str, 'pid', _errors, **kwargs)
         if _control_type == 'pid':
             p = (parse_option('driver.cc.throttle.pid_controller.p', float, 0.002, _errors, **kwargs))
@@ -278,18 +268,20 @@ class AbstractCruiseControl(AbstractDriverBase):
             d = (parse_option('driver.cc.throttle.pid_controller.d', float, 0, _errors, **kwargs))
             stop_p = (parse_option('driver.cc.stop.pid_controller.p', float, 1.0, _errors, **kwargs))
             self._throttle_control = PidThrottleControl(
-                throttle_momentum=DynamicMomentum(up=_throttle_up_momentum, down=_throttle_down_momentum),
-                pid_config=(p, i, d),
+                (p, i, d),
                 stop_p=stop_p,
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed
             )
         else:
+            _throttle_up_momentum = parse_option('driver.throttle.direct.up.momentum', float, 0.05, _errors, **kwargs)
+            _throttle_down_momentum = parse_option('driver.throttle.direct.down.momentum', float, 1.0, _errors, **kwargs)
             _throttle_cutoff = parse_option('driver.throttle.direct.minimum', float, 0.002, _errors, **kwargs)
             self._throttle_control = DirectThrottleControl(
-                throttle_momentum=DynamicMomentum(up=_throttle_up_momentum, down=_throttle_down_momentum),
                 min_desired_speed=self._min_desired_speed,
                 max_desired_speed=self._max_desired_speed,
+                throttle_up_momentum=_throttle_up_momentum,
+                throttle_down_momentum=_throttle_down_momentum,
                 throttle_cutoff=_throttle_cutoff
             )
         self._errors = _errors
