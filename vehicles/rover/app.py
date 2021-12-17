@@ -18,13 +18,20 @@ logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 
 
+class RasRemoteError(IOError):
+    def __init__(self, timeout):
+        self.timeout = timeout
+
+
 class RasSpeedOdometer(object):
     def __init__(self, master_uri, speed_factor):
         self._ras_uri = master_uri
-        # The speed factor should be in m/s.
+        # The speed factor must be in m/s.
         self._motor_effort_speed_factor = speed_factor
         self._values = collections.deque(maxlen=1)
         self._receiver = None
+        # Initialize the queue with the startup time.
+        self._values.append((0, timestamp()))
 
     def _on_receive(self, msg):
         # Some robots do not have a sensor for speed.
@@ -39,22 +46,18 @@ class RasSpeedOdometer(object):
         self._values.append((value, timestamp()))
 
     def get(self):
-        try:
-            value, ts = self._values[-1]
-            _duration = timestamp() - ts
-            # Half a second is an eternity.
-            if _duration > 5e5:
-                raise AssertionError(_duration)
-            return value
-        except IndexError:
-            raise AssertionError("Not yet started.")
+        value, ts = self._values[-1]
+        _duration = (timestamp() - ts) * 1e-3  # convert to milliseconds.
+        # Half a second is already an eternity.
+        if _duration > 500:
+            raise RasRemoteError(_duration)
+        return value
 
     def start(self):
         # The receiver thread is not restartable.
         self._receiver = ReceiverThread(url=('{}:5555'.format(self._ras_uri)), topic=b'ras/drive/status')
         self._receiver.add_listener(self._on_receive)
         self._receiver.start()
-        self._values.append((0, timestamp()))
 
     def quit(self):
         if self._receiver is not None:
@@ -65,6 +68,7 @@ class Platform(Configurable):
     def __init__(self):
         super(Platform, self).__init__()
         self._odometer = None
+        self._odometer_config = None
         self._gps_poller = GpsPollerThread()
         self._geo_tracker = GeoTracker()
 
@@ -73,25 +77,38 @@ class Platform(Configurable):
         position = None if None in (latitude, longitude) else (latitude, longitude)
         return self._geo_tracker.track(position)
 
-    def state(self):
-        y_vel, trust_velocity = 0, 0
-        try:
-            if self._odometer is not None:
-                y_vel, trust_velocity = self._odometer.get(), 1
-        except AssertionError:
-            pass
+    def _start_odometer(self):
+        _master_uri, _speed_factor = self._odometer_config
+        self._odometer = RasSpeedOdometer(_master_uri, _speed_factor)
+        self._odometer.start()
 
-        latitude, longitude, bearing = self._track()
-        return dict(latitude_geo=latitude,
-                    longitude_geo=longitude,
-                    heading=bearing,
-                    velocity=y_vel,
-                    trust_velocity=trust_velocity,
-                    time=timestamp())
-
-    def internal_quit(self, restarting=False):
+    def _quit_odometer(self):
         if self._odometer is not None:
             self._odometer.quit()
+
+    def state(self):
+        with self._lock:
+            y_vel, trust_velocity = 0, 0
+            if self._odometer is not None:
+                try:
+                    y_vel, trust_velocity = self._odometer.get(), 1
+                except RasRemoteError as rre:
+                    # After 5 seconds do a hard reboot of the remote connection.
+                    if rre.timeout > 5000:
+                        logger.info("Hard odometer reboot at {} ms timeout.".format(rre.timeout))
+                        self._quit_odometer()
+                        self._start_odometer()
+
+            latitude, longitude, bearing = self._track()
+            return dict(latitude_geo=latitude,
+                        longitude_geo=longitude,
+                        heading=bearing,
+                        velocity=y_vel,
+                        trust_velocity=trust_velocity,
+                        time=timestamp())
+
+    def internal_quit(self, restarting=False):
+        self._quit_odometer()
         if not restarting:
             self._gps_poller.quit()
 
@@ -99,8 +116,8 @@ class Platform(Configurable):
         errors = []
         _master_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **kwargs)
         _speed_factor = parse_option('ras.non.sensor.speed.factor', float, 0.50, errors, **kwargs)
-        self._odometer = RasSpeedOdometer(_master_uri, _speed_factor)
-        self._odometer.start()
+        self._odometer_config = (_master_uri, _speed_factor)
+        self._start_odometer()
         if not self._gps_poller.is_alive():
             self._gps_poller.start()
         return errors
@@ -109,7 +126,7 @@ class Platform(Configurable):
 class RoverHandler(Configurable):
     def __init__(self):
         super(RoverHandler, self).__init__()
-        self._vehicle = Platform()
+        self._platform = Platform()
         self._process_frequency = 10
         self._patience_micro = 100.
         self._gst_sources = []
@@ -126,7 +143,7 @@ class RoverHandler(Configurable):
 
     def internal_quit(self, restarting=False):
         if not restarting:
-            self._vehicle.quit()
+            self._platform.quit()
             map(lambda x: x.quit(), self._ptz_cameras)
             map(lambda x: x.quit(), self._gst_sources)
 
@@ -134,8 +151,8 @@ class RoverHandler(Configurable):
         errors = []
         self._process_frequency = parse_option('clock.hz', int, 100, errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 100, errors, **kwargs) * 1000.
-        self._vehicle.restart(**kwargs)
-        errors.extend(self._vehicle.get_errors())
+        self._platform.restart(**kwargs)
+        errors.extend(self._platform.get_errors())
         if not self._gst_sources:
             front_camera = ImagePublisher(url='ipc:///byodr/camera_0.sock', topic='aav/camera/0')
             rear_camera = ImagePublisher(url='ipc:///byodr/camera_1.sock', topic='aav/camera/1')
@@ -178,7 +195,7 @@ class RoverHandler(Configurable):
     def cycle(self, c_pilot, c_teleop):
         self._cycle_ptz_cameras(c_pilot, c_teleop)
         map(lambda x: x.check(), self._gst_sources)
-        return self._vehicle.state()
+        return self._platform.state()
 
 
 class RoverApplication(Application):
