@@ -88,8 +88,9 @@ class RealMonitoringRelay(AbstractRelay):
         self._client_factory = PiClientFactory() if client_factory is None else client_factory
         self._patience_micro = 100.
         self._config_hash = -1
+        self._pi_config = None
         self._pi_client = None
-        self._status = None
+        self._pi_status = None
         self._servo_config = None
 
     def _send_config(self, data):
@@ -109,7 +110,7 @@ class RealMonitoringRelay(AbstractRelay):
                                       data=dict(steering=steering, throttle=throttle, reverse=_reverse, wakeup=_wakeup)))
 
     def _drive(self, pilot, teleop):
-        pi_status = None if self._status is None else self._status.pop_latest()
+        pi_status = None if self._pi_status is None else self._pi_status.pop_latest()
         if pi_status is not None and not bool(pi_status.get('configured')):
             self._send_config(self._servo_config)
         if pilot is None:
@@ -136,32 +137,34 @@ class RealMonitoringRelay(AbstractRelay):
             return []
 
     def _reboot(self):
-        if self._pi_client is not None:
-            self._pi_client.quit()
-        if self._status is not None:
-            self._status.quit()
         errors = []
         _config = self._config()
-        _master_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **_config)
+        self._patience_micro = parse_option('patience.ms', int, 100, errors, **_config) * 1000.
+        _pi_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **_config)
+        if self._pi_config != _pi_uri:
+            if self._pi_client is not None:
+                self._pi_client.quit()
+            if self._pi_status is not None:
+                self._pi_status.quit()
+            logger.info("Processing pi at uri '{}'.".format(_pi_uri))
+            self._pi_config = _pi_uri
+            self._pi_client = self._client_factory.create(_pi_uri)
+            self._pi_status = self._status_factory.create(_pi_uri)
+            self._pi_status.add_listener(self._on_receive)
+            self._pi_status.start()
         _steering_offset = parse_option('ras.driver.steering.offset', float, 0.0, errors, **_config)
         _motor_scale = parse_option('ras.driver.motor.scale', float, 1.0, errors, **_config)
-        self._patience_micro = parse_option('patience.ms', int, 100, errors, **_config) * 1000.
         self._servo_config = dict(app_version=2, steering_offset=_steering_offset, motor_scale=_motor_scale)
-        self._pi_client = self._client_factory.create(_master_uri)
-        self._status = self._status_factory.create(_master_uri)
-        self._status.add_listener(self._on_receive)
-        self._status.start()
         self._integrity.reset()
         self._send_config(self._servo_config)
-        logger.info("Processing master at uri '{}'.".format(_master_uri))
         return errors
 
     def quit(self):
         self._relay.open()
         if self._pi_client is not None:
             self._pi_client.quit()
-        if self._status is not None:
-            self._status.quit()
+        if self._pi_status is not None:
+            self._pi_status.quit()
 
     def step(self, pilot, teleop):
         # Always consume the latest commands.
