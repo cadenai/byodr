@@ -8,7 +8,7 @@ from collections import deque
 
 import cachetools
 import numpy as np
-import pid_controller.pid as pic
+from simple_pid import PID as pid_control
 
 from byodr.utils import timestamp, Configurable
 from byodr.utils.navigate import NavigationCommand, NavigationInstructions
@@ -215,26 +215,23 @@ class AbstractThrottleControl(object):
 class PidThrottleControl(AbstractThrottleControl):
     def __init__(self, pid_config, stop_p, min_desired_speed, max_desired_speed):
         super(PidThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
+        (p, i, d) = pid_config
+        self._pid = pid_control(p, i, d, setpoint=0)
+        self._pid.output_limits = (-1, 1)
+        self._stop_p = stop_p
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
-        (p, i, d) = pid_config
-        self._pid_throttle = self._create_pid_ctl(p=p, i=i, d=d)
-        self._pid_stop = self._create_pid_ctl(p=stop_p)
-
-    @staticmethod
-    def _create_pid_ctl(p, i=0., d=0.):
-        _ctl = pic.PID(p=p, i=i, d=d)
-        _ctl.target = 0.
-        return _ctl
 
     def calculate_throttle(self, desired_speed, current_speed):
-        # Keep both controllers up to date.
+        self._pid.setpoint = desired_speed
+        control = self._pid(current_speed)
+        # Brake hard at once if required.
         feedback = desired_speed - current_speed
-        stop_throttle_ = self._pid_stop(feedback=feedback)
-        throttle_ = self._pid_throttle(feedback=feedback)
-        # A separate pid controller is engaged when the desired speed drops below a threshold.
-        # This could be used for emergency braking e.g. when desired speed is zero.
-        return min(0, stop_throttle_) if desired_speed < self._min_desired_speed else max(-1, min(1, throttle_))
+        if desired_speed < self._min_desired_speed:
+            # Clear the pid internals - such as the integral component.
+            self._pid.reset()
+            return max(-1, min(0, feedback * self._stop_p))
+        return control
 
 
 class DirectThrottleControl(AbstractThrottleControl):
