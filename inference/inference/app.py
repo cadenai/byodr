@@ -274,7 +274,7 @@ class TFRunner(Configurable):
         self._process_frequency = parse_option('clock.hz', int, 20, _errors, **kwargs)
         self._steering_scale_left = parse_option('driver.dnn.steering.scale.left', lambda x: abs(float(x)), -1, _errors, **kwargs)
         self._steering_scale_right = parse_option('driver.dnn.steering.scale.right', float, 1, _errors, **kwargs)
-        _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0.15, _errors, **kwargs)
+        _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0.35, _errors, **kwargs)
         _penalty_down_momentum = parse_option('driver.autopilot.filter.momentum.down', float, 0.25, _errors, **kwargs)
         _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 2.0, _errors, **kwargs)
         self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
