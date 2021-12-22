@@ -69,13 +69,13 @@ class Platform(Configurable):
         super(Platform, self).__init__()
         self._odometer = None
         self._odometer_config = None
-        self._gps_poller = GpsPollerThread()
-        self._geo_tracker = GeoTracker()
+        self._gps = None
+        self._geo = GeoTracker()
 
     def _track(self):
-        latitude, longitude = self._gps_poller.get_latitude(), self._gps_poller.get_longitude()
+        latitude, longitude = (None, None) if self._gps is None else (self._gps.get_latitude(), self._gps.get_longitude())
         position = None if None in (latitude, longitude) else (latitude, longitude)
-        return self._geo_tracker.track(position)
+        return self._geo.track(position)
 
     def _start_odometer(self):
         _master_uri, _speed_factor = self._odometer_config
@@ -89,6 +89,7 @@ class Platform(Configurable):
     def state(self):
         with self._lock:
             y_vel, trust_velocity = 0, 0
+            latitude, longitude, bearing = self._track()
             if self._odometer is not None:
                 try:
                     y_vel, trust_velocity = self._odometer.get(), 1
@@ -98,8 +99,6 @@ class Platform(Configurable):
                         logger.info("Hard odometer reboot at {} ms timeout.".format(rre.timeout))
                         self._quit_odometer()
                         self._start_odometer()
-
-            latitude, longitude, bearing = self._track()
             return dict(latitude_geo=latitude,
                         longitude_geo=longitude,
                         heading=bearing,
@@ -109,8 +108,8 @@ class Platform(Configurable):
 
     def internal_quit(self, restarting=False):
         self._quit_odometer()
-        if not restarting:
-            self._gps_poller.quit()
+        if self._gps is not None:
+            self._gps.quit()
 
     def internal_start(self, **kwargs):
         errors = []
@@ -118,8 +117,10 @@ class Platform(Configurable):
         _speed_factor = parse_option('ras.non.sensor.speed.factor', float, 0.50, errors, **kwargs)
         self._odometer_config = (_master_uri, _speed_factor)
         self._start_odometer()
-        if not self._gps_poller.is_alive():
-            self._gps_poller.start()
+        _gps_host = parse_option('gps.provider.host', str, '192.168.1.1', errors, **kwargs)
+        _gps_port = parse_option('gps.provider.port', str, '502', errors, **kwargs)
+        self._gps = GpsPollerThread(_gps_host, _gps_port)
+        self._gps.start()
         return errors
 
 
