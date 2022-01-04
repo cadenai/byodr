@@ -248,11 +248,11 @@ class DualVescDriver(AbstractDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
         self._relay.close()
-        _pp_cm = parse_option('drive.distance.cm_per_pole_pair', float, 1, **kwargs)
+        _pp_cm = parse_option('drive.distance.cm_per_pole_pair', float, 2.3, **kwargs)
         self._drive1 = VESCDrive(serial_port=parse_option('drive.0.serial.port', str, '/dev/ttyACM0', **kwargs), cm_per_pole_pair=_pp_cm)
         self._drive2 = VESCDrive(serial_port=parse_option('drive.1.serial.port', str, '/dev/ttyACM1', **kwargs), cm_per_pole_pair=_pp_cm)
         self._steering_offset = 0
-        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 1.0)))
+        self._steering_effect = max(0., float(kwargs.get('drive.steering.effect', 1.8)))
         self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
         self._axes_ordered = kwargs.get('drive.axes.mount.order', 'normal') == 'normal'
         self._axis0_multiplier = 1 if kwargs.get('drive.axis0.mount.direction', 'forward') == 'forward' else -1

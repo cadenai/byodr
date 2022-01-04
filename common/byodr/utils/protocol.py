@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 from byodr.utils import timestamp
 
 
@@ -29,7 +30,7 @@ class MessageStreamProtocol(object):
         self._last_protocol_time = 0
 
     def _violation(self):
-        self._n_violations = 1 if self._n_violations <= 0 else self._n_violations + 1
+        self._n_violations = 1 if self._n_violations <= 0 else min(1e4, self._n_violations + 1)
 
     def _success(self):
         self._n_violations -= 1
