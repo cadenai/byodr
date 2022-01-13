@@ -1,7 +1,10 @@
 # Must be run from directory root so the python common directory is included in the build context.
-# docker build -f docker/pi-cp37-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.23.3 .
+# docker build -f docker/pi-cp37-gpio.dockerfile -t centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.25.0 .
 
-FROM raspbian/stretch
+#FROM raspbian/stretch
+FROM balenalib/rpi-raspbian:stretch
+
+ENV UDEV=1
 
 ENV DEBIAN_FRONTEND noninteractive
 

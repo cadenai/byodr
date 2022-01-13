@@ -3,7 +3,7 @@ volumes:
   volume_local_config:
 services:
   pigpiod:
-    image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.23.3
+    image: centipede2donald/raspbian-stretch:pigpio-zmq-byodr-0.25.0
     container_name: pigpiod
     privileged: true
     user: root

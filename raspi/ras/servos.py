@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import argparse
 import collections
+import copy
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -104,6 +105,7 @@ class AbstractSteerServoDriver(AbstractDriver, ABC):
                                         frame=parse_option('servo.steering.frame_width.ms', float, 20.0, **kwargs))
         self._steering_config = dict(scale=parse_option('steering.domain.scale', float, 1.0, **kwargs))
         self._steer_servo = None
+        self._last_config = None
 
     @staticmethod
     def _angular_servo(message):
@@ -121,15 +123,16 @@ class AbstractSteerServoDriver(AbstractDriver, ABC):
 
     def _apply_steering(self, steering):
         if self._steer_servo is not None:
-            config = self._steering_config
-            scale = config.get('scale')
+            scale = self._steering_config.get('scale')
             self._steer_servo.angle = scale * 90. * min(1, max(-1, steering))
 
     def set_configuration(self, config):
         # Translate the values into our domain.
         _steer_servo_config = self._steer_servo_config
         _steer_servo_config['min_pw'] = 0.5 + .5 * max(-2, min(2, config.get('steering_offset')))
-        self._steer_servo = self._create_servo(self._steer_servo, 'steering', _steer_servo_config)
+        if _steer_servo_config != self._last_config:
+            self._steer_servo = self._create_servo(self._steer_servo, 'steering', _steer_servo_config)
+            self._last_config = copy.deepcopy(_steer_servo_config)
 
     def is_configured(self):
         return self._steer_servo is not None
@@ -203,7 +206,7 @@ class SingularVescDriver(AbstractSteerServoDriver):
         super().__init__(relay)
         self._relay.close()
         self._drive = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs),
-                                cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 1, **kwargs))
+                                cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 0.4, **kwargs))
         self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
 
     def has_sensors(self):
@@ -214,16 +217,19 @@ class SingularVescDriver(AbstractSteerServoDriver):
 
     def relay_violated(self, on_integrity=True):
         if on_integrity:
-            self.drive(0, 0)
+            self._relay.open()
 
     def set_configuration(self, config):
         if self.configuration_check(config):
             logger.info("Received configuration {}.".format(config))
-            super().set_configuration(config)
             self._throttle_config['scale'] = max(0, config.get('motor_scale'))
+            if self._drive.is_open():
+                super().set_configuration(config)
 
     def is_configured(self):
-        return super().is_configured() and self._drive.is_open()
+        # This method is polled repeatedly.
+        # First check if the drive is open with the side effect that opening is attempted when not in operation.
+        return self._drive.is_open() and super().is_configured()
 
     def velocity(self):
         try:
@@ -233,9 +239,10 @@ class SingularVescDriver(AbstractSteerServoDriver):
             return 0
 
     def drive(self, steering, throttle):
-        self._apply_steering(steering)
         _motor_effort = self._throttle_config.get('scale') * throttle
-        self._drive.set_effort(_motor_effort)
+        _operational = self._drive.set_effort(_motor_effort)
+        if _operational:
+            self._apply_steering(steering)
         return _motor_effort
 
     def quit(self):
@@ -266,7 +273,7 @@ class DualVescDriver(AbstractDriver):
 
     def relay_violated(self, on_integrity=True):
         if on_integrity:
-            self.drive(0, 0)
+            self._relay.open()
 
     def set_configuration(self, config):
         if self.configuration_check(config):

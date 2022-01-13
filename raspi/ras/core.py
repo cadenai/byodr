@@ -4,7 +4,7 @@ import threading
 import pyvesc
 import serial
 from gpiozero import DigitalInputDevice
-from pyvesc.VESC.messages import GetValues, SetDutyCycle, SetRPM
+from pyvesc.VESC.messages import GetValues, SetDutyCycle
 
 from byodr.utils import timestamp
 from byodr.utils.option import parse_option
@@ -107,38 +107,64 @@ class HallOdometer(object):
 
 class VESCDrive(object):
     def __init__(self, serial_port='/dev/ttyACM0', cm_per_pole_pair=1):
-        self._lock = threading.Lock()
+        self._port = serial_port
         self._cm_per_pp = cm_per_pole_pair
-        self._ser = serial.Serial(serial_port, baudrate=115200, timeout=0.05)
-        logger.info("Using serial port {}.".format(serial_port))
+        self._lock = threading.Lock()
+        self._ser = None
+
+    def _close(self):
+        if self._ser is not None:
+            try:
+                self._ser.close()
+            except serial.serialutil.SerialException:
+                pass
+        self._ser = None
+
+    def _open(self):
+        _good = False
+        try:
+            if self._ser is None:
+                logger.info("Using serial port {}.".format(self._port))
+                self._ser = serial.Serial(self._port, baudrate=115200, timeout=0.05)
+            _good = self._ser.isOpen()
+        except serial.serialutil.SerialException:
+            self._close()
+            _good = False
+        return _good
 
     def is_open(self):
         with self._lock:
-            return self._ser.isOpen()
+            return self._open()
 
     def close(self):
         with self._lock:
-            self._ser.close()
+            self._close()
 
     def get_velocity(self):
         return (self.get_rpm() / 60.) * self._cm_per_pp * 1e-2  # Convert to meters per second.
 
     def get_rpm(self):
         with self._lock:
-            if self._ser.isOpen():
-                self._ser.write(pyvesc.encode_request(GetValues))
-                if self._ser.in_waiting > 78:
-                    (response, consumed) = pyvesc.decode(self._ser.read(79))
-                    return response.rpm
-                else:
-                    raise AssertionError("Protocol violation on the response length.")
-            else:
-                raise IOError("The serial port is not open.")
+            if self._open():
+                try:
+                    self._ser.write(pyvesc.encode_request(GetValues))
+                    if self._ser.in_waiting > 78:
+                        (response, consumed) = pyvesc.decode(self._ser.read(79))
+                        return response.rpm
+                    else:
+                        raise AssertionError("Protocol violation on the response length.")
+                except serial.serialutil.SerialException:
+                    self._close()
+                    raise AssertionError("The serial connection is not operational.")
 
     def set_effort(self, value):
         with self._lock:
-            if self._ser.isOpen():
-                self._ser.write(pyvesc.encode(SetDutyCycle(float(value * 1e-1))))
-                # self._ser.write(pyvesc.encode(SetRPM(int(value * 1e3))))
-            else:
-                raise IOError("The serial port is not open.")
+            _operational = self._open()
+            if _operational:
+                try:
+                    # self._ser.write(pyvesc.encode(SetRPM(int(value * 1e3))))
+                    self._ser.write(pyvesc.encode(SetDutyCycle(float(value * 1e-1))))
+                except serial.serialutil.SerialException:
+                    self._close()
+                    _operational = False
+            return _operational
