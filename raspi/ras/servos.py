@@ -204,7 +204,7 @@ class GPIODriver(AbstractSteerServoDriver):
 class SingularVescDriver(AbstractSteerServoDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
-        self._relay.close()
+        self._relay.open()
         self._drive = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs),
                                 cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 0.4, **kwargs))
         self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
@@ -216,8 +216,7 @@ class SingularVescDriver(AbstractSteerServoDriver):
         self._relay.close()
 
     def relay_violated(self, on_integrity=True):
-        if on_integrity:
-            self._relay.open()
+        self._relay.open()
 
     def set_configuration(self, config):
         if self.configuration_check(config):

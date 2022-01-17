@@ -141,17 +141,16 @@ class RealMonitoringRelay(AbstractRelay):
         _config = self._config()
         self._patience_micro = parse_option('patience.ms', int, 100, errors, **_config) * 1000.
         _pi_uri = parse_option('ras.master.uri', str, 'tcp://192.168.1.32', errors, **_config)
-        if self._pi_config != _pi_uri:
-            if self._pi_client is not None:
-                self._pi_client.quit()
-            if self._pi_status is not None:
-                self._pi_status.quit()
-            logger.info("Processing pi at uri '{}'.".format(_pi_uri))
-            self._pi_config = _pi_uri
-            self._pi_client = self._client_factory.create(_pi_uri)
-            self._pi_status = self._status_factory.create(_pi_uri)
-            self._pi_status.add_listener(self._on_receive)
-            self._pi_status.start()
+        if self._pi_client is not None:
+            self._pi_client.quit()
+        if self._pi_status is not None:
+            self._pi_status.quit()
+        logger.info("Processing pi at uri '{}'.".format(_pi_uri))
+        self._pi_config = _pi_uri
+        self._pi_client = self._client_factory.create(_pi_uri)
+        self._pi_status = self._status_factory.create(_pi_uri)
+        self._pi_status.add_listener(self._on_receive)
+        self._pi_status.start()
         _steering_offset = parse_option('ras.driver.steering.offset', float, 0.0, errors, **_config)
         _motor_scale = parse_option('ras.driver.motor.scale', float, 1.0, errors, **_config)
         self._servo_config = dict(app_version=2, steering_offset=_steering_offset, motor_scale=_motor_scale)

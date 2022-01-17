@@ -124,8 +124,8 @@ class VESCDrive(object):
         _good = False
         try:
             if self._ser is None:
-                logger.info("Using serial port {}.".format(self._port))
                 self._ser = serial.Serial(self._port, baudrate=115200, timeout=0.05)
+                logger.info("Connected serial port {}.".format(self._port))
             _good = self._ser.isOpen()
         except serial.serialutil.SerialException:
             self._close()
