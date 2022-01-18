@@ -205,8 +205,11 @@ class SingularVescDriver(AbstractSteerServoDriver):
     def __init__(self, relay, **kwargs):
         super().__init__(relay)
         self._relay.open()
+        # Attempt to suppress noise.
+        self._velocity = 0.0
+        self._velocity_alpha = 0.5
         self._drive = VESCDrive(serial_port=parse_option('drive.serial.port', str, '/dev/ttyACM0', **kwargs),
-                                cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 0.4, **kwargs))
+                                cm_per_pole_pair=parse_option('drive.distance.cm_per_pole_pair', float, 0.88, **kwargs))
         self._throttle_config = dict(scale=parse_option('throttle.domain.scale', float, 2.0, **kwargs))
 
     def has_sensors(self):
@@ -232,7 +235,9 @@ class SingularVescDriver(AbstractSteerServoDriver):
 
     def velocity(self):
         try:
-            return self._drive.get_velocity()
+            self._velocity = self._velocity_alpha * self._velocity + (1 - self._velocity_alpha) * self._drive.get_velocity()
+            self._velocity = self._velocity if abs(self._velocity) > 5e-2 else 0
+            return self._velocity
         except Exception as e:
             logger.warning(e)
             return 0
