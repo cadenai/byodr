@@ -99,6 +99,9 @@ class DynamicMomentum(object):
         self._deceleration = down
         self._ceiling = ceiling
 
+    def reset(self):
+        self._previous_value = 0
+
     def calculate(self, value):
         _momentum = self._acceleration if value > self._previous_value else self._deceleration
         _new_value = min(self._ceiling, _momentum * value + (1. - _momentum) * self._previous_value)
@@ -208,6 +211,10 @@ class AbstractThrottleControl(object):
         return min(maximum, ds)
 
     @abstractmethod
+    def reset(self):
+        raise NotImplementedError()
+
+    @abstractmethod
     def calculate_throttle(self, desired_speed, current_speed):
         raise NotImplementedError()
 
@@ -222,14 +229,17 @@ class PidThrottleControl(AbstractThrottleControl):
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
 
+    def reset(self):
+        # Clear the pid internals - such as the integral component.
+        self._pid.reset()
+
     def calculate_throttle(self, desired_speed, current_speed):
         self._pid.setpoint = desired_speed
         control = self._pid(current_speed)
         # Brake hard at once if required.
         feedback = desired_speed - current_speed
         if desired_speed < self._min_desired_speed:
-            # Clear the pid internals - such as the integral component.
-            self._pid.reset()
+            self.reset()
             return max(-1, min(0, feedback * self._stop_p))
         return control
 
@@ -239,6 +249,9 @@ class DirectThrottleControl(AbstractThrottleControl):
         super(DirectThrottleControl, self).__init__(min_desired_speed, max_desired_speed)
         self._moment = DynamicMomentum(up=throttle_up_momentum, down=throttle_down_momentum)
         self._throttle_cut = throttle_cutoff
+
+    def reset(self):
+        self._moment.reset()
 
     def calculate_throttle(self, desired_speed, current_speed):
         _throttle = desired_speed
@@ -282,6 +295,9 @@ class AbstractCruiseControl(AbstractDriverBase):
                 throttle_cutoff=_throttle_cutoff
             )
         self._errors = _errors
+
+    def _activate(self):
+        self._throttle_control.reset()
 
     def get_action(self, *args):
         raise NotImplementedError()
@@ -399,6 +415,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
         self._piv_count = 0
 
     def _activate(self):
+        super(DeepNetworkDriver, self)._activate()
         self._clear_activation_timestamp()
 
     def _deactivate(self):
