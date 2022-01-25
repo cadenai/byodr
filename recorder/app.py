@@ -136,7 +136,7 @@ class EventHandler(threading.Thread):
         return dict(active=self._session_active, mode=self._recorder.get_mode())
 
     def record(self, blob, vehicle, image_meta, image):
-        if blob.get('button_left', 0) == 1:
+        if blob.get('button_right', 0) == 1:
             self._photo_log.append(blob, vehicle, image_meta, image)
         else:
             # Switch on automatically and then off only when the driver changes.

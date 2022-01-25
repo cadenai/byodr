@@ -818,9 +818,12 @@ class CommandProcessor(Configurable):
         if 'pilot.maximum.speed' in c_ros:
             self._cache_safe('ros set cruise speed', lambda: self._driver.set_cruise_speed(c_ros.get('pilot.maximum.speed')))
 
+        # Zero out max speed on any intervention as a safety rule for ap and to detect faulty controllers.
+        # With the left button this behavior can be overridden to allow for steer corrections.
         c_teleop = {} if c_teleop is None else c_teleop
-        # Steering interventions must be accompanied with throttle.
-        if _is_forced_value(c_teleop.get('steering')) or _is_forced_value(c_teleop.get('throttle')):
+        _throttle_override = _is_forced_value(c_teleop.get('throttle'))
+        _steer_override = _is_forced_value(c_teleop.get('steering')) and c_teleop.get('button_left', 0) == 0
+        if _throttle_override or _steer_override:
             self._driver.set_cruise_speed(0)
 
         # Continue with teleop instructions which take precedence over the rest.
@@ -842,12 +845,12 @@ class CommandProcessor(Configurable):
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
         elif c_teleop.get('arrow_down', 0) == 1:
             self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
-        elif c_teleop.get('button_left', 0) == 1:
-            self._cache_safe('turn left', lambda: self._driver.teleop_direction('intersection.left'))
-        elif c_teleop.get('button_center', 0) == 1:
-            self._cache_safe('turn ahead', lambda: self._driver.teleop_direction('intersection.ahead'))
-        elif c_teleop.get('button_right', 0) == 1:
-            self._cache_safe('turn right', lambda: self._driver.teleop_direction('intersection.right'))
+        # elif c_teleop.get('button_left', 0) == 1:
+        #     self._cache_safe('turn left', lambda: self._driver.teleop_direction('intersection.left'))
+        # elif c_teleop.get('button_center', 0) == 1:
+        #     self._cache_safe('turn ahead', lambda: self._driver.teleop_direction('intersection.ahead'))
+        # elif c_teleop.get('button_right', 0) == 1:
+        #     self._cache_safe('turn right', lambda: self._driver.teleop_direction('intersection.right'))
 
     def _unpack_commands(self, teleop, external, ros, vehicle, inference):
         _patience, _ts = self._patience_micro, timestamp()
