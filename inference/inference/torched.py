@@ -74,12 +74,12 @@ class TRTDriver(object):
             return
 
         logger.info("Located optimized graph '{}'.".format(rt_file))
+        # self._sess = ort.InferenceSession(rt_file, providers=["CPUExecutionProvider"])
         self._sess = ort.InferenceSession(rt_file,
                                           providers=["CUDAExecutionProvider"],
                                           provider_options=[{'device_id': str(self._gpu_id)}])
-        # self._sess.set_providers(['CPUExecutionProvider'])
-        # self._sess.set_providers(["CUDAExecutionProvider"], [{'device_id': str(self._gpu_id)}])
         self._onnx_file = rt_file
+        # self._iota_model = 'iota' in rt_file
 
     def _deactivate(self):
         del self._sess
@@ -113,25 +113,31 @@ class TRTDriver(object):
 
     def features(self, dave_image, alex_image):
         _out = self._forward_all(dave_image, alex_image)
-        coord_source, coord_goal, key, value = _out[7], _out[8], _out[10], _out[11]
-        return coord_source, coord_goal, key, value
+        return _out['coordinate'], _out['key'], _out['value']
 
     def forward(self, dave_image, alex_image, maneuver_command=0, destination=None):
         _out = self._forward_all(dave_image, alex_image, maneuver_command, destination)
-        steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query, key, value = _out
-        return steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query
+        return (_out['steering'], _out['critic'], _out['surprise'],
+                _out['command'], _out['path'], _out['brake'],
+                _out['brake_critic'], _out['coordinate'], _out['query'], _out['distance'])
 
     def _forward_all(self, dave_image, alex_image, maneuver_command=0, destination=None):
         with self._lock:
             assert dave_image.dtype == np.uint8 and alex_image.dtype == np.uint8, "Expected np.uint8 images."
             assert self._sess is not None, "There is no session - run activation prior to calling this method."
-            destination = self._zero_vector if destination is None else destination
+            _direction = self._zero_vector if destination is None else destination
             _feed = {
                 'input/dave_image': np.array([self._dave_prepare(dave_image)], dtype=np.uint8),
                 'input/alex_image': np.array([self._alex_prepare(alex_image)], dtype=np.uint8),
                 'input/maneuver_command': np.array([[maneuver_command]], dtype=np.float32),
-                'input/current_destination': np.array([destination], dtype=np.float32)
+                'input/current_destination': np.array([_direction], dtype=np.float32)
             }
             _out = [x.flatten() for x in self._sess.run(None, _feed)]
-            steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query, key, value = _out
-            return steering, critic, surprise, command, path, brake, br_critic, coord_source, coord_goal, query, key, value
+            steering, critic, surprise, command, path, brake, br_critic, coord1, coord2, query, key, value = _out
+            _map = dict(steering=steering, critic=critic, surprise=surprise, command=command, path=path, brake=brake)
+            _map['brake_critic'] = br_critic
+            _map['coordinate'] = np.concatenate([coord1, coord2], axis=-1)
+            _map['query'] = query
+            _map['key'] = key
+            _map['value'] = value
+            return _map

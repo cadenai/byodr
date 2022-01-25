@@ -52,13 +52,13 @@ class RouteMemory(object):
     def set_threshold(self, value):
         self._recognition_threshold = value
 
-    def reset(self, n_points=0, code_points=None, source_coordinates=None, goal_coordinates=None, keys=None, values=None):
+    def reset(self, n_points=0, code_points=None, coordinates=None, keys=None, values=None):
         self._navigation_point = None
         self._tracking = None
         self._num_points = n_points
         self._num_codes = 0 if code_points is None else len(code_points)
         self._code_points = None if code_points is None else np.array(code_points)
-        self._code_book = None if goal_coordinates is None else np.concatenate([source_coordinates, goal_coordinates], axis=-1)
+        self._code_book = None if coordinates is None else np.array(coordinates)
         self._destination_keys = None if keys is None else np.array(keys)
         self._destination_values = None if values is None else np.array(values)
         self._evidence_reset()
@@ -153,15 +153,14 @@ class Navigator(object):
                     num_points = len(self._store)
                     if num_points > 0:
                         _images = self._store.list_all_images()
-                        _codes, _source_coordinates, _goal_coordinates, _keys, _values = [], [], [], [], []
+                        _codes, _coordinates, _keys, _values = [], [], [], []
                         for im_id in range(len(_images)):
                             _codes.append(self._store.get_image_navigation_point_id(im_id))
-                            _sc, _gc, _k, _v = self._pull_image_features(_images[im_id])
-                            _source_coordinates.append(_sc)
-                            _goal_coordinates.append(_gc)
+                            _c, _k, _v = self._pull_image_features(_images[im_id])
+                            _coordinates.append(_c)
                             _keys.append(_k)
                             _values.append(_v)
-                        self._memory.reset(num_points, _codes, _source_coordinates, _goal_coordinates, _keys, _values)
+                        self._memory.reset(num_points, _codes, _coordinates, _keys, _values)
 
     def _check_state(self, route=None):
         if route is None:
@@ -204,14 +203,13 @@ class Navigator(object):
                                      alex_image=_alex_img,
                                      maneuver_command=_command,
                                      destination=_destination)
-        action, critic, surprise, command, path, brake, brake_critic, coord_source, coord_goal, query = _out
+        action, critic, surprise, command, path, brake, brake_critic, coordinates, query = _out
 
         nav_point_id, nav_image_id, nav_distance, _destination = None, None, None, None
         _acquired = self._lock.acquire(False)
         try:
             if _acquired and self._store.is_open() and self._memory.is_open():
-                coord_out = np.concatenate([coord_source, coord_goal], axis=-1)
-                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coord_out, query)
+                nav_point_id, nav_image_id, _destination = self._memory.match(coordinates, query)
         finally:
             if _acquired:
                 self._lock.release()
@@ -233,8 +231,13 @@ def _norm_scale(v, min_=0., max_=1.):
     return abs(max(0., v - min_) / (max_ - min_))
 
 
+def _null_expression(*args):
+    logger.warning("Null expression used on args '{}'".format(args))
+    return 100
+
+
 def _build_expression(key, default_value, errors, **kwargs):
-    _expression = lambda x, y: 100
+    _expression = _null_expression
     _equation = parse_option(key, str, default_value, errors, **kwargs)
     try:
         _expression = Expression(_equation)
@@ -271,7 +274,7 @@ class TFRunner(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         self._gpu_id = parse_option('gpu.id', int, 0, _errors, **kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 20, _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 22, _errors, **kwargs)
         self._steering_scale_left = parse_option('driver.dnn.steering.scale.left', lambda x: abs(float(x)), -1, _errors, **kwargs)
         self._steering_scale_right = parse_option('driver.dnn.steering.scale.right', float, 1, _errors, **kwargs)
         _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0.35, _errors, **kwargs)
