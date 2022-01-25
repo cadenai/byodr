@@ -4,7 +4,7 @@ import threading
 import pyvesc
 import serial
 from gpiozero import DigitalInputDevice
-from pyvesc.VESC.messages import GetValues, SetDutyCycle
+from pyvesc.VESC.messages import GetValues, SetDutyCycle, SetRPM
 
 from byodr.utils import timestamp
 from byodr.utils.option import parse_option
@@ -106,8 +106,9 @@ class HallOdometer(object):
 
 
 class VESCDrive(object):
-    def __init__(self, serial_port='/dev/ttyACM0', cm_per_pole_pair=1):
+    def __init__(self, serial_port='/dev/ttyACM0', rpm_drive=True, cm_per_pole_pair=1):
         self._port = serial_port
+        self._rpm_drive = rpm_drive
         self._cm_per_pp = cm_per_pole_pair
         self._lock = threading.Lock()
         self._ser = None
@@ -162,8 +163,10 @@ class VESCDrive(object):
             _operational = self._open()
             if _operational:
                 try:
-                    # self._ser.write(pyvesc.encode(SetRPM(int(value * 1e3))))
-                    self._ser.write(pyvesc.encode(SetDutyCycle(float(value * 1e-1))))
+                    if self._rpm_drive:
+                        self._ser.write(pyvesc.encode(SetRPM(int(value * 1e3))))
+                    else:
+                        self._ser.write(pyvesc.encode(SetDutyCycle(float(value * 1e-1))))
                 except serial.serialutil.SerialException:
                     self._close()
                     _operational = False
