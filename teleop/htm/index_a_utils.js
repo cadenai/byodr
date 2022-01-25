@@ -141,6 +141,9 @@ var page_utils = {
     },
 
     get_stream_type: function() {
+        if (dev_tools.is_develop()) {
+            return 'mjpeg';
+        }
         var stream_type = window.localStorage.getItem('video.stream.type');
         if (stream_type == null) {
             return 'h264';

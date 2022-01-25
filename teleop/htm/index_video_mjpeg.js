@@ -250,16 +250,18 @@ var mjpeg_page_controller = {
             const _instance = mjpeg_page_controller;
             const _visible = _instance.overlay_image_container.is_visible();
             if (_visible) {
-                const _state = _instance.el_overlay_image.width() < 640? 'small': 'medium';
+                const _state = _instance.el_overlay_image.width() < 480? 'small': 'medium';
                 switch(_state) {
                     case "small":
-                        _instance.el_overlay_image.width(640);
-                        _instance.el_overlay_image.height(480);
+                        _instance.el_overlay_image.width(480);
+                        _instance.el_overlay_image.height(320);
+                        _instance.el_overlay_image.css({'opacity': 0.5});
                         _instance.overlay_control_container.css({'cursor': 'zoom-out'});
                         break;
                     default:
                         _instance.el_overlay_image.width(320);
                         _instance.el_overlay_image.height(240);
+                        _instance.el_overlay_image.css({'opacity': 1});
                         _instance.overlay_image_container.invisible();
                         _instance.overlay_control_container.css({'cursor': 'zoom-in'});
                 }

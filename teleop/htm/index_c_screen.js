@@ -24,7 +24,6 @@ var screen_utils = {
 
     _decorate_server_message: function(message) {
         message._is_on_autopilot = message.ctl == 5;
-        message._is_on_autopilot_trainer = message.ctl == 5 && message.max_speed != undefined && Math.abs(message.max_speed) < 1e-3;
         message._has_passage = message.inf_total_penalty < 1;
         return message;
     },
@@ -174,6 +173,7 @@ var teleop_screen = {
         this.add_camera_selection_listener(function() {
             teleop_screen._on_camera_selection();
         });
+        this._select_camera('rear');
         this.toggle_debug_values(true);
         this.el_pilot_bar.click(function() {
             teleop_screen.toggle_debug_values();
@@ -204,7 +204,8 @@ var teleop_screen = {
     },
 
     _render_distance_indicators: function() {
-        const _show = this.in_debug && this.active_camera == 'front'? true: false;
+        // const _show = this.in_debug && this.active_camera == 'front'? true: false;
+        const _show = this.active_camera == 'front';
         const _hard_yellow = 'rgba(255, 255, 120, 0.99)';
         const _soft_yellow = 'rgba(255, 255, 120, 0.50)';
         if (_show) {
@@ -233,16 +234,13 @@ var teleop_screen = {
     },
 
     _select_next_camera: function() {
-        // If the overlay is visible it can also be selected.
-        _overlay = $('div#overlay_image_container').is_visible();
         // The active camera cannot be undefined.
-        var _next = null;
-        if (this.selected_camera == this.active_camera) {
-            _next = this.active_camera == 'front'? (_overlay? 'rear': null): (_overlay? 'front': null);
-        } else {
-            _next = this.selected_camera == undefined? this.active_camera: null;
-        }
-        this.selected_camera = _next;
+        const _next = this.selected_camera == undefined? this.active_camera: this.selected_camera == 'front'? 'rear': 'front';
+        this._select_camera(_next);
+    },
+
+    _select_camera: function(name) {
+        this.selected_camera = name;
         this.camera_selection_listeners.forEach(function(cb) {cb();});
     },
 
@@ -346,7 +344,7 @@ var teleop_screen = {
         overlay_image.removeClass('selected');
         if (_selected == _active) {
             viewport_container.addClass('selected');
-        } else if (_selected != undefined && overlay_container.is_visible()) {
+        } else if (_selected != undefined) {
             overlay_image.addClass('selected');
         }
     },
@@ -428,7 +426,7 @@ var teleop_screen = {
             this._schedule_camera_cycle();
         }
         //
-        if (command.button_left) {
+        if (command.button_right) {
             setTimeout(function() {
                 teleop_screen.el_viewport_container.fadeOut(100).fadeIn(100);
             }, 0);
@@ -441,7 +439,7 @@ var teleop_screen = {
 
     canvas_update: function(ctx) {
         const message = this.last_server_message;
-        const _ap = message != undefined && message._is_on_autopilot && !message._is_on_autopilot_trainer;
+        const _ap = message != undefined && message._is_on_autopilot;
         if (_ap && this.active_camera == 'front' && this.in_debug) {
             path_renderer._render_path(ctx, message.nav_path);
         }
