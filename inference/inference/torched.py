@@ -119,7 +119,7 @@ class TRTDriver(object):
         _out = self._forward_all(dave_image, alex_image, maneuver_command, destination)
         return (_out['steering'], _out['critic'], _out['surprise'],
                 _out['command'], _out['path'], _out['brake'],
-                _out['brake_critic'], _out['coordinate'], _out['query'], _out['distance'])
+                _out['brake_critic'], _out['coordinate'], _out['query'])
 
     def _forward_all(self, dave_image, alex_image, maneuver_command=0, destination=None):
         with self._lock:

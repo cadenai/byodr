@@ -4,7 +4,11 @@ import argparse
 import collections
 import copy
 import logging
+import multiprocessing
 import os
+import shutil
+import signal
+import time
 from abc import ABC, abstractmethod
 from configparser import ConfigParser as SafeConfigParser
 
@@ -20,6 +24,16 @@ from .core import CommandHistory, HallOdometer, VESCDrive
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
+
+signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
+signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
+
+quit_event = multiprocessing.Event()
+
+
+def _interrupt():
+    logger.info("Received interrupt, quitting.")
+    quit_event.set()
 
 
 class AbstractDriver(ABC):
@@ -320,8 +334,8 @@ class DualVescDriver(AbstractDriver):
 
 
 class MainApplication(Application):
-    def __init__(self, relay, hz=50, **kwargs):
-        super(MainApplication, self).__init__(run_hz=hz)
+    def __init__(self, event, relay, hz=50, **kwargs):
+        super(MainApplication, self).__init__(run_hz=hz, quit_event=event)
         self._integrity = MessageStreamProtocol(max_age_ms=100, max_delay_ms=100)
         self._cmd_history = CommandHistory(hz=hz)
         self._config_queue = collections.deque(maxlen=1)
@@ -403,35 +417,38 @@ def main():
     args = parser.parse_args()
 
     config_file = args.config
-    assert os.path.exists(config_file) and os.path.isfile(config_file)
+    if os.path.exists(config_file) and os.path.isfile(config_file):
+        parser = SafeConfigParser()
+        parser.read(config_file)
+        kwargs = dict(parser.items('driver')) if parser.has_section('driver') else {}
+        kwargs.update(dict(parser.items('odometer')) if parser.has_section('odometer') else {})
 
-    parser = SafeConfigParser()
-    parser.read(config_file)
-    kwargs = dict(parser.items('driver')) if parser.has_section('driver') else {}
-    kwargs.update(dict(parser.items('odometer')) if parser.has_section('odometer') else {})
+        _relay = SearchUsbRelayFactory().get_relay()
+        assert _relay.is_attached(), "The relay device is not attached."
 
-    _relay = SearchUsbRelayFactory().get_relay()
-    assert _relay.is_attached(), "The relay device is not attached."
+        holder = StaticRelayHolder(relay=_relay, channels=(0, 1))
+        try:
+            application = MainApplication(quit_event, relay=holder, hz=50, **kwargs)
 
-    holder = StaticRelayHolder(relay=_relay, channels=(0, 1))
-    try:
-        application = MainApplication(relay=holder, hz=50, **kwargs)
-        quit_event = application.quit_event
+            application.publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
+            application.platform = JSONServerThread(url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
 
-        application.publisher = JSONPublisher(url='tcp://0.0.0.0:5555', topic='ras/drive/status')
-        application.platform = JSONServerThread(url='tcp://0.0.0.0:5550', event=quit_event, receive_timeout_ms=50)
+            threads = [application.platform]
+            if quit_event.is_set():
+                return 0
 
-        threads = [application.platform]
-        if quit_event.is_set():
-            return 0
+            [t.start() for t in threads]
+            application.run()
 
-        [t.start() for t in threads]
-        application.run()
-
-        logger.info("Waiting on threads to stop.")
-        [t.join() for t in threads]
-    finally:
-        holder.open()
+            logger.info("Waiting on threads to stop.")
+            [t.join() for t in threads]
+        finally:
+            holder.open()
+    else:
+        shutil.copyfile('driver.template', config_file)
+        logger.info("Created a new driver configuration file from template.")
+        while not quit_event.is_set():
+            time.sleep(1)
 
 
 if __name__ == "__main__":

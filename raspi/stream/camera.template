@@ -1,0 +1,6 @@
+[camera]
+camera.type = h264/rtsp
+camera.ip = 192.168.1.64
+
+#camera.type = raw/usb/h264/udp
+#camera.uri = /dev/video0

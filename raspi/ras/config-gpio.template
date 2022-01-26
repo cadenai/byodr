@@ -1,5 +1,0 @@
-[driver]
-drive.type = gpio_with_hall
-throttle.domain.forward.shift = 0
-throttle.domain.backward.shift = 0
-throttle.reverse.gear = -6

@@ -215,8 +215,8 @@ class RoverApplication(Application):
         # One user configuration file is optional and can be used to persist settings.
         _candidates = glob.glob(os.path.join(self._config_dir, '*.ini'))
         if len(_candidates) == 0:
-            shutil.copyfile('user.template.ini', os.path.join(self._config_dir, 'config.ini'))
-            logger.info("Create a new user configuration file from template.")
+            shutil.copyfile('config.template', os.path.join(self._config_dir, 'config.ini'))
+            logger.info("Created a new user configuration file from template.")
 
     def _config(self):
         parser = SafeConfigParser()

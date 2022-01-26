@@ -1,0 +1,18 @@
+[camera]
+# front.camera.type = h264/udp
+front.camera.type = h264/rtsp
+front.camera.ip = 192.168.1.64
+rear.camera.type = h264/rtsp
+rear.camera.ip = 192.168.1.65
+
+[pilot]
+driver.cc.static.speed.max = 1.39
+driver.cc.throttle.pid_controller.p = 0.05
+driver.cc.throttle.pid_controller.i = 0.05
+driver.cc.throttle.pid_controller.d = 0
+driver.cc.control.type = pid
+driver.throttle.direct.up.momentum = 0.020
+
+[vehicle]
+ras.driver.steering.offset = 0
+ras.driver.motor.scale = 2

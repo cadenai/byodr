@@ -8,8 +8,10 @@ defaults
 
 frontend localhost
    bind *:80
-   bind *:9001
-   bind *:9002
+   bind *:443 ssl crt /config/certs/cert.pem
+   bind *:9001 ssl crt /config/certs/cert.pem
+   bind *:9002 ssl crt /config/certs/cert.pem
+   redirect scheme https if !{ ssl_fc }
    mode http
    option forwardfor
    default_backend main

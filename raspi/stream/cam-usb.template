@@ -1,4 +1,0 @@
-[camera]
-camera.type = raw/usb/h264/udp
-camera.uri = /dev/video0
-camera.source.shape = 640x480

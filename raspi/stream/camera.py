@@ -6,6 +6,7 @@ import asyncio
 import logging
 import multiprocessing
 import os
+import shutil
 import signal
 import threading
 import time
@@ -145,6 +146,8 @@ def main():
         logger.info("Waiting on threads to stop.")
         [t.join() for t in threads]
     else:
+        shutil.copyfile('camera.template', config_file)
+        logger.info("Created a new camera configuration file from template.")
         while not quit_event.is_set():
             time.sleep(1)
 

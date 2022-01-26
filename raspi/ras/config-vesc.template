@@ -1,6 +1,0 @@
-[driver]
-drive.type = vesc_dual
-drive.axes.mount.order = normal
-drive.axis0.mount.direction = reverse
-drive.axis1.mount.direction = forward
-drive.steering.effect = 1.0

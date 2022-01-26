@@ -1,3 +1,0 @@
-[camera]
-camera.type = h264/rtsp
-camera.ip = 192.168.1.64

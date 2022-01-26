@@ -209,7 +209,7 @@ class Navigator(object):
         _acquired = self._lock.acquire(False)
         try:
             if _acquired and self._store.is_open() and self._memory.is_open():
-                nav_point_id, nav_image_id, _destination = self._memory.match(coordinates, query)
+                nav_point_id, nav_image_id, nav_distance, _destination = self._memory.match(coordinates, query)
         finally:
             if _acquired:
                 self._lock.release()

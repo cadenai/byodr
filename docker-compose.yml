@@ -44,12 +44,12 @@ services:
 #    container_name: byodr_httpd
     restart: always
     network_mode: host
-    command: ["/usr/sbin/haproxy", "-f", "/config/haproxy.conf"]
+    command: ["python", "wrap.py"]
     stop_signal: SIGKILL
 #    depends_on:
 #      - "teleop"
     volumes:
-      - volume_byodr_config:/config:ro
+      - volume_byodr_config:/config:rw
   ftpd:
     cpuset: "0"
     build:
