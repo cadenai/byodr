@@ -317,7 +317,6 @@ class TFRunner(Configurable):
                     steer_penalty=float(_steer_penalty),
                     brake_penalty=float(_obstacle_penalty),
                     total_penalty=float(_total_penalty),
-                    dagger=int(0),
                     internal=[float(0)],
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),

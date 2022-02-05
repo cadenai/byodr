@@ -105,7 +105,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
         elif ctl == 'driver_mode.teleop.cruise':
             return 3
         elif ctl == 'driver_mode.inference.dnn':
-            return 7 if inference.get('dagger', 0) == 1 else 5
+            return 5
 
     @staticmethod
     def _translate_recorder(recorder):

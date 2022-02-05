@@ -434,10 +434,10 @@ class DeepNetworkDriver(AbstractCruiseControl):
             return
 
         action_out = inference.get('action')
-        _dagger = inference.get('dagger', 0) == 1
         _total_penalty = inference.get('total_penalty')
+        _penalty_override = blob.button_left == 1
         # Handle speed.
-        desired_speed = blob.cruise_speed if _dagger else blob.cruise_speed * (1 - _total_penalty)
+        desired_speed = blob.cruise_speed if _penalty_override else blob.cruise_speed * (1 - _total_penalty)
         blob.desired_speed = max(0, self.calculate_desired_speed(desired_speed=desired_speed,
                                                                  throttle=blob.throttle,
                                                                  forced_acceleration=blob.forced_acceleration,
@@ -455,7 +455,7 @@ class DeepNetworkDriver(AbstractCruiseControl):
             blob.save_event = blob.desired_speed > 1e-3 if blob.forced_steering else True
             # Mark the first few interventions as such.
             if self._piv_count > 2:
-                steering_driver = (OriginType.DAGGER if _dagger else OriginType.CONSOLE)
+                steering_driver = OriginType.CONSOLE
             else:
                 self._piv_count += 1
                 steering_driver = OriginType.DNN_PRE_INTERVENTION
@@ -845,12 +845,6 @@ class CommandProcessor(Configurable):
             self._cache_safe('increase cruise speed', lambda: self._driver.increase_cruise_speed())
         elif c_teleop.get('arrow_down', 0) == 1:
             self._cache_safe('decrease cruise speed', lambda: self._driver.decrease_cruise_speed())
-        # elif c_teleop.get('button_left', 0) == 1:
-        #     self._cache_safe('turn left', lambda: self._driver.teleop_direction('intersection.left'))
-        # elif c_teleop.get('button_center', 0) == 1:
-        #     self._cache_safe('turn ahead', lambda: self._driver.teleop_direction('intersection.ahead'))
-        # elif c_teleop.get('button_right', 0) == 1:
-        #     self._cache_safe('turn right', lambda: self._driver.teleop_direction('intersection.right'))
 
     def _unpack_commands(self, teleop, external, ros, vehicle, inference):
         _patience, _ts = self._patience_micro, timestamp()
