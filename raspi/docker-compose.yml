@@ -32,12 +32,14 @@ services:
 #    image: centipede2donald/byodr-ce:pi_servos
 #    container_name: servos
     privileged: true
+    labels:
+      io.balena.features.kernel-modules: '1'
     user: root
     restart: always
     depends_on:
       - "pigpiod"
     network_mode: "host"
-    command: ["python3", "-m", "ras.servos", "--config", "/config/driver.ini"]
+    command: bash -c "modprobe i2c-dev && python3 -m ras.servos --config /config/driver.ini"
     environment:
       GPIOZERO_PIN_FACTORY: 'pigpio'
     volumes:
