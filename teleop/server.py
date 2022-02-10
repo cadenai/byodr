@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
 import collections
 import datetime
 import json
@@ -11,10 +12,12 @@ import traceback
 import cv2
 import numpy as np
 import tornado
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from tornado import web, websocket
 
 from byodr.utils import timestamp
+from io import open
+from six.moves import range
 
 logger = logging.getLogger(__name__)
 

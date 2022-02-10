@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import argparse
 import collections
 import glob
@@ -5,7 +6,7 @@ import logging
 import os
 import shutil
 
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from core import GpsPollerThread, PTZCamera, ConfigurableImageGstSource
 
 from byodr.utils import Application
@@ -13,6 +14,7 @@ from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector, ReceiverThread
 from byodr.utils.location import GeoTracker
 from byodr.utils.option import parse_option, hash_dict
+from six.moves import map
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
@@ -36,7 +38,7 @@ class RasSpeedOdometer(object):
     def _on_receive(self, msg):
         # Some robots do not have a sensor for speed.
         # If velocity is not part of the ras message try to come up with a proxy for speed.
-        if 'velocity' in msg.keys():
+        if 'velocity' in list(msg.keys()):
             value = float(msg.get('velocity'))
         else:
             # The motor effort is calculated as the motor scale * the actual throttle.
@@ -145,8 +147,8 @@ class RoverHandler(Configurable):
     def internal_quit(self, restarting=False):
         if not restarting:
             self._platform.quit()
-            map(lambda x: x.quit(), self._ptz_cameras)
-            map(lambda x: x.quit(), self._gst_sources)
+            list(map(lambda x: x.quit(), self._ptz_cameras))
+            list(map(lambda x: x.quit(), self._gst_sources))
 
     def internal_start(self, **kwargs):
         errors = []
@@ -195,7 +197,7 @@ class RoverHandler(Configurable):
 
     def cycle(self, c_pilot, c_teleop):
         self._cycle_ptz_cameras(c_pilot, c_teleop)
-        map(lambda x: x.check(), self._gst_sources)
+        list(map(lambda x: x.check(), self._gst_sources))
         return self._platform.state()
 
 

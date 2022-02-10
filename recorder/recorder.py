@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import logging
 import multiprocessing
 import traceback
@@ -5,6 +6,8 @@ from abc import ABCMeta, abstractmethod
 from collections import deque
 
 from store import create_data_source
+from six.moves import map
+import six
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +43,7 @@ def get_or_create_recorder(mode=None, directory=None, vehicle_type=None, vehicle
     return recorder
 
 
-class AbstractRecorder:
-    __metaclass__ = ABCMeta
-
+class AbstractRecorder(six.with_metaclass(ABCMeta)):
     @abstractmethod
     def flush(self):
         raise NotImplementedError()
@@ -70,9 +71,8 @@ class NoopRecorder(AbstractRecorder):
         pass
 
 
-class DirectRecorder(AbstractRecorder):
+class DirectRecorder(six.with_metaclass(ABCMeta, AbstractRecorder)):
     """Write each event immediately to the datasource if its save attribute is set accordingly."""
-    __metaclass__ = ABCMeta
 
     def __init__(self, datasource, mode, vehicle_type, vehicle_config, session_max=1000):
         self._datasource = datasource
@@ -142,7 +142,7 @@ class InterventionsRecorder(DirectRecorder):
         if self._do_save():
             _events = list(self._queue)
             self._queue.clear()
-            map(lambda e: super(InterventionsRecorder, self)._persist_event(e), _events)
+            list(map(lambda e: super(InterventionsRecorder, self)._persist_event(e), _events))
             num_recorded = len(_events)
         self._queue.append(event)
         return num_recorded

@@ -1,10 +1,11 @@
+from __future__ import absolute_import
 import collections
 import logging
 import multiprocessing
 import threading
 import time
 
-import Queue
+import six.moves.queue
 import requests
 from pymodbus.client.sync import ModbusTcpClient
 from pymodbus.constants import Endian
@@ -74,7 +75,7 @@ class ConfigurableImageGstSource(Configurable):
         self._close()
         _errors = []
         _type = parse_option(self._name + '.camera.type', str, 'h264/rtsp', errors=_errors, **kwargs)
-        assert _type in gst_commands.keys(), "Unrecognized camera type '{}'.".format(_type)
+        assert _type in list(gst_commands.keys()), "Unrecognized camera type '{}'.".format(_type)
         framerate = (parse_option(self._name + '.camera.framerate', int, 25, errors=_errors, **kwargs))
         out_width, out_height = [int(x) for x in parse_option(self._name + '.camera.shape', str, '320x240',
                                                               errors=_errors, **kwargs).split('x')]
@@ -125,7 +126,7 @@ class CameraPtzThread(threading.Thread):
         </PTZData>
         """
         self.set_auth(user, password)
-        self._queue = Queue.Queue(maxsize=1)
+        self._queue = six.moves.queue.Queue(maxsize=1)
         self._previous = (0, 0)
 
     def set_url(self, url):
@@ -180,7 +181,7 @@ class CameraPtzThread(threading.Thread):
     def add(self, command):
         try:
             self._queue.put_nowait(command)
-        except Queue.Full:
+        except six.moves.queue.Full:
             pass
 
     def quit(self):
@@ -199,7 +200,7 @@ class CameraPtzThread(threading.Thread):
                     elif 'pan' in cmd and 'tilt' in cmd:
                         operation = (self._norm(cmd.get('pan')) * self._flip[0], self._norm(cmd.get('tilt')) * self._flip[1])
                     self._perform(operation)
-            except Queue.Empty:
+            except six.moves.queue.Empty:
                 pass
             except IOError as e:
                 # E.g. a requests ConnectionError to the ip camera.

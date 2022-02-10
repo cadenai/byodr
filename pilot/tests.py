@@ -1,11 +1,14 @@
+from __future__ import absolute_import
 import os
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 
 from app import CommandProcessor
 from app import PilotApplication
 from byodr.utils import timestamp
 from byodr.utils.navigate import ReloadableDataSource, FileSystemRouteDataSource
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer
+from io import open
+from six.moves import map
 
 
 def test_create_and_setup(tmpdir):
@@ -41,7 +44,7 @@ def test_create_and_setup(tmpdir):
         app.step()
         status = publisher.get_latest()
         assert status.get('driver') == 'driver_mode.teleop.direct'
-        map(lambda x: x.clear(), [teleop, vehicle, publisher])
+        list(map(lambda x: x.clear(), [teleop, vehicle, publisher]))
 
         #
         # Change the configuration and request a restart.
@@ -67,6 +70,6 @@ def test_create_and_setup(tmpdir):
         app.step()
         status = publisher.get_latest()
         assert status.get('driver') == 'driver_mode.teleop.direct'
-        map(lambda x: x.clear(), [teleop, vehicle, publisher])
+        list(map(lambda x: x.clear(), [teleop, vehicle, publisher]))
     finally:
         app.finish()

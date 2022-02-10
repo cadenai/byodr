@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import argparse
 import glob
 import logging
@@ -7,7 +8,7 @@ import shutil
 import signal
 import threading
 
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 from vehicle import CarlaHandler

@@ -1,4 +1,4 @@
-FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
+FROM centipede2donald/ubuntu-bionic:python36-opencv32-gstreamer10
 
 ENV DEBIAN_FRONTEND noninteractive
 
@@ -11,5 +11,3 @@ RUN npm install -g mapport
 
 COPY ./httpd app/
 WORKDIR /app
-
-CMD ["/usr/sbin/haproxy", "-f", "/app/haproxy.conf"]

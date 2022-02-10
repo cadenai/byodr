@@ -1,9 +1,10 @@
+from __future__ import absolute_import
 import argparse
 import glob
 import logging
 import os
 
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from core import CommandProcessor
 from relay import NoopRelay, RealMonitoringRelay
 

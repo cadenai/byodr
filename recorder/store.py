@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import gc
 import io
 import logging
@@ -9,6 +10,8 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime
 
 import pandas as pd
+from six.moves import map
+import six
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +62,7 @@ class Event(object):
         )
 
 
-class AbstractDataSource(object):
-    __metaclass__ = ABCMeta
-
+class AbstractDataSource(six.with_metaclass(ABCMeta, object)):
     @abstractmethod
     def is_open(self):
         raise NotImplementedError()

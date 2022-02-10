@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
 import argparse
 import glob
 import logging
@@ -8,7 +9,7 @@ import signal
 
 import cv2
 import numpy as np
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
     JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler, SimpleRequestNavigationHandler
 from tornado import web, ioloop

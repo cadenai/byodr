@@ -44,7 +44,7 @@ services:
 #    container_name: byodr_httpd
     restart: always
     network_mode: host
-    command: ["python", "wrap.py"]
+    command: ["python3", "wrap.py"]
     stop_signal: SIGKILL
 #    depends_on:
 #      - "teleop"
@@ -86,7 +86,7 @@ services:
 #    image: centipede2donald/byodr-ce:rover_vehicle
 #    container_name: byodr_vehicle
     restart: always
-    command: ["python", "app.py", "--name", "vehicle"]
+    command: ["python3", "app.py", "--name", "vehicle"]
     privileged: true  # NvMedia device creation for omx decoder.
     network_mode: host
     environment:
@@ -102,7 +102,7 @@ services:
 #    image: centipede2donald/byodr-ce:teleop
 #    container_name: byodr_teleop
     restart: always
-    command: ["python", "app.py", "--name", "teleop", "--routes", "/sessions/routes"]
+    command: ["python3", "app.py", "--name", "teleop", "--routes", "/sessions/routes"]
     ports:
       - "8080:8080"
     environment:
@@ -120,7 +120,7 @@ services:
 #    container_name: byodr_pilot
     restart: always
     privileged: true  # Access to usb devices without udev rules.
-    command: ["python", "app.py", "--name", "pilot", "--routes", "/sessions/routes"]
+    command: ["python3", "app.py", "--name", "pilot", "--routes", "/sessions/routes"]
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
@@ -135,7 +135,7 @@ services:
 #    image: centipede2donald/byodr-ce:recorder
 #    container_name: byodr_recorder
     restart: always
-    command: ["python", "app.py", "--name", "recorder"]
+    command: ["python3", "app.py", "--name", "recorder"]
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:

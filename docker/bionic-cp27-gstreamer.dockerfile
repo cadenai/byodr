@@ -1,5 +1,5 @@
 # For docker hub to have this as a cross platform image build and push it at the same time.
-# docker buildx build --platform linux/arm64,linux/amd64 --push -f ubuntu-gstreamer.dockerfile -t centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10 .
+# docker buildx build --platform linux/arm64,linux/amd64 --push -f bionic-cp27-gstreamer.dockerfile -t centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10 .
 FROM ubuntu:bionic
 
 ENV DEBIAN_FRONTEND noninteractive

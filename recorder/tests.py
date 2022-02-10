@@ -1,8 +1,10 @@
+from __future__ import absolute_import
 import os
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 
 from app import RecorderApplication
 from byodr.utils.testing import CollectPublisher, QueueReceiver, CollectServer, QueueCamera
+from io import open
 
 
 def test_create_and_setup(tmpdir):

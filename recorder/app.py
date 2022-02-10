@@ -1,3 +1,4 @@
+from __future__ import absolute_import
 import argparse
 import collections
 import copy
@@ -10,13 +11,14 @@ from datetime import datetime
 
 import cv2
 import numpy as np
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from store import Event
 
 from byodr.utils import Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
+from io import open
 
 logger = logging.getLogger(__name__)
 

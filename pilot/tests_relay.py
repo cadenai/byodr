@@ -1,12 +1,15 @@
+from __future__ import absolute_import
 import os
 import random
 import time
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 
 from byodr.utils import timestamp
 from byodr.utils.testing import QueueReceiver, CollectServer, CollectJSONClient
 from byodr.utils.usbrelay import SearchUsbRelayFactory
 from relay import MonitorApplication
+from io import open
+from six.moves import range
 
 
 class MyJSONClientFactory(object):
