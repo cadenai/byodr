@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Menu</title>
+    <link rel="stylesheet" href="jquery/jquery-ui-1.12.1.min.css">
+    <style type="text/css">
+.application {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+.application-body {
+  display: flex;
+  flex: 1;
+}
+
+.application-content {
+  flex: 1;
+}
+
+.application-nav {
+  /* last value is the width of the columns */
+  flex: 0 0 12em;
+}
+    </style>
+    <script src="jquery/jquery-3.4.1.min.js"></script>
+    <script src="jquery/jquery-ui-1.12.1.min.js"></script>
+    <script src="index_a_utils.js?v=0.55.10"></script>
+    <script src="menu_settings.js?v=0.55.10"></script>
+    <script src="menu_controls.js?v=0.55.10"></script>
+</head>
+<body class="application">
+<header></header>
+<div class="application-body">
+    <nav class="application-nav">
+        <p><a id="home_link" href="#">Home</a></p>
+        <p><a id="settings_link" href="#">Settings</a></p>
+        <p><a id="controls_link" href="#">Controls</a></p>
+    </nav>
+    <main class="application-content">
+        <div id="application-content-container"></div>
+    </main>
+</div>
+<footer></footer>
+</body>
+</html>
+<script type="text/javascript">
+function _user_menu_route_screen(screen) {
+    const el_parent = $("main.application-content");
+    const el_container = $("<div/>", {id: 'application-content-container'});
+    el_parent.find('div#application-content-container').remove();
+    el_parent.append(el_container);
+
+    window.localStorage.setItem('user.menu.screen', screen);
+    switch(screen) {
+        case "controls":
+            menu_user_controls_main(el_container);
+            break;
+        default:
+            menu_user_settings_main(el_container);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    // Set up the click handlers.
+    $("a#home_link").click(function() {
+        location = dev_tools.is_develop() ? '/index.htm?develop=' + dev_tools.is_develop() : '/';
+    });
+    $("a#settings_link").click(function() { _user_menu_route_screen('settings'); });
+    $("a#controls_link").click(function() { _user_menu_route_screen('controls'); });
+
+    // Activate the selected screen.
+    var screen = window.localStorage.getItem('user.menu.screen');
+    if (screen == null) {
+        screen = 'settings';
+    }
+    _user_menu_route_screen(screen);
+
+});
+</script>
