@@ -1,9 +1,11 @@
 from __future__ import absolute_import
 
 import logging
+import multiprocessing
 
 import usb.core
 import usb.util
+from usb.util import CTRL_IN, CTRL_OUT, CTRL_TYPE_VENDOR
 
 logger = logging.getLogger(__name__)
 
@@ -107,20 +109,28 @@ class FourChannelUsbRelay(object):
     Conrad article 393905
     Conrad supplier 393905
     EAN: 4016138810585
+    Type: CP210x
     """
 
-    def __init__(self, vendor=0x10c4, product=0xea60):
+    MAX_GPIO_INDEX = 4
+
+    CP210X_VENDOR_ID = 0x10c4
+    CP210X_PRODUCT_ID = 0xea60
+
+    CP210X_REQUEST_TYPE_READ = CTRL_IN | CTRL_TYPE_VENDOR
+    CP210X_REQUEST_TYPE_WRITE = CTRL_OUT | CTRL_TYPE_VENDOR
+
+    CP210X_REQUEST_VENDOR = 0xFF
+
+    CP210X_VALUE_READ_LATCH = 0x00C2
+    CP210X_VALUE_WRITE_LATCH = 0x37E1
+
+    def __init__(self, vendor=CP210X_VENDOR_ID, product=CP210X_PRODUCT_ID):
         """
-        Note - this class currently only supports the first two channels.
-        device.ctrl_transfer(reqType, bReq, wVal, 0xFF, [])   # all on
-        device.ctrl_transfer(reqType, bReq, wVal, 0xFCFF, []) # 1 and 2 on
-        device.ctrl_transfer(reqType, bReq, wVal, 0xFC, [])   # 3 and 4 on
-        - find bitmasks for individual control of channels 3 and 4
+        Adapted from https://github.com/jjongbloets/CP210xControl/blob/master/CP210xControl/model.py.
         """
         self._vendor = vendor
         self._product = product
-        self._device_on = [0xFC01, 0xFC02]
-        self._device_off = [0xFF01, 0xFF02]
         self._device = None
 
     def find(self):
@@ -145,20 +155,45 @@ class FourChannelUsbRelay(object):
     def is_attached(self):
         return self._device is not None
 
-    def open(self, channel=0):
+    def _query(self, request, value, index, length):
         assert self.is_attached(), "The device is not attached."
-        self._device.ctrl_transfer(0x41, 0xFF, 0x37E1, self._device_off[channel], [])
+        return self._device.ctrl_transfer(self.CP210X_REQUEST_TYPE_READ, request, value, index, length)
+
+    def _write(self, request, value, index, data):
+        assert self.is_attached(), "The device is not attached."
+        return self._device.ctrl_transfer(self.CP210X_REQUEST_TYPE_WRITE, request, value, index, data)
+
+    def _set_gpio(self, index, value):
+        mask = 1 << index
+        values = (0 if value else 1) << index
+        msg = (values << 8) | mask
+        return self._write(self.CP210X_REQUEST_VENDOR, self.CP210X_VALUE_WRITE_LATCH, msg, 0)
+
+    def _get_gpio_states(self):
+        results = []
+        response = self._query(self.CP210X_REQUEST_VENDOR, self.CP210X_VALUE_READ_LATCH, 0, 1)
+        if len(response) > 0:
+            response = response[0]
+        for idx in range(self.MAX_GPIO_INDEX):
+            results.append((response & (1 << idx)) == 0)
+        return results
+
+    def open(self, channel=0):
+        self._set_gpio(channel, 0)
 
     def close(self, channel=0):
-        assert self.is_attached(), "The device is not attached."
-        self._device.ctrl_transfer(0x41, 0xFF, 0x37E1, self._device_on[channel], [])
+        self._set_gpio(channel, 1)
+
+    def states(self):
+        return self._get_gpio_states()
 
 
 class SearchUsbRelayFactory(object):
     def __init__(self):
         _relay = FourChannelUsbRelay()
-        if not _relay.poll():
-            _relay = DoubleChannelUsbRelay()
+        # The others are not supported until they expose a read state method.
+        # if not _relay.poll():
+        #     _relay = DoubleChannelUsbRelay()
         _relay.attach()
         self._relay = _relay
 
@@ -170,9 +205,40 @@ class StaticRelayHolder(object):
     def __init__(self, relay, channels=(0,)):
         self._relay = relay
         self._channels = channels if isinstance(channels, tuple) or isinstance(channels, list) else (channels,)
+        self._lock = multiprocessing.Lock()
 
-    def open(self):
-        [self._relay.open(ch) for ch in self._channels]
+    def _arg_(self, ch=None):
+        return self._channels if ch is None else ch if isinstance(ch, tuple) or isinstance(ch, list) else (ch,)
 
-    def close(self):
-        [self._relay.close(ch) for ch in self._channels]
+    def open(self, channels=None):
+        with self._lock:
+            [self._relay.open(ch) for ch in self._arg_(channels)]
+
+    def close(self, channels=None):
+        with self._lock:
+            [self._relay.close(ch) for ch in self._arg_(channels)]
+
+    def states(self):
+        with self._lock:
+            return self._relay.states()
+
+
+class StaticMemoryFakeHolder(object):
+    def __init__(self):
+        self._channels = (0,)
+        self._state = [1, 1, 0, 0]
+        self._lock = multiprocessing.Lock()
+
+    def open(self, channels=None):
+        with self._lock:
+            for c in self._arg_(channels):
+                self._state[c] = 0
+
+    def close(self, channels=None):
+        with self._lock:
+            for c in self._arg_(channels):
+                self._state[c] = 1
+
+    def states(self):
+        with self._lock:
+            return [bool(x) for x in self._state]
