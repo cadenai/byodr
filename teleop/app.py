@@ -154,14 +154,14 @@ def main():
             (r"/api/system/state", JSONMethodDumpRequestHandler, dict(fn_method=list_process_start_messages)),
             (r"/api/system/capabilities", JSONMethodDumpRequestHandler, dict(fn_method=list_service_capabilities)),
             (r"/api/navigation/routes", JSONNavigationHandler, dict(route_store=route_store)),
-            (r"/ext/v10/direct/navigate", SimpleRequestNavigationHandler, dict(route_store=route_store, fn_override=override_publish)),
+            # (r"/ext/v10/direct/navigate", SimpleRequestNavigationHandler, dict(route_store=route_store, fn_override=override_publish)),
             (r"/", web.RedirectHandler, dict(url=main_redirect_url, permanent=False)),
             (r"/(.*)", web.StaticFileHandler, {'path': os.path.join(os.path.sep, 'app', 'htm')})
         ])
         http_server = HTTPServer(main_app, xheaders=True)
         http_server.bind(8080)
         http_server.start()
-        logger.info("Web services started on port 8080.")
+        logger.info("Teleop web services started on port 8080.")
         io_loop.start()
     except KeyboardInterrupt:
         quit_event.set()
