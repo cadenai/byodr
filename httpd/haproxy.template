@@ -15,12 +15,18 @@ frontend localhost
    default_backend main
    acl is_stream1 dst_port 9001
    acl is_stream2 dst_port 9002
+   acl is_pilot_api path_beg /api/pilot
    use_backend stream1 if is_stream1
    use_backend stream2 if is_stream2
+   use_backend pilot if is_pilot_api
 
 backend main
     mode http
     server rover 127.0.0.1:8080 check
+
+backend pilot
+    mode http
+    server rover 127.0.0.1:8082 check
 
 backend stream1
     mode http
