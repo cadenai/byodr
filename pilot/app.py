@@ -1,23 +1,41 @@
 import argparse
 import glob
 import logging
+import multiprocessing
 import os
+import signal
+import threading
 
 from ConfigParser import SafeConfigParser
-from core import CommandProcessor
-from relay import NoopRelay, RealMonitoringRelay
+from tornado import web, ioloop
+from tornado.httpserver import HTTPServer
 
 from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
-from byodr.utils.usbrelay import StaticRelayHolder, SearchUsbRelayFactory
+from byodr.utils.usbrelay import StaticRelayHolder, SearchUsbRelayFactory, StaticMemoryFakeHolder
+from core import CommandProcessor
+from web import RelayControlRequestHandler
+from relay import NoopRelay, RealMonitoringRelay
 
 logger = logging.getLogger(__name__)
 
+io_loop = ioloop.IOLoop.instance()
+signal.signal(signal.SIGINT, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
+signal.signal(signal.SIGTERM, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
+
+quit_event = multiprocessing.Event()
+
+
+def _interrupt():
+    logger.info("Received interrupt, quitting.")
+    quit_event.set()
+    io_loop.stop()
+
 
 class PilotApplication(Application):
-    def __init__(self, processor, relay, config_dir=os.getcwd()):
-        super(PilotApplication, self).__init__()
+    def __init__(self, event, processor, relay, config_dir=os.getcwd()):
+        super(PilotApplication, self).__init__(quit_event=event)
         self._config_dir = config_dir
         self._processor = processor
         self._relay = relay
@@ -81,12 +99,12 @@ def main():
         _holder = StaticRelayHolder(relay=_relay, channels=(0, 1))
         monitoring_relay = RealMonitoringRelay(relay=_holder, config_dir=args.config)
     else:
+        _holder = StaticMemoryFakeHolder()
         monitoring_relay = NoopRelay()
 
     try:
         route_store = ReloadableDataSource(FileSystemRouteDataSource(directory=args.routes, load_instructions=True))
-        application = PilotApplication(processor=CommandProcessor(route_store), relay=monitoring_relay, config_dir=args.config)
-        quit_event = application.quit_event
+        application = PilotApplication(quit_event, processor=CommandProcessor(route_store), relay=monitoring_relay, config_dir=args.config)
 
         teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
         external = json_collector(url='ipc:///byodr/external.sock', topic=b'aav/external/input', hwm=10, pop=True, event=quit_event)
@@ -103,15 +121,25 @@ def main():
         application.ipc_chatter = lambda: ipc_chatter.get()
         application.publisher = JSONPublisher(url='ipc:///byodr/pilot.sock', topic='aav/pilot/output')
         application.ipc_server = LocalIPCServer(url='ipc:///byodr/pilot_c.sock', name='pilot', event=quit_event)
-        threads = [teleop, external, ros, vehicle, inference, ipc_chatter, application.ipc_server]
+        threads = [teleop, external, ros, vehicle, inference, ipc_chatter, application.ipc_server, threading.Thread(target=application.run)]
         if quit_event.is_set():
             return 0
 
         [t.start() for t in threads]
-        application.run()
+
+        try:
+            main_app = web.Application([
+                (r"/api/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=_holder))
+            ])
+            http_server = HTTPServer(main_app, xheaders=True)
+            http_server.bind(8082)
+            http_server.start()
+            logger.info("Pilot web services started on port 8082.")
+            io_loop.start()
+        except KeyboardInterrupt:
+            quit_event.set()
 
         route_store.quit()
-
         logger.info("Waiting on threads to stop.")
         [t.join() for t in threads]
     finally:
