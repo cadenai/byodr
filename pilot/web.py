@@ -18,11 +18,28 @@ class RelayControlRequestHandler(web.RequestHandler):
     @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
-        blob = dict(state=self._relay_holder.states())
+        blob = dict(states=self._relay_holder.states())
         message = json.dumps(blob)
         response_code = 200
         self.set_header('Content-Type', 'application/json')
         self.set_header('Content-Length', len(message))
         self.set_status(response_code)
         self.write(message)
+        yield tornado.gen.Task(self.flush)
+
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
+    def post(self):
+        data = json.loads(self.request.body)
+        action = data.get('action')
+        channel = int(data.get('channel'))
+        assert channel in (3, 4), "Illegal channel requested '{}'.".format(channel)
+        # Convert to zero based index.
+        channel -= 1
+        if action in ('on', '1', 1):
+            self._relay_holder.close(channel)
+        else:
+            self._relay_holder.open(channel)
+        states = self._relay_holder.states()
+        self.write(json.dumps(dict(channel=channel, state=states[channel])))
         yield tornado.gen.Task(self.flush)

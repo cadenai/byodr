@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Menu</title>
     <link rel="stylesheet" href="jquery/jquery-ui-1.12.1.min.css">
+    <link rel="stylesheet" href="radioslider/radioslider-1.0.0_b1.min.css">
     <style type="text/css">
 .application {
   display: flex;
@@ -18,15 +19,39 @@
 
 .application-content {
   flex: 1;
+  padding: 20px;
+  font-family: "Arial";
+  background: whitesmoke;
 }
 
 .application-nav {
   /* last value is the width of the columns */
   flex: 0 0 12em;
+  border-right: 1px solid gray;
 }
+
+.application-nav a {
+    font-family: "Arial";
+    font-size: 20px;
+    color: darkblue;
+}
+
+.application-nav a:link, a:visited {
+    text-decoration: none;
+}
+
+.application-nav a:hover {
+    text-decoration: underline;
+}
+
+.application-nav a.active {
+    font-weight: bold;
+}
+
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
+    <script src="radioslider/jquery.radioslider-1.0.0_b1.min.js"></script>
     <script src="index_a_utils.js?v=0.55.10"></script>
     <script src="menu_settings.js?v=0.55.10"></script>
     <script src="menu_controls.js?v=0.55.10"></script>
@@ -35,7 +60,9 @@
 <header></header>
 <div class="application-body">
     <nav class="application-nav">
-        <p><a id="home_link" href="#">Home</a></p>
+        <p style="padding-bottom: 50px;">
+            <a id="home_link" href="#">Home</a>
+        </p>
         <p><a id="settings_link" href="#">Settings</a></p>
         <p><a id="controls_link" href="#">Controls</a></p>
     </nav>
@@ -48,6 +75,8 @@
 </html>
 <script type="text/javascript">
 function _user_menu_route_screen(screen) {
+    $(".application-nav a").each(function() {$(this).removeClass("active");});
+
     const el_parent = $("main.application-content");
     const el_container = $("<div/>", {id: 'application-content-container'});
     el_parent.find('div#application-content-container').remove();
@@ -56,9 +85,11 @@ function _user_menu_route_screen(screen) {
     window.localStorage.setItem('user.menu.screen', screen);
     switch(screen) {
         case "controls":
+            $("a#controls_link").addClass('active');
             menu_user_controls_main(el_container);
             break;
         default:
+            $("a#settings_link").addClass('active');
             menu_user_settings_main(el_container);
     }
 }
@@ -77,6 +108,5 @@ document.addEventListener("DOMContentLoaded", function() {
         screen = 'settings';
     }
     _user_menu_route_screen(screen);
-
 });
 </script>

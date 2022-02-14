@@ -229,6 +229,9 @@ class StaticMemoryFakeHolder(object):
         self._state = [1, 1, 0, 0]
         self._lock = multiprocessing.Lock()
 
+    def _arg_(self, ch=None):
+        return self._channels if ch is None else ch if isinstance(ch, tuple) or isinstance(ch, list) else (ch,)
+
     def open(self, channels=None):
         with self._lock:
             for c in self._arg_(channels):

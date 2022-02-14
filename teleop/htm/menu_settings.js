@@ -8,7 +8,7 @@ class RealSettingsBackend {
         $.get("/api/user/options", cb);
     }
     _call_save_settings(data, cb) {
-        $.post('api/user/options', data).done(cb);
+        $.post("api/user/options", data).done(cb);
     }
 }
 
@@ -45,7 +45,7 @@ var menu_settings = {
         el_parent.append(div_column);
         // Get and render.
         this._poll_system_state();
-        this._get_user_settings();
+        this._create_user_settings();
     },
 
     _system_state_update: function(data) {
@@ -71,8 +71,8 @@ var menu_settings = {
         menu_settings._backend._call_get_state(menu_settings._system_state_update);
     },
 
-    _get_user_settings: function() {
-        menu_settings._backend._call_get_settings(menu_settings._settings_form_update);
+    _create_user_settings: function() {
+        menu_settings._backend._call_get_settings(menu_settings._create_settings_form);
     },
 
     _start_state_polling: function() {
@@ -100,7 +100,7 @@ var menu_settings = {
         });
     },
 
-    _settings_form_update: function(data) {
+    _create_settings_form: function(data) {
         const el_form = $("form#form_user_options");
         Object.keys(data).forEach(section => {
             var el_table = $("<table/>");

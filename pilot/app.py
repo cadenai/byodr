@@ -15,8 +15,8 @@ from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.usbrelay import StaticRelayHolder, SearchUsbRelayFactory, StaticMemoryFakeHolder
 from core import CommandProcessor
-from web import RelayControlRequestHandler
 from relay import NoopRelay, RealMonitoringRelay
+from web import RelayControlRequestHandler
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ def main():
         [t.start() for t in threads]
 
         try:
+            # The api has partial control of the relay.
             main_app = web.Application([
                 (r"/api/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=_holder))
             ])
