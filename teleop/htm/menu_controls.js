@@ -2,10 +2,13 @@ class RealControlsBackend {
     constructor() {
     }
     _call_get_channel_states(cb) {
-        $.get("/api/pilot/controls/relay", cb);
+        $.get("/teleop/pilot/controls/relay", function(response) {cb(response['states']);});
     }
-    _call_save_channel_state(data, cb) {
-        $.post("/api/pilot/controls/relay", JSON.stringify(data)).done(cb);
+    _call_save_channel_state(channel, value, cb) {
+        const command = {'channel': channel, 'action': ((value == true || value == 'true')? 'on': 'off')};
+        $.post("/teleop/pilot/controls/relay", JSON.stringify(command)).done(function(response) {
+            cb(response['channel'], response['value']);
+        });
     }
 }
 
@@ -15,15 +18,11 @@ class FakeControlsBackend extends RealControlsBackend {
         this._states = [false, false, false, true];
     }
     _call_get_channel_states(cb) {
-        cb({"states": this._states});
+        cb(this._states);
     }
-    _call_save_channel_state(command, cb) {
-        //console.log("Dev backend save channel: " + command);
-        const channel = command['channel'];
-        const action = command['action'];
-        const value = action == 'on' ? true: false;
+    _call_save_channel_state(channel, value, cb) {
         this._states[channel] = value;
-        cb({"channel": channel, "state": value});
+        cb(channel, value);
     }
 }
 
@@ -38,46 +37,101 @@ var menu_controls = {
         const div_column = $("<div/>", {id: 'column'});
         div_column.append($("<h2/>").text("Primary relays"));
         const div_relays = $("<div/>", {id: 'relay_channels'});
-
-        const p_channel4_container = $("<p/>");
-        p_channel4_container.css('line-height', '25px');
-        const div_channel4 = $("<div/>", {id: 'channel4'});
-        div_channel4.append($("<input/>", {id: 'channel4_off', name: 'options', type: 'radio', value: false}));
-        div_channel4.append($("<label/>", {for: 'channel4_off'}).text('Off'));
-        div_channel4.append($("<input/>", {id: 'channel4_on', name: 'options', type: 'radio', value: true}));
-        div_channel4.append($("<label/>", {for: 'channel4_on'}).text('On'));
-        div_channel4.css('width', '200px');
-                
-        p_channel4_container.append($("<span/>", {id: 'channel4_label'}).text('Channel 4'));
-        p_channel4_container.append(div_channel4)
-        div_relays.append(p_channel4_container);
         div_column.append(div_relays);
         el_parent.append(div_column);
+        this._channels = [];
+        this._channels.push(this._create_channel(div_relays, 3));
+        this._channels.push(this._create_channel(div_relays, 4));
+        this._apply_backend_states();
+    },
 
-        this._channel4_slider = div_channel4.radioslider({fit: true});
-        this._channel4_slider.radioslider('setValue', false);
-        this._channel4_slider.radioslider('setDisabled');
-        this._channel4_slider.on('radiochange', function() {
-            menu_controls._channel4_slider.radioslider('setDisabled');
-            const _val = $("div#channel4 input[name='options']:checked").val();
-            const _action = _val == 'true'? 'on': 'off';
-            const command = {'channel': 4, 'action': _action};
-            menu_controls._backend._call_save_channel_state(command, function(response) {
-                menu_controls._render_channel_state(menu_controls._channel4_slider, response['state']);
+    _apply_backend_states: function() {
+        const channels = menu_controls._channels;
+        channels.forEach(function(channel) {
+            channel.flag();
+            channel.disable();
+        });
+        menu_controls._backend._call_get_channel_states(function(states) {
+            channels.forEach(function(channel) {
+                channel.enable();
+                channel.setValue(states[channel._index]);
+                channel.un_flag();
             });
         });
-
-        this._backend._call_get_channel_states(menu_controls._render_relay_states);
     },
 
-    _render_channel_state: function(element, value) {
-        element.radioslider('setEnabled');
-        element.radioslider('setValue', value);
+    _on_channel_select: function(channel) {
+        // This method is called when the user sets a value and also when a value is set by code.
+        if (!channel.isFlagged()) {
+            menu_controls._backend._call_save_channel_state(channel._index + 1, channel.getValue(), function(ch, x) {});
+        }
     },
 
-    _render_relay_states: function(data) {
-        //console.log(data);
-        menu_controls._render_channel_state(menu_controls._channel4_slider, data['states'][3]);
+    _create_channel: function(el_parent, number){
+        const _channel_container = $("<p/>");
+        const _name = 'channel' + number;
+        const _field = $("<fieldset/>", {id: _name});
+        _field.append($("<legend/>", {id: _name + '_label'}).text('Channel ' + number));
+        _field.append($("<input/>", {id: _name + '_off', name: _name, type: 'radio', value: false, checked: true}));
+        _field.append($("<label/>", {for: _name + '_off'}).text('Off'));
+        _field.append($("<input/>", {id: _name + '_on', name: _name, type: 'radio', value: true}));
+        _field.append($("<label/>", {for: _name + '_on'}).text('On'));
+        _channel_container.css('width', '200px');
+        _channel_container.css('line-height', '25px');
+        _channel_container.append(_field)
+        el_parent.append(_channel_container);
+
+        const _slider = _field.radioslider({
+            fit: true,
+            onSelect: function(event) {menu_controls._on_channel_select(_slider);}
+        });
+        _slider._index = number - 1;
+        _slider._parent = _field;
+        _slider._flagged = false;
+        _slider.flag = function() {
+            _slider._flagged = true;
+            _slider._parent.css('cursor', 'wait');
+            return _slider;
+        }
+        _slider.un_flag = function() {
+            _slider._flagged = false;
+            _slider._parent.css('cursor', 'auto');
+            return _slider;
+        }
+        _slider.isFlagged = function() {
+            return _slider._flagged;
+        }
+        _slider.isDisabled = function() {
+            return _slider.find("input[name=" + _name + "]").is(':disabled');
+        }
+        _slider.getValue = function() {
+            return _slider.find("input:checked").val();
+        }
+        _slider.on = function() {
+            _slider.radioslider('setValue', 'true');
+            return _slider;
+        }
+        _slider.off = function() {
+            _slider.radioslider('setValue', 'false');
+            return _slider;
+        }
+        _slider.setValue = function(x) {
+            if (x || x  == 'true') {
+                _slider.on();
+            } else {
+                _slider.off();
+            }
+            return _slider;
+        }
+        _slider.disable = function() {
+            _slider.radioslider('setDisabled');
+            return _slider;
+        }
+        _slider.enable = function() {
+            _slider.radioslider('setEnabled');
+            return _slider;
+        }
+        return _slider;
     }
 }
 

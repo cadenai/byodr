@@ -17,7 +17,7 @@ frontend localhost
    default_backend main
    acl is_stream1 dst_port 9001
    acl is_stream2 dst_port 9002
-   acl is_pilot_api path_beg /api/pilot
+   acl is_pilot_api path_beg /teleop/pilot
    use_backend stream1 if is_stream1
    use_backend stream2 if is_stream2
    use_backend pilot if is_pilot_api

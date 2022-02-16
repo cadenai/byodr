@@ -125,7 +125,7 @@ class RealNavigatorController {
     }
     _list_routes() {
         const _instance = this;
-        $.get("/api/navigation/routes?action=list", function(response) {
+        $.get("/teleop/navigation/routes?action=list", function(response) {
             _instance._set_routes(response);
             _instance._update_visibility();
         });

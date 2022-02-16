@@ -2,13 +2,13 @@ class RealSettingsBackend {
     constructor() {
     }
     _call_get_state(cb) {
-        $.get("/api/system/state", cb);
+        $.get("/teleop/system/state", cb);
     }
     _call_get_settings(cb) {
-        $.get("/api/user/options", cb);
+        $.get("/teleop/user/options", cb);
     }
     _call_save_settings(data, cb) {
-        $.post("api/user/options", data).done(cb);
+        $.post("/teleop/user/options", data).done(cb);
     }
 }
 

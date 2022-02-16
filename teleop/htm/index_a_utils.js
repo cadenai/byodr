@@ -130,7 +130,7 @@ var page_utils = {
                 }};
                 callback(_instance._capabilities);
             } else {
-                jQuery.get("/api/system/capabilities", function(data) {
+                jQuery.get("/teleop/system/capabilities", function(data) {
                     _instance._capabilities = data;
                     callback(_instance._capabilities);
                 });

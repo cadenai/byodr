@@ -130,7 +130,7 @@ def main():
         try:
             # The api has partial control of the relay.
             main_app = web.Application([
-                (r"/api/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=_holder))
+                (r"/teleop/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=_holder))
             ])
             http_server = HTTPServer(main_app, xheaders=True)
             http_server.bind(8082)
