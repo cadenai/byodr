@@ -11,12 +11,12 @@ from datetime import datetime
 import cv2
 import numpy as np
 from ConfigParser import SafeConfigParser
-from store import Event
 
 from byodr.utils import Application
 from byodr.utils.ipc import CameraThread, JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.option import parse_option, hash_dict
 from recorder import get_or_create_recorder
+from store import Event
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +59,11 @@ class ImageEventLog(object):
     Select the closest data to the image by timestamp.
     """
 
-    def __init__(self, buffer_size=int(1e4), window_ms=30):
+    def __init__(self, buffer_size=int(1e4), window_ms=30, log=True):
         self._micro = window_ms * 1e3
         self._observed = None
         self._events = collections.deque(maxlen=buffer_size)
+        self._log = log
 
     def clear(self):
         self._events.clear()
@@ -77,7 +78,7 @@ class ImageEventLog(object):
             d_vehicle = abs(img_ts - get_ts(vehicle))
             if d_pilot <= self._micro and d_vehicle <= self._micro:
                 self._events.append(to_event(img_ts, copy.deepcopy(pilot), copy.deepcopy(vehicle), np.copy(image)))
-            else:
+            elif self._log:
                 logger.info("Data window violation of pilot {} ms and vehicle {} ms - skipping image {}.".format(
                     d_pilot * 1e-3, d_vehicle * 1e-3, img_ts)
                 )
@@ -104,7 +105,7 @@ class EventHandler(threading.Thread):
         self._im_width = int(_im_width)
         self._session_active = False
         self._session_log = ImageEventLog()
-        self._photo_log = ImageEventLog()
+        self._photo_log = ImageEventLog(buffer_size=50, window_ms=500, log=False)
         self._recorder = get_or_create_recorder(mode='record.mode.interventions',
                                                 directory=self._record_dir,
                                                 vehicle_type=self._vehicle,

@@ -138,7 +138,7 @@ def main():
             external_publisher.publish(nav_request)
 
     try:
-        main_redirect_url = '/index.htm?v=0.60.0'
+        main_redirect_url = '/index.htm?v=0.60.01'
         main_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,

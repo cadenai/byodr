@@ -158,8 +158,9 @@ var teleop_screen = {
     camera_activation_listeners: [],
     selected_camera: null,  // Select a camera for ptz control.
     camera_selection_listeners: [],
-    camera_cycle_timer: null,
-    last_server_message: null,
+    _camera_cycle_timer: null,
+    _photo_snapshot_timer: null,
+    _last_server_message: null,
 
     _init() {
         this.el_viewport_container = $("div#viewport_container");
@@ -209,7 +210,7 @@ var teleop_screen = {
         const _hard_yellow = 'rgba(255, 255, 120, 0.99)';
         const _soft_yellow = 'rgba(255, 255, 120, 0.50)';
         if (_show) {
-            const _m = this.last_server_message;
+            const _m = this._last_server_message;
             const _color = _m != undefined && _m._is_on_autopilot && _m.max_speed < 1e-3? _hard_yellow: _soft_yellow;
             this.overlay_center_markers[0].css('color', `${_color}`);
             this.overlay_center_markers[1].css('color', `${_color}`);
@@ -249,17 +250,24 @@ var teleop_screen = {
         if (this.selected_camera != undefined) {
             console.log("Camera " + this.selected_camera + " is selected for ptz control.")
         }
-        this.camera_cycle_timer = null;
+        this._camera_cycle_timer = null;
     },
 
     _schedule_camera_cycle: function(direction) {
-        if (this.camera_cycle_timer == undefined) {
-            this.camera_cycle_timer = setTimeout(function() {teleop_screen._cycle_camera_selection();}, 200);
+        if (this._camera_cycle_timer == undefined) {
+            this._camera_cycle_timer = setTimeout(function() {teleop_screen._cycle_camera_selection();}, 150);
         }
     },
 
+    _schedule_photo_snapshot_effect: function() {
+        if (this._photo_snapshot_timer != undefined) {
+            clearTimeout(this._photo_snapshot_timer);
+        }
+        this._photo_snapshot_timer = setTimeout(function() {teleop_screen.el_viewport_container.fadeOut(50).fadeIn(50);}, 130);
+    },
+
     _server_message: function(message) {
-        this.last_server_message = message;
+        this._last_server_message = message;
 
         $('span#pilot_steering').text(message.ste.toFixed(3));
         $('span#pilot_throttle').text(message.thr.toFixed(3));
@@ -427,9 +435,7 @@ var teleop_screen = {
         }
         //
         if (command.button_right) {
-            setTimeout(function() {
-                teleop_screen.el_viewport_container.fadeOut(100).fadeIn(100);
-            }, 0);
+            this._schedule_photo_snapshot_effect();
         }
     },
 
@@ -438,7 +444,7 @@ var teleop_screen = {
     },
 
     canvas_update: function(ctx) {
-        const message = this.last_server_message;
+        const message = this._last_server_message;
         const _ap = message != undefined && message._is_on_autopilot;
         if (_ap && this.active_camera == 'front' && this.in_debug) {
             path_renderer._render_path(ctx, message.nav_path);
