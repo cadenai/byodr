@@ -225,7 +225,7 @@ class PTZCamera(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        _type = parse_option(self._name + '.camera.type', str, 'not_specified', errors=errors, **kwargs)
+        _type = parse_option(self._name + '.camera.type', str, 'h264/rtsp', errors=errors, **kwargs)
         ptz_enabled = _type == 'h264/rtsp' and parse_option(self._name + '.camera.ptz.enabled', int, 1, errors=errors, **kwargs)
         if ptz_enabled:
             _server = parse_option(self._name + '.camera.ip', str, '192.168.1.64', errors=errors, **kwargs)
