@@ -13,7 +13,7 @@ log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Camera web-socket server.')
+    parser = argparse.ArgumentParser(description='Http proxy server.')
     parser.add_argument('--config', type=str, default='/config/haproxy.conf', help='Configuration file.')
     args = parser.parse_args()
 
