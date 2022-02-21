@@ -3,8 +3,6 @@ volumes:
   volume_zerotier_config:
   volume_wireguard_config:
   volume_ftpd_config:
-  volume_mongodb_config:
-  volume_mongodb_data:
   volume_byodr_config:
   volume_byodr_sockets:
   volume_byodr_sessions:
@@ -54,28 +52,13 @@ services:
       dockerfile: ftpd/Dockerfile
     restart: always
     command: ["python3", "wrap.py"]
+    stop_signal: SIGKILL
     ports:
       - "21:21"
       - "30000-30009:30000-30009"
     volumes:
       - volume_ftpd_config:/etc/pureftpd:rw
       - volume_byodr_sessions:/home/ftpuser:rw
-  mongodb:
-    cpuset: "0"
-    build:
-      context: .
-      dockerfile: mongodb/Dockerfile
-    container_name: mongodb
-    restart: always
-    command: ["python3", "wrap.py"]
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD_FILE: /config/mongo-root
-    volumes:
-      - volume_mongodb_config:/config:rw
-      - volume_mongodb_data:/data/db:rw
   rosnode:
     cpuset: "0"
     build:
@@ -147,7 +130,7 @@ services:
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:rw
   inference:
-    # cpuset: "3" # - not currently possible with onnx runtime due to a cpu affinity bug.
+    # cpuset: "3" # - not compatible with onnx runtime - use env omp_places.
     build:
       context: .
       dockerfile: inference/runtime-cp36-jp441.dockerfile
@@ -156,6 +139,7 @@ services:
     command: ["python3", "-m",  "inference.app", "--user", "/sessions/models", "--routes", "/sessions/routes"]
     environment:
       LD_PRELOAD: libgomp.so.1
+      OMP_PLACES: "{3}"
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
