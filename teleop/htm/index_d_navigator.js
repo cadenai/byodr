@@ -115,7 +115,7 @@ class RealNavigatorController {
     }
     _toggle_route() {
         var command = {'action': 'toggle', 'route': this.selected_route};
-        $.post('api/navigation/routes', JSON.stringify(command))
+        $.post('teleop/navigation/routes', JSON.stringify(command))
                     .fail(function(xhr, status, error) {
                         console.log(error);
                     })
