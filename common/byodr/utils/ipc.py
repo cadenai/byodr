@@ -80,10 +80,11 @@ class JSONReceiver(object):
         subscriber.setsockopt(zmq.LINGER, 0)
         subscriber.connect(url)
         subscriber.setsockopt(zmq.SUBSCRIBE, topic)
+        self._pop = pop
+        self._unpack = hwm == 1
         self._subscriber = subscriber
-        self._peek = not pop
-        self._queue = collections.deque(maxlen=hwm)
         self._lock = threading.Lock()
+        self._queue = collections.deque(maxlen=hwm)
 
     def consume(self):
         with self._lock:
@@ -94,7 +95,12 @@ class JSONReceiver(object):
                 pass
 
     def get(self):
-        return (self._queue[0] if self._peek else self._queue.popleft()) if self._queue else None
+        if self._unpack and not self._pop:
+            return self._queue[0] if self._queue else None
+        _view = list(self._queue) if self._queue else None
+        if self._pop:
+            self._queue.clear()
+        return _view
 
 
 class CollectorThread(threading.Thread):
@@ -106,10 +112,9 @@ class CollectorThread(threading.Thread):
         self._sleep = 1. / hz
 
     def get(self, index=0):
-        # Get the latest message.
-        _receiver = self._receivers[index]
-        # _receiver.consume() -- blocks; perform at thread run not user call
-        return _receiver.get()
+        # Get the latest message without blocking.
+        # _receiver.consume() -- blocks; perform at thread.run()
+        return self._receivers[index].get()
 
     def quit(self):
         self._quit_event.set()
