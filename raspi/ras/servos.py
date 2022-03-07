@@ -233,7 +233,8 @@ class SingularVescDriver(AbstractSteerServoDriver):
         self._relay.close()
 
     def relay_violated(self, on_integrity=True):
-        self._relay.open()
+        if on_integrity:
+            self._relay.open()
 
     def set_configuration(self, config):
         if self.configuration_check(config):
@@ -445,7 +446,7 @@ def main():
         finally:
             holder.open()
     else:
-        shutil.copyfile('driver.template', config_file)
+        shutil.copyfile('ras/driver.template', config_file)
         logger.info("Created a new driver configuration file from template.")
         while not quit_event.is_set():
             time.sleep(1)
