@@ -8,6 +8,16 @@ services:
     image: rwgrim/docker-noop:latest
     restart: 'no'
     command: ["/bin/true"]
+  httpd:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./httpd:/app
+  ftpd:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./ftpd:/app
   rosnode:
     restart: 'no'
     volumes:
