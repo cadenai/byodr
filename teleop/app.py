@@ -105,7 +105,7 @@ def main():
     [t.start() for t in threads]
 
     teleop_publisher = JSONPublisher(url='ipc:///byodr/teleop.sock', topic='aav/teleop/input')
-    external_publisher = JSONPublisher(url='ipc:///byodr/external.sock', topic='aav/external/input')
+    # external_publisher = JSONPublisher(url='ipc:///byodr/external.sock', topic='aav/external/input')
     chatter = JSONPublisher(url='ipc:///byodr/teleop_c.sock', topic='aav/teleop/chatter')
     zm_client = JSONZmqClient(urls=['ipc:///byodr/pilot_c.sock',
                                     'ipc:///byodr/inference_c.sock',
@@ -132,10 +132,10 @@ def main():
         cmd['navigator'] = dict(route=route_store.get_selected_route())
         teleop_publisher.publish(cmd)
 
-    def override_publish(nav_request):
+    # def override_publish(nav_request):
         # We are the authority on route state.
-        if nav_request is not None:
-            external_publisher.publish(nav_request)
+        # if nav_request is not None:
+        #     external_publisher.publish(nav_request)
 
     try:
         main_redirect_url = '/index.htm?v=0.60.02'
