@@ -4,6 +4,7 @@ from __future__ import absolute_import
 import argparse
 import logging
 import os
+import re
 import shutil
 import subprocess
 
@@ -19,8 +20,7 @@ def _check_config(config_file):
         logger.info("The proxy configuration is up to date.")
     else:
         # Not all routers are at the default ip.
-        _ip_id = contents.index(':9101')
-        _ip = contents[_ip_id - 12: _ip_id]
+        _ip = re.findall("rover.*:9101", contents)[0][6:-5]
         _ssl = ('ssl crt' in contents)
         with open('haproxy_ssl.template' if _ssl else 'haproxy.template', 'r') as _template:
             with open(config_file, 'w') as _file:
