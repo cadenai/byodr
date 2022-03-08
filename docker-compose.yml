@@ -117,7 +117,7 @@ services:
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:ro
   recorder:
-    cpuset: "3"
+    cpuset: "0"
     build:
       context: .
       dockerfile: recorder/Dockerfile

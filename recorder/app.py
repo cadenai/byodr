@@ -191,8 +191,7 @@ class EventHandler(threading.Thread):
                 if event is not None:
                     self._save_photo(event)
                 # Allow other threads access to cpu.
-                else:
-                    time.sleep(1e-3)
+                time.sleep(0.050)
             except IndexError:
                 pass
 
