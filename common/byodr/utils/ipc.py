@@ -95,9 +95,7 @@ class JSONReceiver(object):
                 pass
 
     def get(self):
-        if self._unpack and not self._pop:
-            return self._queue[0] if self._queue else None
-        _view = list(self._queue) if self._queue else None
+        _view = self._queue[0] if (self._queue and self._unpack) else list(self._queue) if self._queue else None
         if self._pop:
             self._queue.clear()
         return _view
