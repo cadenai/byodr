@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import collections
 import logging
 import multiprocessing
@@ -8,7 +10,9 @@ from collections import deque
 
 import cachetools
 import numpy as np
+import six
 from simple_pid import PID as pid_control
+from six.moves import zip
 
 from byodr.utils import timestamp, Configurable
 from byodr.utils.navigate import NavigationCommand, NavigationInstructions
@@ -122,9 +126,7 @@ class LowPassFilter(object):
         return self._value
 
 
-class AbstractDriverBase(object):
-    __metaclass__ = ABCMeta
-
+class AbstractDriverBase(six.with_metaclass(ABCMeta, object)):
     def __init__(self, control):
         super(AbstractDriverBase, self).__init__()
         self._control = control
@@ -191,9 +193,7 @@ class AbstractDriverBase(object):
         pass
 
 
-class AbstractThrottleControl(object):
-    __metaclass__ = ABCMeta
-
+class AbstractThrottleControl(six.with_metaclass(ABCMeta, object)):
     def __init__(self, min_desired_speed, max_desired_speed):
         self._min_desired_speed = min_desired_speed
         self._max_desired_speed = max_desired_speed
@@ -259,9 +259,7 @@ class DirectThrottleControl(AbstractThrottleControl):
         return _throttle if abs(_throttle) > self._throttle_cut else 0
 
 
-class AbstractCruiseControl(AbstractDriverBase):
-    __metaclass__ = ABCMeta
-
+class AbstractCruiseControl(six.with_metaclass(ABCMeta, AbstractDriverBase)):
     def __init__(self, control, **kwargs):
         super(AbstractCruiseControl, self).__init__(control)
         _errors = []

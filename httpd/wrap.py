@@ -16,7 +16,7 @@ log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 def _check_config(config_file):
     with open(config_file, 'r') as _file:
         contents = _file.read()
-    if 'backend pilot' in contents:
+    if 'backend datatable' in contents:
         logger.info("The proxy configuration is up to date.")
     else:
         # Not all routers are at the default ip.

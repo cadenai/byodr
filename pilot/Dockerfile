@@ -1,8 +1,8 @@
-FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
+FROM centipede2donald/ubuntu-bionic:python36-opencv32-gstreamer10
 
-RUN pip install simple-pid
-RUN pip install "pyusb==1.0.2"
-RUN pip install "tornado==4.5.3"
+RUN pip3 install simple-pid
+RUN pip3 install "pyusb==1.0.2"
+RUN pip3 install "tornado==6.1"
 
 COPY ./common common/
 COPY ./pilot app/
@@ -10,4 +10,4 @@ WORKDIR /app
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
 
-CMD ["python", "app.py"]
+CMD ["python3", "app.py"]

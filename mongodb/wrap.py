@@ -17,7 +17,7 @@ def main():
         with open(os.open(pw_file, os.O_CREAT | os.O_WRONLY, 0o600), 'w') as fh:
             fh.write('robot')
         logger.info("Created the default mongo user.")
-    subprocess.call(["mongod", "--wiredTigerCacheSizeGB", "0.20", "--bind_ip", "127.0.0.1"])
+    subprocess.call(["mongod", "--syslog", "--wiredTigerCacheSizeGB", "0.20", "--bind_ip", "127.0.0.1"])
 
 
 if __name__ == "__main__":

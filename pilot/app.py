@@ -1,4 +1,7 @@
+from __future__ import absolute_import
+
 import argparse
+import asyncio
 import glob
 import logging
 import multiprocessing
@@ -6,9 +9,10 @@ import os
 import signal
 import threading
 
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
+from tornado.platform.asyncio import AnyThreadEventLoopPolicy
 
 from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
@@ -20,9 +24,8 @@ from web import RelayControlRequestHandler
 
 logger = logging.getLogger(__name__)
 
-io_loop = ioloop.IOLoop.instance()
-signal.signal(signal.SIGINT, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
-signal.signal(signal.SIGTERM, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
+signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
+signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 
 quit_event = multiprocessing.Event()
 
@@ -30,7 +33,6 @@ quit_event = multiprocessing.Event()
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-    io_loop.stop()
 
 
 class PilotApplication(Application):
@@ -124,7 +126,11 @@ def main():
 
         [t.start() for t in threads]
 
+        asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
         try:
+            io_loop = ioloop.IOLoop.instance()
             # The api has partial control of the relay.
             main_app = web.Application([
                 (r"/teleop/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=_holder))
@@ -132,8 +138,8 @@ def main():
             http_server = HTTPServer(main_app, xheaders=True)
             http_server.bind(8082)
             http_server.start()
-            logger.info("Pilot web services started on port 8082.")
             io_loop.start()
+            logger.info("Pilot web services started on port 8082.")
         except KeyboardInterrupt:
             quit_event.set()
 

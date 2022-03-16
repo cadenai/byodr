@@ -3,6 +3,8 @@ volumes:
   volume_zerotier_config:
   volume_wireguard_config:
   volume_ftpd_config:
+  volume_mongodb_config:
+  volume_mongodb_data:
   volume_byodr_config:
   volume_byodr_sockets:
   volume_byodr_sessions:
@@ -71,6 +73,46 @@ services:
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
+  recorder:
+    cpuset: "0"
+    build:
+      context: .
+      dockerfile: recorder/Dockerfile
+    restart: always
+    command: ["python", "app.py", "--name", "recorder"]
+    environment:
+      LD_PRELOAD: libgomp.so.1
+    volumes:
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
+      - volume_byodr_sessions:/sessions:rw
+  mongodb:
+    cpuset: "0"
+    build:
+      context: .
+      dockerfile: mongodb/Dockerfile
+    restart: always
+    command: ["python3", "wrap.py"]
+    network_mode: host
+    stop_signal: SIGKILL
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /config/mongo-root
+    volumes:
+      - volume_mongodb_config:/config:rw
+      - volume_mongodb_data:/data/db:rw
+  logbox:
+    cpuset: "0"
+    build:
+      context: .
+      dockerfile: logbox/Dockerfile
+    restart: always
+    command: ["python3", "app.py", "--name", "logbox"]
+    stop_signal: SIGKILL
+    network_mode: host
+    volumes:
+      - volume_byodr_sockets:/byodr:rw
+      - volume_byodr_config:/config:ro
   vehicle:
     cpuset: "1"
     build:
@@ -107,7 +149,8 @@ services:
       dockerfile: pilot/Dockerfile
     restart: always
     privileged: true  # Access to usb devices without udev rules.
-    command: ["python", "app.py", "--name", "pilot", "--routes", "/sessions/routes"]
+    command: ["python3", "app.py", "--name", "pilot", "--routes", "/sessions/routes"]
+    stop_signal: SIGKILL
     ports:
       - "8082:8082"
     environment:
@@ -116,19 +159,6 @@ services:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
       - volume_byodr_sessions:/sessions:ro
-  recorder:
-    cpuset: "0"
-    build:
-      context: .
-      dockerfile: recorder/Dockerfile
-    restart: always
-    command: ["python", "app.py", "--name", "recorder"]
-    environment:
-      LD_PRELOAD: libgomp.so.1
-    volumes:
-      - volume_byodr_sockets:/byodr:rw
-      - volume_byodr_config:/config:ro
-      - volume_byodr_sessions:/sessions:rw
   inference:
     # cpuset: "3" # - not compatible with onnx runtime - use env omp_places.
     build:

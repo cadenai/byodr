@@ -55,6 +55,7 @@
     <script src="index_a_utils.js?v=0.60.0"></script>
     <script src="menu_settings.js?v=0.60.0"></script>
     <script src="menu_controls.js?v=0.60.0"></script>
+    <script src="menu_logbox.js?v=0.61.0"></script>
 </head>
 <body class="application">
 <header></header>
@@ -65,6 +66,7 @@
         </p>
         <p><a id="settings_link" href="#">Settings</a></p>
         <p><a id="controls_link" href="#">Controls</a></p>
+        <p><a id="logbox_link" href="#">Controls</a></p>
     </nav>
     <main class="application-content">
         <div id="application-content-container"></div>
@@ -87,6 +89,10 @@ function _user_menu_route_screen(screen) {
         case "controls":
             $("a#controls_link").addClass('active');
             menu_user_controls_main(el_container);
+            break;
+        case "logbox":
+            $("a#logbox_link").addClass('active');
+            menu_user_logbox_main(el_container);
             break;
         default:
             $("a#settings_link").addClass('active');

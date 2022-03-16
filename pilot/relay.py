@@ -1,10 +1,13 @@
+from __future__ import absolute_import
+
 import argparse
 import glob
 import logging
 import os
 from abc import ABCMeta, abstractmethod
 
-from ConfigParser import SafeConfigParser
+import six
+from six.moves.configparser import SafeConfigParser
 
 from byodr.utils import timestamp
 from byodr.utils.ipc import ReceiverThread, JSONZmqClient
@@ -47,9 +50,7 @@ class PiClientFactory(object):
         return JSONZmqClient(urls='{}:5550'.format(master_uri))
 
 
-class AbstractRelay(object):
-    __metaclass__ = ABCMeta
-
+class AbstractRelay(six.with_metaclass(ABCMeta, object)):
     @staticmethod
     def _latest_or_none(candidate, patience):
         _time = 0 if candidate is None else candidate.get('time')

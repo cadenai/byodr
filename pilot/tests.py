@@ -1,5 +1,10 @@
+from __future__ import absolute_import
+
 import os
-from ConfigParser import SafeConfigParser
+from io import open
+
+from six.moves import map
+from six.moves.configparser import SafeConfigParser
 
 from app import CommandProcessor
 from app import PilotApplication
@@ -41,7 +46,7 @@ def test_create_and_setup(tmpdir):
         app.step()
         status = publisher.get_latest()
         assert status.get('driver') == 'driver_mode.teleop.direct'
-        map(lambda x: x.clear(), [teleop, vehicle, publisher])
+        list(map(lambda x: x.clear(), [teleop, vehicle, publisher]))
 
         #
         # Change the configuration and request a restart.
@@ -67,6 +72,6 @@ def test_create_and_setup(tmpdir):
         app.step()
         status = publisher.get_latest()
         assert status.get('driver') == 'driver_mode.teleop.direct'
-        map(lambda x: x.clear(), [teleop, vehicle, publisher])
+        list(map(lambda x: x.clear(), [teleop, vehicle, publisher]))
     finally:
         app.finish()

@@ -23,6 +23,21 @@ services:
     volumes:
       - ./common:/common
       - ./rosnode:/app
+  recorder:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./recorder:/app
+  mongodb:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./mongodb:/app
+  logbox:
+    restart: 'no'
+    volumes:
+      - ./common:/common
+      - ./logbox:/app
   vehicle:
     # Need extra cpu resources to run the h264 encoder sockets.
     cpuset: "1,4,5"
@@ -45,11 +60,6 @@ services:
     volumes:
       - ./common:/common
       - ./pilot:/app
-  recorder:
-    restart: 'no'
-    volumes:
-      - ./common:/common
-      - ./recorder:/app
   inference:
     build:
       context: .

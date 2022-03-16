@@ -1,3 +1,5 @@
+from __future__ import absolute_import
+
 import json
 import logging
 
@@ -15,7 +17,6 @@ class RelayControlRequestHandler(web.RequestHandler):
     def data_received(self, chunk):
         pass
 
-    @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
         blob = dict(states=self._relay_holder.states())
@@ -25,9 +26,7 @@ class RelayControlRequestHandler(web.RequestHandler):
         self.set_header('Content-Length', len(message))
         self.set_status(response_code)
         self.write(message)
-        yield tornado.gen.Task(self.flush)
 
-    @tornado.web.asynchronous
     @tornado.gen.coroutine
     def post(self):
         data = json.loads(self.request.body)
@@ -41,5 +40,5 @@ class RelayControlRequestHandler(web.RequestHandler):
         else:
             self._relay_holder.open(channel)
         states = self._relay_holder.states()
-        self.write(json.dumps(dict(channel=channel, state=states[channel])))
-        yield tornado.gen.Task(self.flush)
+        message = json.dumps(dict(channel=channel, state=states[channel]))
+        self.write(message)
