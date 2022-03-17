@@ -89,7 +89,7 @@ class LogApplication(Application):
             _img_bytes = _encode(image).tobytes()
             _img_num_bytes = len(_img_bytes)
             _img_buffer = Binary(_img_bytes)
-
+        # The pilot message is nil when no party is driving.
         self._database.events.insert_one({
             'time': _time,
             'trigger': trigger,
@@ -116,7 +116,7 @@ class LogApplication(Application):
             'img_time': _get_ts(image_md),
             'img_shape': _img_shape,
             'img_num_bytes': _img_num_bytes,
-            'img_buffer': _img_buffer
+            # 'img_buffer': _img_buffer
         })
 
     def setup(self):
@@ -126,7 +126,8 @@ class LogApplication(Application):
         self._insert(TRIGGER_SERVICE_END)
 
     def step(self):
-        self._insert(TRIGGER_SERVICE_STEP)
+        # self._insert(TRIGGER_SERVICE_STEP)
+        pass
 
 
 def main():

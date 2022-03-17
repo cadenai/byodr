@@ -18,10 +18,11 @@ class MongoLogBox(object):
         _projection = {} if load_image else {'img_buffer': False}
         start = kwargs.get('start', 0)
         length = kwargs.get('length', 10)
+        time_order = kwargs.get('order', -1)
         cursor = self._database.events.find(
             filter=_filter,
             projection=_projection,
-            sort=[('time', -1)],
+            sort=[('time', time_order)],
             batch_size=length,
             limit=length,
             skip=(start * length)
@@ -33,8 +34,38 @@ class EventViewer(object):
     def __init__(self):
         pass
 
+    @staticmethod
+    def _trigger_str(trigger):
+        if trigger == 1:
+            return 'startup'
+        elif trigger == 2:
+            return 'shutdown'
+        elif trigger == 4:
+            return 'time'
+        else:
+            raise ValueError("Unexpected trigger '{}'.".format(trigger))
+
     def __call__(self, *args, **kwargs):
-        return kwargs.get('time'), kwargs.get('trigger')
+        return [
+            kwargs.get('time'),
+            self._trigger_str(kwargs.get('trigger')),
+            kwargs.get('pil_driver'),
+            kwargs.get('pil_cruise_speed'),
+            kwargs.get('pil_desired_speed'),
+            kwargs.get('veh_velocity'),
+            kwargs.get('pil_steering'),
+            kwargs.get('pil_throttle'),
+            kwargs.get('pil_is_steering_intervention'),
+            kwargs.get('pil_is_throttle_intervention'),
+            kwargs.get('pil_is_save_event'),
+            kwargs.get('veh_gps_latitude'),
+            kwargs.get('veh_gps_longitude'),
+            kwargs.get('inf_steer_action'),
+            kwargs.get('inf_obstruction'),
+            kwargs.get('inf_steer_penalty'),
+            kwargs.get('inf_obstruction_penalty'),
+            kwargs.get('inf_running_penalty')
+        ]
 
 
 class DataTableRequestHandler(web.RequestHandler):
@@ -46,19 +77,24 @@ class DataTableRequestHandler(web.RequestHandler):
     def data_received(self, chunk):
         pass
 
+    # noinspection PyUnresolvedReferences
     @tornado.gen.coroutine
     def get(self):
+        # logger.info(self.request.arguments)
         try:
             # Parse the draw as integer for security reasons: https://datatables.net/manual/server-side.
             draw = int(self.get_query_argument('draw'))
             start = int(self.get_query_argument('start'))
             length = int(self.get_query_argument('length'))
+            time_order = self.get_query_argument('order[0][dir]')
+            time_order = 1 if time_order == 'desc' else -1
         except ValueError:
             draw = 0
             start = 0
             length = 10
+            time_order = -1
 
-        c_total, cursor = self._box.read_events(start=start, length=length)
+        c_total, cursor = self._box.read_events(start=start, length=length, order=time_order)
         data = []
         for _ in range(length):
             try:

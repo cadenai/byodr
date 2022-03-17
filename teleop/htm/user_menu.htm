@@ -5,6 +5,7 @@
     <title>Menu</title>
     <link rel="stylesheet" href="jquery/jquery-ui-1.12.1.min.css">
     <link rel="stylesheet" href="radioslider/radioslider-1.0.0_b1.min.css">
+    <link rel="stylesheet" href="datatables/datatables-1.11.5.min.css">
     <style type="text/css">
 .application {
   display: flex;
@@ -48,10 +49,15 @@
     font-weight: bold;
 }
 
+table#logbox td {
+    white-space: nowrap;
+}
+
     </style>
     <script src="jquery/jquery-3.4.1.min.js"></script>
     <script src="jquery/jquery-ui-1.12.1.min.js"></script>
     <script src="radioslider/jquery.radioslider-1.0.0_b1.min.js"></script>
+    <script src="datatables/datatables-1.11.5.min.js"></script>
     <script src="index_a_utils.js?v=0.60.0"></script>
     <script src="menu_settings.js?v=0.60.0"></script>
     <script src="menu_controls.js?v=0.60.0"></script>
@@ -66,7 +72,7 @@
         </p>
         <p><a id="settings_link" href="#">Settings</a></p>
         <p><a id="controls_link" href="#">Controls</a></p>
-        <p><a id="logbox_link" href="#">Controls</a></p>
+        <p><a id="logbox_link" href="#">Events</a></p>
     </nav>
     <main class="application-content">
         <div id="application-content-container"></div>
@@ -107,6 +113,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
     $("a#settings_link").click(function() { _user_menu_route_screen('settings'); });
     $("a#controls_link").click(function() { _user_menu_route_screen('controls'); });
+    $("a#logbox_link").click(function() { _user_menu_route_screen('logbox'); });
 
     // Activate the selected screen.
     var screen = window.localStorage.getItem('user.menu.screen');
