@@ -305,9 +305,9 @@ class TFRunner(Configurable):
         _out = self._navigator.forward(image, route)
         action, critic, surprise, brake, brake_critic, nav_point_id, nav_image_id, nav_distance, command, path = _out
         _command_index = int(np.argmax(command))
-        _steer_penalty = max(0, self._fn_steer_mu(surprise=max(0, surprise), loss=abs(surprise - critic)))
-        _obstacle_penalty = max(0, self._fn_brake_mu(surprise=max(0, brake), loss=max(0, brake_critic)))
-        _total_penalty = max(0, min(1, self._penalty_filter.calculate(_steer_penalty + _obstacle_penalty)))
+        _steer_penalty = min(1, max(0, self._fn_steer_mu(surprise=max(0, surprise), loss=abs(surprise - critic))))
+        _obstacle_penalty = min(1, max(0, self._fn_brake_mu(surprise=max(0, brake), loss=max(0, brake_critic))))
+        _total_penalty = min(1, max(0, self._penalty_filter.calculate(_steer_penalty + _obstacle_penalty)))
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action)),
                     obstacle=float(brake),

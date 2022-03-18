@@ -18,9 +18,9 @@ from byodr.utils import Application
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.usbrelay import StaticRelayHolder, SearchUsbRelayFactory, StaticMemoryFakeHolder
-from core import CommandProcessor
-from relay import NoopRelay, RealMonitoringRelay
-from web import RelayControlRequestHandler
+from .core import CommandProcessor
+from .relay import NoopRelay, RealMonitoringRelay
+from .web import RelayControlRequestHandler
 
 logger = logging.getLogger(__name__)
 

@@ -107,7 +107,7 @@ services:
       context: .
       dockerfile: logbox/Dockerfile
     restart: always
-    command: ["python3", "app.py", "--name", "logbox"]
+    command: ["python3", "-m", "logbox.app", "--name", "logbox"]
     stop_signal: SIGKILL
     network_mode: host
     volumes:
@@ -149,7 +149,7 @@ services:
       dockerfile: pilot/Dockerfile
     restart: always
     privileged: true  # Access to usb devices without udev rules.
-    command: ["python3", "app.py", "--name", "pilot", "--routes", "/sessions/routes"]
+    command: ["python3", "-m", "pilot.app", "--name", "pilot", "--routes", "/sessions/routes"]
     stop_signal: SIGKILL
     ports:
       - "8082:8082"
@@ -166,7 +166,7 @@ services:
       dockerfile: inference/runtime-cp36-jp441.dockerfile
     restart: always
     privileged: true
-    command: ["python3", "-m",  "inference.app", "--user", "/sessions/models", "--routes", "/sessions/routes"]
+    command: ["python3", "-m", "inference.app", "--user", "/sessions/models", "--routes", "/sessions/routes"]
     environment:
       LD_PRELOAD: libgomp.so.1
       OMP_PLACES: "{3}"
