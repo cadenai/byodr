@@ -1,6 +1,6 @@
 from __future__ import absolute_import
+
 import gc
-from io import StringIO, BytesIO
 import logging
 import multiprocessing
 import os
@@ -8,10 +8,12 @@ import uuid
 import zipfile
 from abc import ABCMeta, abstractmethod
 from datetime import datetime
+from io import StringIO, BytesIO
 
+import numpy as np
 import pandas as pd
-from six.moves import map
 import six
+from six.moves import map
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,7 @@ class Event(object):
     def __init__(self,
                  timestamp,
                  image_shape,
-                 jpeg_image,
+                 jpeg_buffer,
                  steer_src,
                  speed_src,
                  command_src,
@@ -40,7 +42,7 @@ class Event(object):
                  inference_brake):
         self.timestamp = timestamp
         self.image_shape = image_shape
-        self.jpeg_image = jpeg_image
+        self.jpeg_buffer = jpeg_buffer
         self.steer_src = steer_src
         self.speed_src = speed_src
         self.command_src = command_src
@@ -173,8 +175,7 @@ image-shape-hwc: "{image_shape}"
                     str(timestamp), steering, throttle, desired_speed, heading, str(steer_src)
                 )
                 with zipfile.ZipFile(self._zip_file_at_write(), mode='a', compression=0) as archive:
-                    buf = event.jpeg_image
-                    archive.writestr(filename, BytesIO(buf).getvalue())
+                    archive.writestr(filename, BytesIO(np.frombuffer(memoryview(event.jpeg_buffer), dtype=np.uint8)).getvalue())
                 #
                 self._data.loc[len(self._data)] = [timestamp,
                                                    event.vehicle,

@@ -2,27 +2,23 @@ from __future__ import absolute_import
 
 import argparse
 import asyncio
-import collections
 import logging
 import multiprocessing
-import os
 import signal
 import sys
 import threading
 import traceback
+from datetime import datetime
 
-import cv2
-import numpy as np
-from bson.binary import Binary
 from pymongo import MongoClient
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.platform.asyncio import AnyThreadEventLoopPolicy
 
-from byodr.utils import Application, timestamp
+from byodr.utils import Application
 from byodr.utils.ipc import CameraThread, json_collector
 from byodr.utils.option import parse_option
-from . import jpeg_encode
+from .core import *
 from .store import Event, create_data_source
 from .web import DataTableRequestHandler, JPEGImageRequestHandler
 
@@ -32,10 +28,6 @@ else:
     pass
 
 logger = logging.getLogger(__name__)
-
-TRIGGER_SERVICE_START = 2 ** 0
-TRIGGER_SERVICE_END = 2 ** 1
-TRIGGER_SERVICE_STEP = 2 ** 2
 
 signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
 signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
@@ -54,10 +46,6 @@ def _str(c, attr):
 
 def _bool(c, attr):
     return 1 if (c is not None and bool(c.get(attr))) else 0
-
-
-def _get_ts(c, default=-1):
-    return default if c is None else c.get('time')
 
 
 def _driver_mode(pil):
@@ -82,124 +70,13 @@ def _driver_sub_type(pil, attr):
         return 0
 
 
-class SharedMem(object):
-    def __init__(self):
-        self._user_busy = collections.deque(maxlen=1)
-
-    def touch(self):
-        self._user_busy.append(timestamp())
-
-    def get(self):
-        return self._user_busy[0] if len(self._user_busy) > 0 else 0
-
-    def is_busy(self, wait_ms=3e5):
-        return timestamp() - self.get() < (wait_ms * 1e3)
-
-
-class LogApplication(Application):
-    def __init__(self, mongo, mem, event, hz=10, config_dir=os.getcwd()):
-        super(LogApplication, self).__init__(quit_event=event, run_hz=hz)
-        self._database = mongo.logbox
-        self._mem = mem
-        self._config_dir = config_dir
-        self._patience = 1.5 * (1e6 / self.get_hz())
-        self.camera = None
-        self.pilot = None
-        self.vehicle = None
-        self.inference = None
-
-    def _states(self, stamp):
-        # Ignore outdated data with nil.
-        image_md, image = self.camera.capture()
-        pil, veh, inf = self.pilot(), self.vehicle(), self.inference()
-        _li = list([None if x is None or abs(stamp - _get_ts(x)) > self._patience else x for x in (pil, veh, inf, image_md)])
-        pil, veh, inf, image_md = _li
-        return pil, veh, inf, image_md, (None if image_md is None else image)
-
-    @staticmethod
-    def _image_fields(image, persist=True):
-        _shape, _num_bytes, _buffer = -1, -1, -1
-        if persist and image is not None:
-            if image.shape != (240, 320, 3):
-                image = cv2.resize(image, (320, 240))
-            _shape = image.shape
-            _img_bytes = jpeg_encode(image).tobytes()
-            _num_bytes = len(_img_bytes)
-            _buffer = Binary(_img_bytes)
-        return _shape, _num_bytes, _buffer
-
-    def _insert(self, trigger, force=False):
-        _time = timestamp()
-        _busy = False
-        # The pilot message is nil when no party is driving.
-        # The pilot message save_event attribute is set to true by the autopilot driver to indicate the image needs recording.
-        pil, veh, inf, image_md, image = self._states(_time)
-        _pil_ok = pil is not None and pil.get('driver') is not None
-        _pil_ok = _pil_ok and (bool(pil.get('forced_steering', 0)) or bool(pil.get('forced_throttle', 0)))
-        _busy = _pil_ok
-        if force or _pil_ok:
-            _save_img = pil is not None and bool(pil.get('save_event', 0))
-            _busy = _busy or _save_img
-            _img_fields = self._image_fields(image, persist=(force or _save_img))
-            self._database.events.insert_one({
-                'time': _time,
-                'trigger': trigger,
-                'pil_time': _get_ts(pil),
-                'pil_cruise_speed': _str(pil, 'cruise_speed'),
-                'pil_desired_speed': _str(pil, 'desired_speed'),
-                'pil_driver_mode': _driver_mode(pil),
-                'pil_steering_driver': _driver_sub_type(pil, 'steering_driver'),
-                'pil_speed_driver': _driver_sub_type(pil, 'speed_driver'),
-                'pil_is_steering_intervention': _bool(pil, 'forced_steering'),
-                'pil_is_throttle_intervention': _bool(pil, 'forced_throttle'),
-                'pil_is_save_event': _bool(pil, 'save_event'),
-                'pil_steering': _str(pil, 'steering'),
-                'pil_throttle': _str(pil, 'throttle'),
-                'veh_time': _get_ts(veh),
-                'veh_heading': _str(veh, 'heading'),
-                'veh_gps_latitude': _str(veh, 'latitude_geo'),
-                'veh_gps_longitude': _str(veh, 'longitude_geo'),
-                'veh_velocity': _str(veh, 'velocity'),
-                'veh_is_velocity_trusted': _bool(veh, 'trust_velocity'),
-                'inf_time': _get_ts(inf),
-                'inf_steer_action': _str(inf, 'action'),
-                'inf_obstruction': _str(inf, 'obstacle'),
-                'inf_steer_penalty': _str(inf, 'steer_penalty'),
-                'inf_obstruction_penalty': _str(inf, 'brake_penalty'),
-                'inf_running_penalty': _str(inf, 'total_penalty'),
-                'img_time': _get_ts(image_md),
-                'img_shape': _img_fields[0],
-                'img_num_bytes': _img_fields[1],
-                'img_buffer': _img_fields[2],
-                'lb_zip_packaged': 0
-            })
-        if _busy:
-            self._mem.touch()
-
-    def setup(self):
-        self._insert(TRIGGER_SERVICE_START, force=True)
-
-    def finish(self):
-        self._insert(TRIGGER_SERVICE_END, force=True)
-
-    def step(self):
-        self._insert(TRIGGER_SERVICE_STEP)
-
-
-def _get_directory(directory, mode=0o775):
-    if not os.path.exists(directory):
-        _mask = os.umask(000)
-        os.makedirs(directory, mode=mode)
-        os.umask(_mask)
-    return directory
-
-
 class PackageApplication(Application):
-    def __init__(self, mongo, mem, event, hz=1e-2, sessions_dir=os.getcwd()):
+    def __init__(self, mongo, user, event, hz=1e-2, sessions_dir=os.getcwd()):
         super(PackageApplication, self).__init__(quit_event=event, run_hz=hz)
-        self._database = mongo.logbox
-        self._mem = mem
-        self._recorder_dir = _get_directory(os.path.join(sessions_dir, 'autopilot'))
+        self._mongo = mongo
+        self._user = user
+        self._recorder_dir = get_or_create_directory(os.path.join(sessions_dir, 'autopilot'))
+        self._photo_dir = get_or_create_directory(os.path.join(sessions_dir, 'photos', 'cam0'))
         self._vehicle = parse_option('constant.vehicle.type', str, 'vehicle.byodr.2020', [], **{})
         self._config = parse_option('constant.vehicle.config', str, 'latest', [], **{})
 
@@ -210,13 +87,30 @@ class PackageApplication(Application):
         pass
 
     def _mark(self, item):
-        self._database.events.update_one({'_id': item.get('_id')}, {'$set': {"lb_zip_packaged": 1}})
+        self._mongo.update_event({'_id': item.get('_id')}, {'$set': {"lb_is_packaged": 1}})
 
-    def _event(self, row):
+    def _write_out_photos(self):
+        items = self._mongo.list_all_non_packaged_photo_events()
+        if len(items) > 0 and not self._user.is_busy():
+            _directory = os.path.join(self._photo_dir, datetime.fromtimestamp(items[0].get('time') * 1e-6).strftime('%Y%B'))
+            _directory = get_or_create_directory(_directory)
+            with open(os.path.join(_directory, 'photo.log'), 'a+') as f:
+                for item in items:
+                    self._mark(item)
+                    _timestamp = item.get('time')
+                    _dts = datetime.fromtimestamp(_timestamp * 1e-6).strftime('%Y%b%dT%H%M%S')
+                    latitude = item.get('veh_gps_latitude')
+                    longitude = item.get('veh_gps_longitude')
+                    fname = "{}_lat{}_long{}.jpg".format(_dts, str(latitude)[:8].replace('.', '_'), str(longitude)[:8].replace('.', '_'))
+                    cv2.imwrite(os.path.join(_directory, fname), cv2_image_from_bytes(item.get('img_buffer')))
+                    f.write("{} {} latitude {} longitude {}\r\n".format(_timestamp, fname, latitude, longitude))
+
+    def _event(self, row, lenience_ms=30):
+        _timestamp = row.get('time')
         event = Event(
-            timestamp=row.get('time'),
+            timestamp=_timestamp,
             image_shape=row.get('img_shape'),
-            jpeg_image=np.frombuffer(memoryview(row.get('img_buffer')), dtype=np.uint8),
+            jpeg_buffer=row.get('img_buffer'),
             steer_src=row.get('pil_steering_driver'),
             speed_src=row.get('pil_speed_driver'),
             command_src=row.get('pil_steering_driver'),
@@ -232,38 +126,142 @@ class PackageApplication(Application):
         )
         event.vehicle = self._vehicle
         event.vehicle_config = self._config
+        lenience = lenience_ms * 1e3
+        pil_valid = abs(_timestamp - row.get('pil_time')) < lenience
+        veh_valid = abs(_timestamp - row.get('veh_time')) < lenience
+        inf_valid = abs(_timestamp - row.get('inf_time')) < lenience
+        img_valid = abs(_timestamp - row.get('img_time')) < lenience
+        event.valid = pil_valid and veh_valid and inf_valid and img_valid
         return event
 
-    def _zip(self):
-        if self._mem.is_busy():
+    def _package_next(self):
+        if self._user.is_busy():
             return False
-
-        _filter = {'pil_is_save_event': 1, 'lb_zip_packaged': 0, 'img_num_bytes': {'$gt': 0}}
-        cursor = self._database.events.find(filter=_filter, sort=[('time', -1)], batch_size=1000, limit=1000)
-        items = list(cursor)
+        # Start by saving the photo snapshots.
+        self._write_out_photos()
+        # Proceed unless new user activity.
+        if self._user.is_busy():
+            return False
+        # The save events not previously processed are packaged together in a zip.
+        items = self._mongo.list_next_batch_of_non_packaged_save_events()
         if len(items) < 1:
             return False
-
-        _timestamp = items[-1].get('time')
-        _archive = create_data_source(_timestamp, self._recorder_dir)
+        # Mark regardless of zip write success.
+        list([self._mark(x) for x in items])
+        # Do the zip write in time ascending order - filter out invalid saves.
+        events = list(filter(lambda x: x.valid, map(self._event, reversed(items))))
+        if len(events) < 1:
+            return False
+        logger.info("Packaging {} valid events out of {} total items.".format(len(events), len(items)))
+        _archive = create_data_source(events[0].timestamp, self._recorder_dir)
         try:
             _archive.open()
             assert _archive.is_open(), "Could not create a new archive."
-            # Write the zip in time ascending order.
-            for row in reversed(items):
-                _archive.create_event(self._event(row))
+            list(map(lambda x: _archive.create_event(x), events))
             _archive.close()
-            list([self._mark(x) for x in items])
         except Exception as e:
             logger.warning(e)
-            logger.error("Recorder#do_record: {}".format(traceback.format_exc()))
+            logger.error("Packager#next: {}".format(traceback.format_exc()))
             return False
-        return not self._mem.is_busy()
+        return not self._user.is_busy()
 
     def step(self):
         _package = True
         while _package:
-            _package = self._zip()
+            _package = self._package_next()
+
+
+class PhotoLog(object):
+    """Ignore photos taken too fast."""
+
+    def __init__(self, buffer_size=100, window_ms=500):
+        self._micro = window_ms * 1e3
+        self._events = collections.deque(maxlen=buffer_size)
+        self._observed = None
+
+    def clear(self):
+        self._events.clear()
+
+    def append(self, content):
+        _timestamp = content[0]
+        # Skip duplicate photos.
+        if self._observed is None or (_timestamp - self._observed) > self._micro:
+            self._observed = _timestamp
+            self._events.append(content)
+
+    def pop_all(self):
+        _l = list(self._events) if len(self._events) > 0 else []
+        self.clear()
+        return _l
+
+
+class LogApplication(Application):
+    def __init__(self, mongo, user, state, event, config_dir=os.getcwd()):
+        super(LogApplication, self).__init__(quit_event=event, run_hz=state.get_hz())
+        self._mongo = mongo
+        self._user = user
+        self._state = state
+        self._config_dir = config_dir
+        self._photos = PhotoLog()
+
+    def _insert(self, trigger, content, save_image=False):
+        _time, pil, veh, inf, image_md, image = content
+        _img_fields = prepare_image_persist(image, persist=save_image)
+        self._mongo.insert_event({
+            'time': _time,
+            'trigger': trigger,
+            'pil_time': get_timestamp(pil),
+            'pil_cruise_speed': _str(pil, 'cruise_speed'),
+            'pil_desired_speed': _str(pil, 'desired_speed'),
+            'pil_driver_mode': _driver_mode(pil),
+            'pil_steering_driver': _driver_sub_type(pil, 'steering_driver'),
+            'pil_speed_driver': _driver_sub_type(pil, 'speed_driver'),
+            'pil_is_steering_intervention': _bool(pil, 'forced_steering'),
+            'pil_is_throttle_intervention': _bool(pil, 'forced_throttle'),
+            'pil_is_save_event': _bool(pil, 'save_event'),
+            'pil_steering': _str(pil, 'steering'),
+            'pil_throttle': _str(pil, 'throttle'),
+            'veh_time': get_timestamp(veh),
+            'veh_heading': _str(veh, 'heading'),
+            'veh_gps_latitude': _str(veh, 'latitude_geo'),
+            'veh_gps_longitude': _str(veh, 'longitude_geo'),
+            'veh_velocity': _str(veh, 'velocity'),
+            'veh_is_velocity_trusted': _bool(veh, 'trust_velocity'),
+            'inf_time': get_timestamp(inf),
+            'inf_steer_action': _str(inf, 'action'),
+            'inf_obstruction': _str(inf, 'obstacle'),
+            'inf_steer_penalty': _str(inf, 'steer_penalty'),
+            'inf_obstruction_penalty': _str(inf, 'brake_penalty'),
+            'inf_running_penalty': _str(inf, 'total_penalty'),
+            'img_time': get_timestamp(image_md),
+            'img_shape': _img_fields[0],
+            'img_num_bytes': _img_fields[1],
+            'img_buffer': _img_fields[2],
+            'lb_is_packaged': 0
+        })
+
+    def setup(self):
+        self._insert(TRIGGER_SERVICE_START, content=self._state.pull()[:-1])
+
+    def finish(self):
+        pass
+
+    def step(self):
+        # The pilot message is nil when no party is driving.
+        _time, pil, veh, inf, image_md, image, pilot_all = self._state.pull()
+        # The pilot message save_event attribute is set to true by the autopilot driver to indicate the image needs recording.
+        _drive = pil is not None and pil.get('driver') is not None
+        _drive = _drive and (bool(pil.get('forced_steering', 0)) or bool(pil.get('forced_throttle', 0)))
+        _train = pil is not None and bool(pil.get('save_event', 0))
+        _contents = (_time, pil, veh, inf, image_md, image)
+        # Log events.
+        if _drive or _train:
+            self._user.touch()
+            self._insert(TRIGGER_SERVICE_STEP, content=_contents, save_image=_train)
+        # Scan the pilot commands for photo requests.
+        if any([cmd.get('button_right', 0) == 1 for cmd in ([] if pilot_all is None else pilot_all)]):
+            self._photos.append(_contents)
+        list(map(lambda x: self._insert(TRIGGER_PHOTO_SNAPSHOT, content=x, save_image=True), self._photos.pop_all()))
 
 
 def main():
@@ -274,24 +272,23 @@ def main():
     args = parser.parse_args()
 
     # The mongo client is thread-safe and provides for transparent connection pooling.
-    _mongo = MongoClient()
+    _mongo = MongoLogBox(MongoClient())
 
-    shared_mem = SharedMem()
-    log_application = LogApplication(_mongo, shared_mem, quit_event, hz=20, config_dir=args.config)
-    package_application = PackageApplication(_mongo, shared_mem, quit_event, hz=0.01666666667, sessions_dir=args.sessions)
-
-    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
+    # Never miss out on pilot commands - pop a large buffer.
+    _camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event, pop=True, hwm=20)
     vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
 
-    log_application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
-    log_application.pilot = lambda: pilot.get()
-    log_application.vehicle = lambda: vehicle.get()
-    log_application.inference = lambda: inference.get()
+    _user = SharedUser()
+    _state = SharedState(channels=(_camera, (lambda: pilot.get()), (lambda: vehicle.get()), (lambda: inference.get())), hz=20)
 
-    log_thread = threading.Thread(target=log_application.run)
+    log_application = LogApplication(_mongo, _user, _state, quit_event, config_dir=args.config)
+    package_application = PackageApplication(_mongo, _user, quit_event, hz=0.0333, sessions_dir=args.sessions)
+
+    application_thread = threading.Thread(target=log_application.run)
     package_thread = threading.Thread(target=package_application.run)
-    threads = [log_application.camera, pilot, vehicle, inference, log_thread, package_thread]
+    threads = [_camera, pilot, vehicle, inference, application_thread, package_thread]
     if quit_event.is_set():
         return 0
 
@@ -303,8 +300,8 @@ def main():
     try:
         io_loop = ioloop.IOLoop.instance()
         main_app = web.Application([
-            (r"/api/datalog/event/v10/table", DataTableRequestHandler, dict(mongo_client=_mongo)),
-            (r"/api/datalog/event/v10/image", JPEGImageRequestHandler, dict(mongo_client=_mongo))
+            (r"/api/datalog/event/v10/table", DataTableRequestHandler, dict(mongo_box=_mongo)),
+            (r"/api/datalog/event/v10/image", JPEGImageRequestHandler, dict(mongo_box=_mongo))
         ])
         http_server = HTTPServer(main_app, xheaders=True)
         http_server.bind(8085)

@@ -3,42 +3,13 @@ from __future__ import absolute_import
 import json
 import logging
 
-import cv2
-import numpy as np
 import tornado
-from bson.objectid import ObjectId
+from six.moves import range
 from tornado import web
 
-from . import jpeg_encode
-from six.moves import range
+from .core import *
 
 logger = logging.getLogger(__name__)
-
-
-class MongoLogBox(object):
-    def __init__(self, client):
-        self._database = client.logbox
-
-    def load_jpeg_image(self, object_id):
-        # Images are stored as jpeg encoded bytes.
-        event = self._database.events.find_one({'_id': ObjectId(object_id)})
-        return None if event is None else event.get('img_shape'), event.get('img_num_bytes'), event.get('img_buffer')
-
-    def read_events(self, load_image=False, **kwargs):
-        _filter = {}
-        _projection = {} if load_image else {'img_buffer': False}
-        start = kwargs.get('start', 0)
-        length = kwargs.get('length', 10)
-        time_order = kwargs.get('order', -1)
-        cursor = self._database.events.find(
-            filter=_filter,
-            projection=_projection,
-            sort=[('time', time_order)],
-            batch_size=length,
-            limit=length,
-            skip=start
-        )
-        return cursor.collection.count_documents(_filter), cursor
 
 
 class EventViewer(object):
@@ -47,12 +18,14 @@ class EventViewer(object):
 
     @staticmethod
     def _trigger_str(trigger):
-        if trigger == 1:
+        if trigger == TRIGGER_SERVICE_START:
             return 'startup'
-        elif trigger == 2:
+        elif trigger == TRIGGER_SERVICE_END:
             return 'shutdown'
-        elif trigger == 4:
+        elif trigger == TRIGGER_SERVICE_STEP:
             return 'time'
+        elif trigger == TRIGGER_PHOTO_SNAPSHOT:
+            return 'photo'
         else:
             raise ValueError("Unexpected trigger '{}'.".format(trigger))
 
@@ -84,7 +57,7 @@ class EventViewer(object):
 class DataTableRequestHandler(web.RequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._box = MongoLogBox(kwargs.get('mongo_client'))
+        self._box = kwargs.get('mongo_box')
         self._view = EventViewer()
 
     def data_received(self, chunk):
@@ -106,7 +79,7 @@ class DataTableRequestHandler(web.RequestHandler):
             length = 10
             time_order = -1
 
-        c_total, cursor = self._box.read_events(start=start, length=length, order=time_order)
+        c_total, cursor = self._box.paginate_events(start=start, length=length, order=time_order)
         data = []
         for _ in range(length):
             try:
@@ -132,20 +105,19 @@ class DataTableRequestHandler(web.RequestHandler):
 class JPEGImageRequestHandler(web.RequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
-        self._box = MongoLogBox(kwargs.get('mongo_client'))
+        self._box = kwargs.get('mongo_box')
 
     def data_received(self, chunk):
         pass
 
     @tornado.gen.coroutine
     def get(self):
-        _fields = self._box.load_jpeg_image(self.get_query_argument('object_id'))
+        _fields = self._box.load_event_image_fields(self.get_query_argument('object_id'))
         _written = False
         if _fields is not None:
             _exists = _fields[1] > 0
             if _exists:
-                img = cv2.imdecode(np.frombuffer(memoryview(_fields[-1]), dtype=np.uint8), cv2.IMREAD_COLOR)
-                img = cv2.resize(img, (200, 80))
+                img = cv2.resize(cv2_image_from_bytes(_fields[-1]), (200, 80))
                 _bytes = jpeg_encode(img).tobytes()
                 self.set_status(200)
                 self.set_header('Content-Type', 'image/jpeg')
