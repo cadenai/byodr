@@ -163,7 +163,7 @@ class Application(object):
             # Quit first to be sure - the traceback may in some cases raise another exception.
             self.quit()
             self.logger.error(e)
-            self.logger.error(traceback.format_exc(e))
+            self.logger.error(traceback.format_exc())
         except KeyboardInterrupt:
             self.quit()
         finally:

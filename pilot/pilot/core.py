@@ -645,7 +645,7 @@ class DriverManager(Configurable):
             if self._driver is not None:
                 self._driver.activate()
         except Exception as e:
-            logger.error("Driver activation: {}".format(traceback.format_exc(e)))
+            logger.error("Driver activation: {}".format(traceback.format_exc()))
         finally:
             self._lock.release()
 

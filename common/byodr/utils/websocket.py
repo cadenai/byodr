@@ -60,7 +60,7 @@ class HttpLivePlayerVideoSocket(websocket.WebSocketHandler):
                 self._streaming = 'REQUESTSTREAM' in message
                 logger.info("On message - streaming = {}.".format(self._streaming))
         except Exception as e:
-            logger.error("Stream socket@on_message: {} {}".format(e, traceback.format_exc(e)))
+            logger.error("Stream socket@on_message: {} {}".format(e, traceback.format_exc()))
             logger.error("Input message:---\n{}\n---".format(message))
 
 

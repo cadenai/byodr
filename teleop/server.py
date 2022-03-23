@@ -226,7 +226,7 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
             img = self._black_img if img is None else img
             self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
         except Exception as e:
-            logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc(e)))
+            logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc()))
             logger.error("JSON message:---\n{}\n---".format(message))
 
 

@@ -10,6 +10,7 @@ from bson.objectid import ObjectId
 from tornado import web
 
 from . import jpeg_encode
+from six.moves import range
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class EventViewer(object):
             kwargs.get('time'),
             1 if kwargs.get('img_num_bytes', 0) > 0 else 0,
             self._trigger_str(kwargs.get('trigger')),
-            kwargs.get('pil_driver'),
+            kwargs.get('pil_driver_mode'),
             kwargs.get('pil_cruise_speed'),
             kwargs.get('pil_desired_speed'),
             kwargs.get('veh_velocity'),
@@ -109,7 +110,7 @@ class DataTableRequestHandler(web.RequestHandler):
         data = []
         for _ in range(length):
             try:
-                data.append(self._view(**cursor.next()))
+                data.append(self._view(**next(cursor)))
             except StopIteration:
                 break
 
