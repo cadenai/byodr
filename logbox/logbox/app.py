@@ -15,7 +15,7 @@ from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.platform.asyncio import AnyThreadEventLoopPolicy
 
-from byodr.utils import Application
+from byodr.utils import Application, ApplicationExit
 from byodr.utils.ipc import CameraThread, json_collector
 from byodr.utils.option import parse_option
 from .core import *
@@ -48,7 +48,14 @@ def _bool(c, attr):
     return 1 if (c is not None and bool(c.get(attr))) else 0
 
 
-def _driver_mode(pil):
+def _float(c, attr, default=0.):
+    try:
+        return default if (c is None or c.get(attr) is None) else float(c.get(attr))
+    except ValueError:
+        return default
+
+
+def _driver_mode_as_int(pil):
     dr = None if pil is None else pil.get('driver')
     if dr == 'driver_mode.teleop.direct':
         return 1
@@ -58,7 +65,7 @@ def _driver_mode(pil):
         return 0
 
 
-def _driver_sub_type(pil, attr):
+def _driver_type_as_int(pil, attr):
     x = _str(pil, attr)
     if x == 'src.console':
         return 1
@@ -68,6 +75,17 @@ def _driver_sub_type(pil, attr):
         return 4
     else:
         return 0
+
+
+def _driver_type_as_str(x):
+    if x == 1:
+        return 'src.console'
+    elif x == 2:
+        return 'src.dnn.pre-intervention'
+    elif x == 4:
+        return 'src.dnn'
+    else:
+        return 'null'
 
 
 class PackageApplication(Application):
@@ -107,13 +125,15 @@ class PackageApplication(Application):
 
     def _event(self, row, lenience_ms=30):
         _timestamp = row.get('time')
+        _steer_src = _driver_type_as_str(row.get('pil_steering_driver'))
+        _speed_src = _driver_type_as_str(row.get('pil_speed_driver'))
         event = Event(
             timestamp=_timestamp,
             image_shape=row.get('img_shape'),
             jpeg_buffer=row.get('img_buffer'),
-            steer_src=row.get('pil_steering_driver'),
-            speed_src=row.get('pil_speed_driver'),
-            command_src=row.get('pil_steering_driver'),
+            steer_src=_steer_src,
+            speed_src=_speed_src,
+            command_src=_steer_src,
             steering=row.get('pil_steering'),
             desired_speed=row.get('pil_desired_speed'),
             actual_speed=row.get('veh_velocity'),
@@ -129,9 +149,7 @@ class PackageApplication(Application):
         lenience = lenience_ms * 1e3
         pil_valid = abs(_timestamp - row.get('pil_time')) < lenience
         veh_valid = abs(_timestamp - row.get('veh_time')) < lenience
-        inf_valid = abs(_timestamp - row.get('inf_time')) < lenience
-        img_valid = abs(_timestamp - row.get('img_time')) < lenience
-        event.valid = pil_valid and veh_valid and inf_valid and img_valid
+        event.valid = pil_valid and veh_valid
         return event
 
     def _package_next(self):
@@ -203,22 +221,26 @@ class LogApplication(Application):
         self._state = state
         self._config_dir = config_dir
         self._photos = PhotoLog()
+        self._queue_operator = collections.deque(maxlen=1)
+        self._queue_operator.append(timestamp())
 
     def _insert(self, trigger, content, save_image=False):
         _time, pil, veh, inf, image_md, image = content
         _img_fields = prepare_image_persist(image, persist=save_image)
+        _pil_steering_scale = _float(pil, 'steering_scale', default=1.)
         self._mongo.insert_event({
             'time': _time,
             'trigger': trigger,
             'pil_time': get_timestamp(pil),
             'pil_cruise_speed': _str(pil, 'cruise_speed'),
             'pil_desired_speed': _str(pil, 'desired_speed'),
-            'pil_driver_mode': _driver_mode(pil),
-            'pil_steering_driver': _driver_sub_type(pil, 'steering_driver'),
-            'pil_speed_driver': _driver_sub_type(pil, 'speed_driver'),
+            'pil_driver_mode': _driver_mode_as_int(pil),
+            'pil_steering_driver': _driver_type_as_int(pil, 'steering_driver'),
+            'pil_speed_driver': _driver_type_as_int(pil, 'speed_driver'),
             'pil_is_steering_intervention': _bool(pil, 'forced_steering'),
             'pil_is_throttle_intervention': _bool(pil, 'forced_throttle'),
             'pil_is_save_event': _bool(pil, 'save_event'),
+            'pil_steering_scale': _pil_steering_scale,
             'pil_steering': _str(pil, 'steering'),
             'pil_throttle': _str(pil, 'throttle'),
             'veh_time': get_timestamp(veh),
@@ -230,9 +252,9 @@ class LogApplication(Application):
             'inf_time': get_timestamp(inf),
             'inf_steer_action': _str(inf, 'action'),
             'inf_obstruction': _str(inf, 'obstacle'),
-            'inf_steer_penalty': _str(inf, 'steer_penalty'),
-            'inf_obstruction_penalty': _str(inf, 'brake_penalty'),
-            'inf_running_penalty': _str(inf, 'total_penalty'),
+            'inf_steer_confidence': _str(inf, 'steer_confidence'),
+            'inf_obstruction_confidence': _str(inf, 'brake_confidence'),
+            'inf_total_penalty': _str(inf, 'total_penalty'),
             'img_time': get_timestamp(image_md),
             'img_shape': _img_fields[0],
             'img_num_bytes': _img_fields[1],
@@ -249,16 +271,21 @@ class LogApplication(Application):
     def step(self):
         # The pilot message is nil when no party is driving.
         _time, pil, veh, inf, image_md, image, pilot_all = self._state.pull()
-        # The pilot message save_event attribute is set to true by the autopilot driver to indicate the image needs recording.
-        _drive = pil is not None and pil.get('driver') is not None
-        _drive = _drive and (bool(pil.get('forced_steering', 0)) or bool(pil.get('forced_throttle', 0)))
-        _train = pil is not None and bool(pil.get('save_event', 0))
         _contents = (_time, pil, veh, inf, image_md, image)
-        # Log events.
-        if _drive or _train:
+        # The pilot message save_event attribute is set to true by the autopilot driver to indicate the image needs recording.
+        _operator = pil is not None and pil.get('driver') is not None
+        _operator = _operator and (bool(pil.get('forced_steering', 0)) or bool(pil.get('forced_throttle', 0)))
+        _train = pil is not None and bool(pil.get('save_event', 0))
+        # Keep tabs on whether there is a user in operational command.
+        if _operator or _train:
             self._user.touch()
-            self._insert(TRIGGER_SERVICE_STEP, content=_contents, save_image=_train)
-        # Scan the pilot commands for photo requests.
+        # Log operator events more slowly.
+        if _operator and abs(_time - self._queue_operator[-1]) >= 10e6:
+            self._queue_operator.append(_time)
+            self._insert(TRIGGER_DRIVE_OPERATOR, content=_contents, save_image=True)
+        elif _train:
+            self._insert(TRIGGER_DRIVE_TRAINER, content=_contents, save_image=True)
+        # Scan the pilot commands for photo requests and process them.
         if any([cmd.get('button_right', 0) == 1 for cmd in ([] if pilot_all is None else pilot_all)]):
             self._photos.append(_contents)
         list(map(lambda x: self._insert(TRIGGER_PHOTO_SNAPSHOT, content=x, save_image=True), self._photos.pop_all()))
@@ -271,20 +298,23 @@ def main():
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     args = parser.parse_args()
 
+    primary_hz = 16
+
     # The mongo client is thread-safe and provides for transparent connection pooling.
     _mongo = MongoLogBox(MongoClient())
+    _mongo.ensure_indexes()
 
     # Never miss out on pilot commands - pop a large buffer.
     _camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event, pop=True, hwm=20)
-    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
+    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event, pop=True, hwm=20)
+    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event, pop=True, hwm=20)
 
     _user = SharedUser()
-    _state = SharedState(channels=(_camera, (lambda: pilot.get()), (lambda: vehicle.get()), (lambda: inference.get())), hz=20)
+    _state = SharedState(channels=(_camera, (lambda: pilot.get()), (lambda: vehicle.get()), (lambda: inference.get())), hz=primary_hz)
 
-    log_application = LogApplication(_mongo, _user, _state, quit_event, config_dir=args.config)
-    package_application = PackageApplication(_mongo, _user, quit_event, hz=0.0333, sessions_dir=args.sessions)
+    log_application = LogApplication(_mongo, _user, _state, event=quit_event, config_dir=args.config)
+    package_application = PackageApplication(_mongo, _user, event=quit_event, hz=0.0333, sessions_dir=args.sessions)
 
     application_thread = threading.Thread(target=log_application.run)
     package_thread = threading.Thread(target=package_application.run)
@@ -297,8 +327,12 @@ def main():
     asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
     asyncio.set_event_loop(asyncio.new_event_loop())
 
+    io_loop = ioloop.IOLoop.instance()
+    _conditional_exit = ApplicationExit(quit_event, lambda: io_loop.stop())
+    _periodic = ioloop.PeriodicCallback(lambda: _conditional_exit(), 5e3)
+    _periodic.start()
+
     try:
-        io_loop = ioloop.IOLoop.instance()
         main_app = web.Application([
             (r"/api/datalog/event/v10/table", DataTableRequestHandler, dict(mongo_box=_mongo)),
             (r"/api/datalog/event/v10/image", JPEGImageRequestHandler, dict(mongo_box=_mongo))
@@ -312,6 +346,7 @@ def main():
         quit_event.set()
     finally:
         _mongo.close()
+        _periodic.stop()
 
     logger.info("Waiting on threads to stop.")
     [t.join() for t in threads]

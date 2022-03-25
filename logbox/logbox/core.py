@@ -3,6 +3,7 @@ import os
 
 import cv2
 import numpy as np
+import pymongo
 from bson.binary import Binary
 from bson.objectid import ObjectId
 
@@ -10,8 +11,9 @@ from byodr.utils import timestamp
 
 TRIGGER_SERVICE_START = 2 ** 0
 TRIGGER_SERVICE_END = 2 ** 1
-TRIGGER_SERVICE_STEP = 2 ** 2
-TRIGGER_PHOTO_SNAPSHOT = 2 ** 3
+TRIGGER_PHOTO_SNAPSHOT = 2 ** 2
+TRIGGER_DRIVE_OPERATOR = 2 ** 3
+TRIGGER_DRIVE_TRAINER = 2 ** 4
 
 
 def get_timestamp(c, default=-1):
@@ -61,13 +63,23 @@ class SharedUser(object):
         return timestamp() - self.get() < (wait_ms * 1e3)
 
 
+def _nearest(items, ts, default=None):
+    r = default
+    dt = abs(ts - get_timestamp(r))
+    for item in ([] if items is None else items):
+        delta = abs(ts - get_timestamp(item))
+        if delta < dt:
+            dt = delta
+            r = item
+    return r
+
+
 class SharedState(object):
     def __init__(self, channels, hz=20):
         self._hz = hz
         self._patience = (1e6 / hz)
-        # The pilot channel is set to collect and pop the others cache the most recent message.
         self._camera, self._pilot, self._vehicle, self._inference = channels
-        self._pil_msg = None
+        self._cached = (None, None, None)
 
     def _expire(self, cmd, stamp):
         return None if cmd is None or abs(stamp - get_timestamp(cmd)) > self._patience else cmd
@@ -76,18 +88,27 @@ class SharedState(object):
         return self._hz
 
     def pull(self):
-        # The channels store the most recent message at the start of a list.
+        # The non camera channels are set to collect and pop.
         image_md, image = self._camera.capture()
-        # Delete expired information.
-        _time = timestamp()
-        image_md = self._expire(image_md, _time)
-        image = None if image_md is None else image
-        p_msgs = self._pilot()
-        pil = self._expire(p_msgs[0] if p_msgs is not None and len(p_msgs) > 0 else self._pil_msg, _time)
-        self._pil_msg = pil
-        veh = self._expire(self._vehicle(), _time)
-        inf = self._expire(self._inference(), _time)
-        return _time, pil, veh, inf, image_md, image, p_msgs
+        # Start with the return values.
+        pil, veh, inf = self._cached
+        # The image is the primary event.
+        _time = get_timestamp(image_md, default=timestamp())
+        # Gather the messages around the primary time.
+        pilots = self._pilot()
+        pil = self._expire(_nearest(pilots, _time, pil), _time)
+        veh = self._expire(_nearest(self._vehicle(), _time, veh), _time)
+        inf = self._expire(_nearest(self._inference(), _time, inf), _time)
+        self._cached = (pil, veh, inf)
+        return _time, pil, veh, inf, image_md, image, pilots
+
+
+# noinspection PyUnresolvedReferences
+def _create_index_if_not_exists(collection, keys, name, unique=False, background=True):
+    try:
+        collection.create_index(keys, name=name, unique=unique, background=background)
+    except pymongo.errors.OperationFailure:
+        pass
 
 
 class MongoLogBox(object):
@@ -97,6 +118,17 @@ class MongoLogBox(object):
 
     def close(self):
         self._client.close()
+
+    def ensure_indexes(self):
+        _coll = self._database.events
+        _create_index_if_not_exists(_coll, [('time', pymongo.DESCENDING)], name='idx_time_descending', unique=True)
+        _create_index_if_not_exists(_coll, [('time', pymongo.DESCENDING),
+                                            ('pil_is_save_event', pymongo.ASCENDING),
+                                            ('lb_is_packaged', pymongo.ASCENDING),
+                                            ('img_num_bytes', pymongo.ASCENDING)], name='idx_non_packaged_save_events')
+        _create_index_if_not_exists(_coll, [('trigger', pymongo.ASCENDING),
+                                            ('lb_is_packaged', pymongo.ASCENDING),
+                                            ('img_num_bytes', pymongo.ASCENDING)], name='idx_non_packaged_save_events')
 
     def load_event_image_fields(self, object_id):
         # Images are stored as jpeg encoded bytes.
@@ -119,8 +151,13 @@ class MongoLogBox(object):
         )
         return cursor.collection.count_documents(_filter), cursor
 
+    # noinspection PyUnresolvedReferences
     def insert_event(self, document):
-        return self._database.events.insert_one(document)
+        try:
+            # Silently handle the case where a timestamp already exists.
+            return self._database.events.insert_one(document)
+        except pymongo.errors.DuplicateKeyError:
+            return False
 
     def update_event(self, query, update):
         return self._database.events.update_one(query, update)

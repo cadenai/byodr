@@ -11,46 +11,64 @@ from .core import *
 
 logger = logging.getLogger(__name__)
 
+_trigger_names = {
+    TRIGGER_SERVICE_START: 'startup',
+    TRIGGER_SERVICE_END: 'shutdown',
+    TRIGGER_PHOTO_SNAPSHOT: 'photo',
+    TRIGGER_DRIVE_OPERATOR: 'teleop',
+    TRIGGER_DRIVE_TRAINER: 'train'
+}
 
-class EventViewer(object):
+
+def _trigger_str(trigger):
+    if trigger in _trigger_names:
+        return _trigger_names[trigger]
+    else:
+        raise ValueError("Unexpected trigger '{}'.".format(trigger))
+
+
+def _float_scaled(x, scale=1.):
+    try:
+        return x if x is None else (float(x) / scale)
+    except ValueError:
+        return x
+
+
+def _float_or_default(x, default=0.):
+    try:
+        return default if x is None else float(x)
+    except ValueError:
+        return default
+
+
+class WebEventViewer(object):
     def __init__(self):
         pass
 
-    @staticmethod
-    def _trigger_str(trigger):
-        if trigger == TRIGGER_SERVICE_START:
-            return 'startup'
-        elif trigger == TRIGGER_SERVICE_END:
-            return 'shutdown'
-        elif trigger == TRIGGER_SERVICE_STEP:
-            return 'time'
-        elif trigger == TRIGGER_PHOTO_SNAPSHOT:
-            return 'photo'
-        else:
-            raise ValueError("Unexpected trigger '{}'.".format(trigger))
-
     def __call__(self, *args, **kwargs):
+        _steering_scale = _float_or_default(kwargs.get('pil_steering_scale'), default=1.)
+        _pil_steering = _float_scaled(kwargs.get('pil_steering'), scale=_steering_scale)
+        _inf_steering = _float_scaled(kwargs.get('inf_steer_action'), scale=_steering_scale)
         return [
             str(kwargs.get('_id')),
             kwargs.get('time'),
             1 if kwargs.get('img_num_bytes', 0) > 0 else 0,
-            self._trigger_str(kwargs.get('trigger')),
+            _trigger_str(kwargs.get('trigger')),
             kwargs.get('pil_driver_mode'),
             kwargs.get('pil_cruise_speed'),
             kwargs.get('pil_desired_speed'),
             kwargs.get('veh_velocity'),
-            kwargs.get('pil_steering'),
+            _pil_steering,
             kwargs.get('pil_throttle'),
             kwargs.get('pil_is_steering_intervention'),
             kwargs.get('pil_is_throttle_intervention'),
             kwargs.get('pil_is_save_event'),
             kwargs.get('veh_gps_latitude'),
             kwargs.get('veh_gps_longitude'),
-            kwargs.get('inf_steer_action'),
+            _inf_steering,
             kwargs.get('inf_obstruction'),
-            kwargs.get('inf_steer_penalty'),
-            kwargs.get('inf_obstruction_penalty'),
-            kwargs.get('inf_running_penalty')
+            kwargs.get('inf_steer_confidence'),
+            kwargs.get('inf_obstruction_confidence')
         ]
 
 
@@ -58,7 +76,7 @@ class DataTableRequestHandler(web.RequestHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._box = kwargs.get('mongo_box')
-        self._view = EventViewer()
+        self._view = WebEventViewer()
 
     def data_received(self, chunk):
         pass
