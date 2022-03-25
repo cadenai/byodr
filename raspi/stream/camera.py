@@ -140,8 +140,8 @@ def main():
         rear_server = web.HTTPServer(web_app, xheaders=True)
         rear_server.bind(args.port)
         rear_server.start()
-        io_loop.start()
         logger.info("Web service started on port {}.".format(args.port))
+        io_loop.start()
 
         logger.info("Waiting on threads to stop.")
         [t.join() for t in threads]

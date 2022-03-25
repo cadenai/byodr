@@ -142,8 +142,8 @@ def main():
             http_server = HTTPServer(main_app, xheaders=True)
             http_server.bind(8082)
             http_server.start()
-            io_loop.start()
             logger.info("Pilot web services started on port 8082.")
+            io_loop.start()
         except KeyboardInterrupt:
             quit_event.set()
         finally:
