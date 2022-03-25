@@ -73,19 +73,6 @@ services:
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
-  recorder:
-    cpuset: "0"
-    build:
-      context: .
-      dockerfile: recorder/Dockerfile
-    restart: always
-    command: ["python", "app.py", "--name", "recorder"]
-    environment:
-      LD_PRELOAD: libgomp.so.1
-    volumes:
-      - volume_byodr_sockets:/byodr:rw
-      - volume_byodr_config:/config:ro
-      - volume_byodr_sessions:/sessions:rw
   mongodb:
     cpuset: "0"
     build:
@@ -110,9 +97,12 @@ services:
     command: ["python3", "-m", "logbox.app", "--name", "logbox"]
     stop_signal: SIGKILL
     network_mode: host
+    environment:
+      LD_PRELOAD: libgomp.so.1
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:ro
+      - volume_byodr_sessions:/sessions:rw
   vehicle:
     cpuset: "1"
     build:

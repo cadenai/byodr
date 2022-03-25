@@ -23,11 +23,6 @@ services:
     volumes:
       - ./common:/common
       - ./rosnode:/app
-  recorder:
-    restart: 'no'
-    volumes:
-      - ./common:/common
-      - ./recorder:/app
   mongodb:
     restart: 'no'
     volumes:
