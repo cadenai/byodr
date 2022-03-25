@@ -280,11 +280,11 @@ class LogApplication(Application):
         if _operator or _train:
             self._user.touch()
         # Log operator events more slowly.
-        if _operator and abs(_time - self._queue_operator[-1]) >= 10e6:
+        if _train:
+            self._insert(TRIGGER_DRIVE_TRAINER, content=_contents, save_image=True)
+        elif _operator and abs(_time - self._queue_operator[-1]) >= 10e6:
             self._queue_operator.append(_time)
             self._insert(TRIGGER_DRIVE_OPERATOR, content=_contents, save_image=True)
-        elif _train:
-            self._insert(TRIGGER_DRIVE_TRAINER, content=_contents, save_image=True)
         # Scan the pilot commands for photo requests and process them.
         if any([cmd.get('button_right', 0) == 1 for cmd in ([] if pilot_all is None else pilot_all)]):
             self._photos.append(_contents)
@@ -340,8 +340,8 @@ def main():
         http_server = HTTPServer(main_app, xheaders=True)
         http_server.bind(8085)
         http_server.start()
-        io_loop.start()
         logger.info("Data table web services started on port 8085.")
+        io_loop.start()
     except KeyboardInterrupt:
         quit_event.set()
     finally:
