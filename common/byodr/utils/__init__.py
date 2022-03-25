@@ -1,4 +1,5 @@
 from __future__ import absolute_import
+
 import collections
 import logging
 import multiprocessing
@@ -10,9 +11,11 @@ from cProfile import Profile
 from contextlib import contextmanager
 
 import numpy as np
+import six
 
 from byodr.utils.option import hash_dict
-import six
+
+logger = logging.getLogger(__name__)
 
 
 def timestamp(value=None):
@@ -168,3 +171,17 @@ class Application(object):
             self.quit()
         finally:
             self.finish()
+
+
+class ApplicationExit(object):
+    def __init__(self, event, cb):
+        self._event = event
+        self._cb = cb
+
+    def __call__(self, *args, **kwargs):
+        if self._event.is_set():
+            try:
+                self._cb()
+            except Exception as e:
+                logger.info(e)
+                logger.info(traceback.format_exc())
