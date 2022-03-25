@@ -21,20 +21,20 @@ var menu_logbox = {
         const column_names = [
             'time', 'image', 'trigger', 'driver', 'max speed', 'desired speed', 'velocity', 'steer', 'throttle',
             'steer intervention', 'speed intervention', 'save', 'latitude', 'longitude',
-            'ap steer', 'ap brake', 'ap steer uncertainty', 'ap brake uncertainty', 'ap running uncertainty'
+            'ap steer', 'ap brake', 'ap steer confidence', 'ap brake confidence'
         ];
         // Construct the dom elements.
         const el_table = $("<table/>", {id: 'logbox', class: 'display', style: 'font-size: 0.8em'});
         const el_head = $("<thead/>");
-        const el_foot = $("<tfoot/>");
+        //const el_foot = $("<tfoot/>");
         const el_head_row = $("<tr/>");
-        const el_foot_row = $("<tr/>");
+        //const el_foot_row = $("<tr/>");
         el_head.append(el_head_row);
-        el_foot.append(el_foot_row);
+        //el_foot.append(el_foot_row);
         column_names.forEach(function(column) {el_head_row.append($("<th/>").text(column));});
-        column_names.forEach(function(column) {el_foot_row.append($("<th/>").text(column));});
+        //column_names.forEach(function(column) {el_foot_row.append($("<th/>").text(column));});
         el_table.append(el_head);
-        el_table.append(el_foot);
+        //el_table.append(el_foot);
         el_parent.append(el_table);
         this._setup();
     },
@@ -87,7 +87,7 @@ var menu_logbox = {
             _cnt += "src='api/datalog/event/v10/image?object_id=" + object_id + "'/>";
             return _cnt;
         } else {
-            return "<img src='im_no_image_available.png?v=0.61.0'/>";
+            return "<img src='im_no_image_available.png?v=0.65.0'/>";
         }
     },
 
@@ -106,12 +106,13 @@ var menu_logbox = {
         const value2 = parseFloat(row[2]);
         const ctx = $("canvas#" + object_id)[0].getContext('2d');
         ctx.drawImage(el_image, 0, 0, 200, 80);
-        this._draw_line(ctx, '#fff', (1 + value1) * 100, 80);
-        this._draw_line(ctx, '#0937b5', (1 + value2) * 100, 80);
+        this._draw_line(ctx, '#fff', (100 + 98 * value1), 80);
+        this._draw_line(ctx, '#0937b5', (100 + 98 * value2), 80);
     },
 
     _setup: function() {
         $('table#logbox').DataTable({
+            "fixedHeader": true,
             "processing": true,
             "serverSide": true,
             "searching": false,
@@ -137,8 +138,7 @@ var menu_logbox = {
                 {data: 15, orderable: false, render: function(data, type, row, meta) {return menu_logbox._float_str(data, 4);}},
                 {data: 16, orderable: false, render: function(data, type, row, meta) {return menu_logbox._float_str(data, 4);}},
                 {data: 17, orderable: false, render: function(data, type, row, meta) {return menu_logbox._float_str(data, 4);}},
-                {data: 18, orderable: false, render: function(data, type, row, meta) {return menu_logbox._float_str(data, 4);}},
-                {data: 19, orderable: false, render: function(data, type, row, meta) {return menu_logbox._float_str(data, 4);}}
+                {data: 18, orderable: false, render: function(data, type, row, meta) {return menu_logbox._float_str(data, 4);}}
             ]
         });
     }
