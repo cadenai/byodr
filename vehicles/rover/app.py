@@ -6,13 +6,13 @@ import os
 import shutil
 
 from ConfigParser import SafeConfigParser
-from core import GpsPollerThread, PTZCamera, ConfigurableImageGstSource
 
 from byodr.utils import Application
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector, ReceiverThread
 from byodr.utils.location import GeoTracker
 from byodr.utils.option import parse_option, hash_dict
+from core import GpsPollerThread, PTZCamera, ConfigurableImageGstSource
 
 logger = logging.getLogger(__name__)
 log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
@@ -150,7 +150,7 @@ class RoverHandler(Configurable):
 
     def internal_start(self, **kwargs):
         errors = []
-        self._process_frequency = parse_option('clock.hz', int, 100, errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 80, errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 100, errors, **kwargs) * 1000.
         self._platform.restart(**kwargs)
         errors.extend(self._platform.get_errors())
