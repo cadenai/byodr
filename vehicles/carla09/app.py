@@ -10,14 +10,14 @@ import threading
 from ConfigParser import SafeConfigParser
 from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
-from vehicle import CarlaHandler
-from video import NumpyImageVideoSource
 
 from byodr.utils import Application
 from byodr.utils import Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector
 from byodr.utils.option import parse_option
 from byodr.utils.websocket import HttpLivePlayerVideoSocket
+from vehicle import CarlaHandler
+from video import NumpyImageVideoSource
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class CarlaRunner(Configurable):
         self._vehicle.restart(**kwargs)
         _errors = self._vehicle.get_errors()
         _errors += self._publisher.restart(**kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 80, _errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 100, _errors, **kwargs) * 1000.
         return _errors
 
