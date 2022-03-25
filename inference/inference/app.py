@@ -205,6 +205,7 @@ class Navigator(object):
                                      destination=_destination)
         action, critic, surprise, command, path, brake, brake_critic, coordinates, query = _out
 
+        # noinspection PyUnusedLocal
         nav_point_id, nav_image_id, nav_distance, _destination = None, None, None, None
         _acquired = self._lock.acquire(False)
         try:
@@ -255,7 +256,9 @@ class TFRunner(Configurable):
         self._process_frequency = 10
         self._steering_scale_left = 1
         self._steering_scale_right = 1
-        self._penalty_filter = None
+        self._steer_confidence_filter = None
+        self._brake_confidence_filter = None
+        self._total_penalty_filter = None
         self._fn_steer_mu = None
         self._fn_brake_mu = None
 
@@ -280,7 +283,9 @@ class TFRunner(Configurable):
         _penalty_up_momentum = parse_option('driver.autopilot.filter.momentum.up', float, 0.35, _errors, **kwargs)
         _penalty_down_momentum = parse_option('driver.autopilot.filter.momentum.down', float, 0.25, _errors, **kwargs)
         _penalty_ceiling = parse_option('driver.autopilot.filter.ceiling', float, 2.0, _errors, **kwargs)
-        self._penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
+        self._total_penalty_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=_penalty_ceiling)
+        self._steer_confidence_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=1.0)
+        self._brake_confidence_filter = DynamicMomentum(up=_penalty_up_momentum, down=_penalty_down_momentum, ceiling=1.0)
         self._fn_steer_mu = _build_expression(
             'driver.dnn.steer.mu.equation', '(7.0 * (-0.50 + surprise + loss)) **7', _errors, **kwargs
         )
@@ -307,7 +312,12 @@ class TFRunner(Configurable):
         _command_index = int(np.argmax(command))
         _steer_penalty = min(1, max(0, self._fn_steer_mu(surprise=max(0, surprise), loss=abs(surprise - critic))))
         _obstacle_penalty = min(1, max(0, self._fn_brake_mu(surprise=max(0, brake), loss=max(0, brake_critic))))
-        _total_penalty = min(1, max(0, self._penalty_filter.calculate(_steer_penalty + _obstacle_penalty)))
+        # The total penalty is smoothed over the instant values.
+        _total_running_penalty = min(1, max(0, self._total_penalty_filter.calculate(_steer_penalty + _obstacle_penalty)))
+        # Smooth the instant individual values for reporting purposes.
+        _normalized_brake_critic = self._fn_brake_mu(surprise=0, loss=max(0, brake_critic))
+        _steer_running_confidence = 1. - min(1, max(0, self._steer_confidence_filter.calculate(_steer_penalty)))
+        _brake_running_confidence = 1. - min(1, max(0, self._brake_confidence_filter.calculate(_normalized_brake_critic)))
         return dict(time=timestamp(),
                     action=float(self._dnn_steering(action)),
                     obstacle=float(brake),
@@ -316,7 +326,9 @@ class TFRunner(Configurable):
                     brake_critic_out=float(brake_critic),
                     steer_penalty=float(_steer_penalty),
                     brake_penalty=float(_obstacle_penalty),
-                    total_penalty=float(_total_penalty),
+                    total_penalty=float(_total_running_penalty),
+                    steer_confidence=float(_steer_running_confidence),
+                    brake_confidence=float(_brake_running_confidence),
                     internal=[float(0)],
                     navigation_point=int(-1 if nav_point_id is None else nav_point_id),
                     navigation_image=int(-1 if nav_image_id is None else nav_image_id),
