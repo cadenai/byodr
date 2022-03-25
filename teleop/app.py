@@ -133,12 +133,12 @@ def main():
         teleop_publisher.publish(cmd)
 
     # def override_publish(nav_request):
-        # We are the authority on route state.
-        # if nav_request is not None:
-        #     external_publisher.publish(nav_request)
+    # We are the authority on route state.
+    # if nav_request is not None:
+    #     external_publisher.publish(nav_request)
 
     try:
-        main_redirect_url = '/index.htm?v=0.60.02'
+        main_redirect_url = '/index.htm?v=0.65.0'
         main_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
