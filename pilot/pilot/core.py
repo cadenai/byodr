@@ -72,6 +72,7 @@ class Blob(AttrDict):
         self.save_event = kwargs.get('save_event')
         self.speed_driver = kwargs.get('speed_driver')
         self.steering = kwargs.get('steering', 0)
+        self.steering_scale = kwargs.get('steering_scale', 1)
         self.steering_driver = kwargs.get('steering_driver')
         self.throttle = kwargs.get('throttle', 0)
         self.arrow_up = kwargs.get('arrow_up')
@@ -756,6 +757,7 @@ class DriverManager(Configurable):
                         inference_brake=_inference_brake,
                         **teleop)
             # Scale teleop before interpretation by the driver.
+            blob.steering_scale = self._principal_steer_scale
             blob.steering = self._principal_steer_scale * blob.steering
             self._driver.next_action(blob, vehicle, inference)
             blob.steering = self._steering_stabilizer.update(blob.steering)
@@ -785,7 +787,7 @@ class CommandProcessor(Configurable):
     def internal_start(self, **kwargs):
         _errors = []
         self._driver.restart(**kwargs)
-        self._process_frequency = parse_option('clock.hz', int, 100, _errors, **kwargs)
+        self._process_frequency = parse_option('clock.hz', int, 80, _errors, **kwargs)
         self._patience_micro = parse_option('patience.ms', int, 200, _errors, **kwargs) * 1000.
         self._button_north_ctl = parse_option('controller.button.north.mode', str, 'driver_mode.inference.dnn', _errors, **kwargs)
         self._button_west_ctl = parse_option('controller.button.west.mode', str, 'ignore', _errors, **kwargs)

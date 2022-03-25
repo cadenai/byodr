@@ -14,7 +14,7 @@ from tornado import web, ioloop
 from tornado.httpserver import HTTPServer
 from tornado.platform.asyncio import AnyThreadEventLoopPolicy
 
-from byodr.utils import Application
+from byodr.utils import Application, ApplicationExit
 from byodr.utils.ipc import JSONPublisher, LocalIPCServer, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
 from byodr.utils.usbrelay import StaticRelayHolder, SearchUsbRelayFactory, StaticMemoryFakeHolder
@@ -129,8 +129,12 @@ def main():
         asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
         asyncio.set_event_loop(asyncio.new_event_loop())
 
+        io_loop = ioloop.IOLoop.instance()
+        _conditional_exit = ApplicationExit(quit_event, lambda: io_loop.stop())
+        _periodic = ioloop.PeriodicCallback(lambda: _conditional_exit(), 5e3)
+        _periodic.start()
+
         try:
-            io_loop = ioloop.IOLoop.instance()
             # The api has partial control of the relay.
             main_app = web.Application([
                 (r"/teleop/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=_holder))
@@ -142,6 +146,8 @@ def main():
             logger.info("Pilot web services started on port 8082.")
         except KeyboardInterrupt:
             quit_event.set()
+        finally:
+            _periodic.stop()
 
         route_store.quit()
         logger.info("Waiting on threads to stop.")

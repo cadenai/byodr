@@ -33,12 +33,11 @@ def execute(arguments):
 
 
 class StatusReceiverThreadFactory(object):
-    def __init__(self, topic='ras/drive/status'):
+    def __init__(self, topic=b'ras/drive/status'):
         self._topic = topic
 
     def create(self, master_uri):
-        # noinspection PyTypeChecker
-        return ReceiverThread(url=('{}:5555'.format(master_uri)), topic=b'' + self._topic)
+        return ReceiverThread(url=('{}:5555'.format(master_uri)), topic=self._topic)
 
 
 class PiClientFactory(object):
