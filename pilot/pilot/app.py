@@ -73,6 +73,13 @@ class PilotApplication(Application):
         self._relay.quit()
         self._processor.quit()
 
+    # def run(self):
+    #     from byodr.utils import Profiler
+    #     profiler = Profiler()
+    #     with profiler():
+    #         super(PilotApplication, self).run()
+    #     profiler.dump_stats('/config/pilot.stats')
+
     def step(self):
         teleop = self.teleop()
         commands = (teleop, self.ros(), self.vehicle(), self.inference())

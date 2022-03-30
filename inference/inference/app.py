@@ -268,9 +268,6 @@ class TFRunner(Configurable):
     def get_frequency(self):
         return self._process_frequency
 
-    def recompile(self):
-        self._navigator.recompile()
-
     def internal_quit(self, restarting=False):
         self._navigator.quit()
 
@@ -355,9 +352,7 @@ class InferenceApplication(Application):
         self.camera = None
         self.ipc_server = None
         self.teleop = None
-        self.pilot = None
         self.ipc_chatter = None
-        self._last_known_active_time = timestamp()
 
     @staticmethod
     def _glob(directory, pattern):
@@ -372,18 +367,8 @@ class InferenceApplication(Application):
         logger.info(cfg)
         return cfg
 
-    def _touch(self, c_pilot):
-        # Keep track of the activity to have the network update in case it has a new model and the robot is not in use.
-        if c_pilot is not None and (abs(c_pilot.get('steering', 0)) > 1e-3 or abs(c_pilot.get('throttle', 0)) > 1e-3):
-            self._last_known_active_time = timestamp()
-
     def get_process_frequency(self):
         return self._runner.get_frequency()
-
-    def recompile(self, seconds=300):
-        _sleeping = (timestamp() - self._last_known_active_time) > seconds * 1e6
-        if _sleeping:
-            self._runner.recompile()
 
     def setup(self):
         if self.active():
@@ -401,14 +386,12 @@ class InferenceApplication(Application):
     #     from byodr.utils import Profiler
     #     profiler = Profiler()
     #     with profiler():
-    #         super(RoverApplication, self).run()
+    #         super(InferenceApplication, self).run()
     #     profiler.dump_stats('/config/inference.stats')
 
     def step(self):
         # Leave the state as is on empty teleop state.
         c_teleop = self.teleop()
-        c_pilot = self.pilot()
-        self._touch(c_pilot)
         image = self.camera.capture()[-1]
         if image is not None:
             # The teleop service is the authority on route state.
@@ -437,17 +420,15 @@ def main():
     quit_event = application.quit_event
 
     teleop = json_collector(url='ipc:///byodr/teleop.sock', topic=b'aav/teleop/input', event=quit_event)
-    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     ipc_chatter = json_collector(url='ipc:///byodr/teleop_c.sock', topic=b'aav/teleop/chatter', pop=True, event=quit_event)
 
     application.publisher = JSONPublisher(url='ipc:///byodr/inference.sock', topic='aav/inference/state')
     application.camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     application.ipc_server = LocalIPCServer(url='ipc:///byodr/inference_c.sock', name='inference', event=quit_event)
     application.teleop = lambda: teleop.get()
-    application.pilot = lambda: pilot.get()
     application.ipc_chatter = lambda: ipc_chatter.get()
 
-    threads = [teleop, pilot, ipc_chatter, application.camera, application.ipc_server]
+    threads = [teleop, ipc_chatter, application.camera, application.ipc_server]
     if quit_event.is_set():
         return 0
 

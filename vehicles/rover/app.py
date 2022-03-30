@@ -7,7 +7,7 @@ import shutil
 
 from ConfigParser import SafeConfigParser
 
-from byodr.utils import Application
+from byodr.utils import Application, PeriodicCallTrace
 from byodr.utils import timestamp, Configurable
 from byodr.utils.ipc import JSONPublisher, ImagePublisher, LocalIPCServer, json_collector, ReceiverThread
 from byodr.utils.location import GeoTracker
@@ -130,6 +130,7 @@ class RoverHandler(Configurable):
         self._platform = Platform()
         self._process_frequency = 10
         self._patience_micro = 100.
+        self._gst_calltrace = PeriodicCallTrace(seconds=10.0)
         self._gst_sources = []
         self._ptz_cameras = []
 
@@ -175,6 +176,9 @@ class RoverHandler(Configurable):
             'rear': {'ptz': rear.get_ptz()}
         }
 
+    def _check_gst_sources(self):
+        self._gst_calltrace(lambda: list(map(lambda x: x.check(), self._gst_sources)))
+
     def _cycle_ptz_cameras(self, c_pilot, c_teleop):
         # The front camera ptz function is enabled for teleop direct driving only.
         # Set the front camera to the home position anytime the autopilot is switched on.
@@ -193,9 +197,9 @@ class RoverHandler(Configurable):
                            }
                 self._ptz_cameras[c_camera].add(command)
 
-    def cycle(self, c_pilot, c_teleop):
+    def step(self, c_pilot, c_teleop):
         self._cycle_ptz_cameras(c_pilot, c_teleop)
-        map(lambda x: x.check(), self._gst_sources)
+        self._check_gst_sources()
         return self._platform.state()
 
 
@@ -257,7 +261,7 @@ class RoverApplication(Application):
         rover, pilot, teleop, publisher = self._handler, self.pilot, self.teleop, self.state_publisher
         c_pilot = self._latest_or_none(pilot, patience=rover.get_patience_micro())
         c_teleop = self._latest_or_none(teleop, patience=rover.get_patience_micro())
-        _state = rover.cycle(c_pilot, c_teleop)
+        _state = rover.step(c_pilot, c_teleop)
         publisher.publish(_state)
         chat = self.ipc_chatter()
         if chat and chat.get('command') == 'restart':

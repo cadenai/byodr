@@ -185,3 +185,16 @@ class ApplicationExit(object):
             except Exception as e:
                 logger.info(e)
                 logger.info(traceback.format_exc())
+
+
+class PeriodicCallTrace(object):
+    def __init__(self, seconds=1.0):
+        self._seconds_micro = seconds * 1e6
+        self._last = timestamp()
+
+    def __call__(self, *args, **kwargs):
+        _callback = args[0]
+        _now = timestamp()
+        if _now - self._last > self._seconds_micro:
+            _callback()
+            self._last = _now
