@@ -13,6 +13,7 @@ import numpy as np
 import tornado
 from ConfigParser import SafeConfigParser
 from tornado import web, websocket
+from tornado.gen import coroutine
 
 from byodr.utils import timestamp
 
@@ -34,7 +35,6 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # noinspection PyAttributeOutsideInit
     def initialize(self, **kwargs):
         self._fn_control = kwargs.get('fn_control')
-        self._operator_throttle_micro = 15 * 1e3  # 15 milliseconds.
 
     def check_origin(self, origin):
         return True
@@ -62,14 +62,11 @@ class ControlServerSocket(websocket.WebSocketHandler):
         _response = json.dumps(dict(control='viewer'))
         if self._is_operator():
             _response = json.dumps(dict(control='operator'))
+            msg = json.loads(json_message)
             _micro_time = timestamp()
-            # Throttle very fast operator connections to protect our processing resources.
-            _last_msg_micro = self.operator_access_control[-1] if self.operator_access_control else 0
-            if _micro_time - _last_msg_micro > self._operator_throttle_micro:
-                msg = json.loads(json_message)
-                msg['time'] = _micro_time
-                self.operator_access_control.append(_micro_time)
-                self._fn_control(msg)
+            msg['time'] = _micro_time
+            self.operator_access_control.append(_micro_time)
+            self._fn_control(msg)
         try:
             self.write_message(_response)
         except websocket.WebSocketClosedError:
@@ -200,6 +197,8 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
     def initialize(self, **kwargs):
         self._fn_capture = kwargs.get('image_capture')
         self._black_img = np.zeros(shape=(320, 240, 3), dtype=np.uint8)
+        self._calltrace = collections.deque(maxlen=1)
+        self._calltrace.append(timestamp())
 
     def check_origin(self, origin):
         return True
@@ -221,10 +220,15 @@ class CameraMJPegSocket(websocket.WebSocketHandler):
         try:
             request = json.loads(message)
             quality = int(request.get('quality', 90))
-            img = self._fn_capture()[-1]
-            # Always send something so the client is able to resume polling.
-            img = self._black_img if img is None else img
-            self.write_message(jpeg_encode(img, quality).tobytes(), binary=True)
+            md, img = self._fn_capture()
+            _timestamp = self._calltrace[-1] if md is None else md.get('time')
+            if _timestamp == self._calltrace[-1]:
+                # Refrain from encoding and resending an old image.
+                self.write_message(json.dumps(dict(action='wait')))
+            else:
+                # Always send something so the client is able to resume polling.
+                self._calltrace.append(_timestamp)
+                self.write_message(jpeg_encode((self._black_img if img is None else img), quality).tobytes(), binary=True)
         except Exception as e:
             logger.error("Camera socket@on_message: {} {}".format(e, traceback.format_exc()))
             logger.error("JSON message:---\n{}\n---".format(message))
