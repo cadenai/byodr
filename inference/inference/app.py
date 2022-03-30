@@ -397,6 +397,13 @@ class InferenceApplication(Application):
     def finish(self):
         self._runner.quit()
 
+    # def run(self):
+    #     from byodr.utils import Profiler
+    #     profiler = Profiler()
+    #     with profiler():
+    #         super(RoverApplication, self).run()
+    #     profiler.dump_stats('/config/inference.stats')
+
     def step(self):
         # Leave the state as is on empty teleop state.
         c_teleop = self.teleop()
@@ -413,31 +420,6 @@ class InferenceApplication(Application):
         if chat is not None:
             if chat.get('command') == 'restart':
                 self.setup()
-
-
-# class RecompilationThread(threading.Thread):
-#     def __init__(self, application, sleep_seconds=600):
-#         super(RecompilationThread, self).__init__()
-#         self._app = application
-#         self._sleep = sleep_seconds
-#         self._quit_event = threading.Event()
-#
-#     def quit(self):
-#         self._quit_event.set()
-#
-#     def is_running(self):
-#         return not self._quit_event.is_set()
-#
-#     def run(self):
-#         while self.is_running():
-#             time.sleep(self._sleep)
-#             # noinspection PyBroadException
-#             try:
-#                 self._app.recompile()
-#             except Exception:
-#                 # This will exit the application - let the service manager handle restarts.
-#                 self.quit()
-#                 self._app.quit()
 
 
 def main():
