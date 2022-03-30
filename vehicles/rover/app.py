@@ -251,7 +251,7 @@ class RoverApplication(Application):
     #     profiler = Profiler()
     #     with profiler():
     #         super(RoverApplication, self).run()
-    #     profiler.dump_stats('/config/prof.stats')
+    #     profiler.dump_stats('/config/rover.stats')
 
     def step(self):
         rover, pilot, teleop, publisher = self._handler, self.pilot, self.teleop, self.state_publisher

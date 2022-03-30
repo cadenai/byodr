@@ -75,7 +75,8 @@ class ConfigurableImageGstSource(Configurable):
         _errors = []
         _type = parse_option(self._name + '.camera.type', str, 'h264/rtsp', errors=_errors, **kwargs)
         assert _type in gst_commands.keys(), "Unrecognized camera type '{}'.".format(_type)
-        framerate = (parse_option(self._name + '.camera.framerate', int, 25, errors=_errors, **kwargs))
+        framerate = 25  # if self._name == 'front' else 15
+        framerate = (parse_option(self._name + '.camera.framerate', int, framerate, errors=_errors, **kwargs))
         out_width, out_height = [int(x) for x in parse_option(self._name + '.camera.shape', str, '320x240',
                                                               errors=_errors, **kwargs).split('x')]
         if _type == 'h264/rtsp':

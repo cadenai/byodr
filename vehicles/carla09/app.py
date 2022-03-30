@@ -155,7 +155,7 @@ class CarlaApplication(Application):
     #     profiler = Profiler()
     #     with profiler():
     #         super(CarlaApplication, self).run()
-    #     profiler.dump_stats('/config/prof.stats')
+    #     profiler.dump_stats('/config/carla.stats')
 
     def step(self):
         runner, pilot, teleop, ipc_chatter, ipc_server = self._runner, self.pilot, self.teleop, self.ipc_chatter, self.ipc_server
