@@ -5,6 +5,7 @@ import logging
 
 import tornado
 from tornado import web
+from tornado.gen import coroutine
 
 logger = logging.getLogger(__name__)
 

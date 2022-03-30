@@ -1,6 +1,7 @@
 from __future__ import absolute_import
 
 import argparse
+import collections
 import glob
 import logging
 import os
@@ -86,6 +87,7 @@ class RealMonitoringRelay(AbstractRelay):
         self._integrity = MessageStreamProtocol()
         self._status_factory = StatusReceiverThreadFactory() if status_factory is None else status_factory
         self._client_factory = PiClientFactory() if client_factory is None else client_factory
+        self._relay_closed_calltrace = collections.deque(maxlen=1)
         self._patience_micro = 100.
         self._config_hash = -1
         self._pi_config = None
@@ -158,8 +160,19 @@ class RealMonitoringRelay(AbstractRelay):
         self._send_config(self._servo_config)
         return errors
 
-    def quit(self):
+    def _open_relay(self):
         self._relay.open()
+        self._relay_closed_calltrace.clear()
+
+    def _close_relay(self):
+        # In normal operation the relay is constantly asked to close.
+        now = timestamp()
+        if len(self._relay_closed_calltrace) == 0 or (now - self._relay_closed_calltrace[-1]) > 30 * 1e6:
+            self._relay.close()
+            self._relay_closed_calltrace.append(now)
+
+    def quit(self):
+        self._open_relay()
         if self._pi_client is not None:
             self._pi_client.quit()
         if self._pi_status is not None:
@@ -171,13 +184,13 @@ class RealMonitoringRelay(AbstractRelay):
         c_teleop = self._latest_or_none(teleop, patience=self._patience_micro)
         n_violations = self._integrity.check()
         if n_violations < -5:
-            self._relay.close()
+            self._close_relay()
             self._drive(c_pilot, c_teleop)
         elif n_violations > 200:
             # ZeroMQ ipc over tcp does not allow connection timeouts to be set - while the timeout is too high.
             self._reboot()  # Resets the protocol.
         elif n_violations > 5:
-            self._relay.open()
+            self._open_relay()
             self._drive(None, None)
         else:
             self._drive(None, None)
