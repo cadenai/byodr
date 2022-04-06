@@ -108,20 +108,21 @@ class PackageApplication(Application):
         self._mongo.update_event({'_id': item.get('_id')}, {'$set': {"lb_is_packaged": 1}})
 
     def _write_out_photos(self):
-        items = self._mongo.list_all_non_packaged_photo_events()
-        if len(items) > 0 and not self._user.is_busy():
-            _directory = os.path.join(self._photo_dir, datetime.fromtimestamp(items[0].get('time') * 1e-6).strftime('%Y%B'))
-            _directory = get_or_create_directory(_directory)
-            with open(os.path.join(_directory, 'photo.log'), 'a+') as f:
-                for item in items:
-                    self._mark(item)
-                    _timestamp = item.get('time')
-                    _dts = datetime.fromtimestamp(_timestamp * 1e-6).strftime('%Y%b%dT%H%M%S')
-                    latitude = item.get('veh_gps_latitude')
-                    longitude = item.get('veh_gps_longitude')
-                    fname = "{}_lat{}_long{}.jpg".format(_dts, str(latitude)[:8].replace('.', '_'), str(longitude)[:8].replace('.', '_'))
-                    cv2.imwrite(os.path.join(_directory, fname), cv2_image_from_bytes(item.get('img_buffer')))
-                    f.write("{} {} latitude {} longitude {}\r\n".format(_timestamp, fname, latitude, longitude))
+        if not self._user.is_busy(wait_sec=10):
+            items = self._mongo.list_all_non_packaged_photo_events()
+            if len(items) > 0 and not self._user.is_busy(wait_sec=10):
+                _directory = os.path.join(self._photo_dir, datetime.fromtimestamp(items[0].get('time') * 1e-6).strftime('%Y%B'))
+                _directory = get_or_create_directory(_directory)
+                with open(os.path.join(_directory, 'photo.log'), 'a+') as f:
+                    for item in items:
+                        self._mark(item)
+                        _timestamp = item.get('time')
+                        _dts = datetime.fromtimestamp(_timestamp * 1e-6).strftime('%Y%b%dT%H%M%S')
+                        latitude = str(item.get('veh_gps_latitude'))[:8].replace('.', '_')
+                        longitude = str(item.get('veh_gps_longitude'))[:8].replace('.', '_')
+                        fname = "{}_lat{}_long{}.jpg".format(_dts, latitude, longitude)
+                        cv2.imwrite(os.path.join(_directory, fname), cv2_image_from_bytes(item.get('img_buffer')))
+                        f.write("{} {} latitude {} longitude {}\r\n".format(_timestamp, fname, latitude, longitude))
 
     def _event(self, row, lenience_ms=30):
         _timestamp = row.get('time')
@@ -153,8 +154,6 @@ class PackageApplication(Application):
         return event
 
     def _package_next(self):
-        if self._user.is_busy():
-            return False
         # Start by saving the photo snapshots.
         self._write_out_photos()
         # Proceed unless new user activity.
@@ -314,7 +313,7 @@ def main():
     _state = SharedState(channels=(_camera, (lambda: pilot.get()), (lambda: vehicle.get()), (lambda: inference.get())), hz=primary_hz)
 
     log_application = LogApplication(_mongo, _user, _state, event=quit_event, config_dir=args.config)
-    package_application = PackageApplication(_mongo, _user, event=quit_event, hz=0.0333, sessions_dir=args.sessions)
+    package_application = PackageApplication(_mongo, _user, event=quit_event, hz=0.100, sessions_dir=args.sessions)
 
     application_thread = threading.Thread(target=log_application.run)
     package_thread = threading.Thread(target=package_application.run)
@@ -340,7 +339,7 @@ def main():
         http_server = HTTPServer(main_app, xheaders=True)
         http_server.bind(8085)
         http_server.start()
-        logger.info("Data table web services started on port 8085.")
+        logger.info("Data table web services starting on port 8085.")
         io_loop.start()
     except KeyboardInterrupt:
         quit_event.set()

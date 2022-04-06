@@ -59,8 +59,8 @@ class SharedUser(object):
     def get(self):
         return self._user_busy[0] if len(self._user_busy) > 0 else 0
 
-    def is_busy(self, wait_ms=3e4):
-        return timestamp() - self.get() < (wait_ms * 1e3)
+    def is_busy(self, wait_sec=30):
+        return timestamp() - self.get() < (wait_sec * 1e6)
 
 
 def _nearest(items, ts, default=None):
