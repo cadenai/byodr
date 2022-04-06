@@ -161,7 +161,7 @@ def main():
         http_server = HTTPServer(main_app, xheaders=True)
         http_server.bind(8080)
         http_server.start()
-        logger.info("Teleop web services started on port 8080.")
+        logger.info("Teleop web services starting on port 8080.")
         io_loop.start()
     except KeyboardInterrupt:
         quit_event.set()
