@@ -283,7 +283,7 @@ class LogApplication(Application):
             self._insert(TRIGGER_DRIVE_TRAINER, content=_contents, save_image=True)
         elif _operator and abs(_time - self._queue_operator[-1]) >= 10e6:
             self._queue_operator.append(_time)
-            self._insert(TRIGGER_DRIVE_OPERATOR, content=_contents, save_image=True)
+            self._insert(TRIGGER_DRIVE_OPERATOR, content=_contents, save_image=False)
         # Scan the pilot commands for photo requests and process them.
         if any([cmd.get('button_right', 0) == 1 for cmd in ([] if pilot_all is None else pilot_all)]):
             self._photos.append(_contents)
