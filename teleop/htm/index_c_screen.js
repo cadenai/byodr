@@ -370,9 +370,10 @@ var teleop_screen = {
             this._on_viewport_container_resize();
             this.el_pilot_bar.css({'cursor': 'zoom-out'});
         } else {
-            this.el_drive_bar.hide();
-            this._on_viewport_container_resize();
+            // this.el_drive_bar.hide();
+            // this._on_viewport_container_resize();
             this.el_pilot_bar.css({'cursor': 'zoom-in'});
+
         }
         this.in_debug = show? 1: 0;
         this._render_distance_indicators();
