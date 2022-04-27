@@ -112,7 +112,7 @@ var gamepad_controller = {
         var result = null;
         if (gamepad.mapping == 'standard' && gid.includes('45e')) {
             result = Object.create(Xbox360StandardController);
-        } else if (gamepad.mapping == 'standard' && gid.includes('54c')) {
+        } else if (gamepad.mapping == 'standard') {
             result = Object.create(PS4StandardController);
         //
         // Not to be used yet - without standard mapping the triggers can result in non-zero throttle before use.
