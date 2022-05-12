@@ -64,6 +64,7 @@ var menu_controls = {
         // This method is called when the user sets a value and also when a value is set by code.
         if (!channel.isFlagged()) {
             menu_controls._backend._call_save_channel_state(channel._index + 1, channel.getValue(), function(ch, x) {});
+            setTimeout(function() {menu_controls._apply_backend_states();}, 250);
         }
     },
 

@@ -2,6 +2,7 @@ from __future__ import absolute_import
 
 import logging
 import multiprocessing
+import time
 
 import usb.core
 import usb.util
@@ -103,6 +104,20 @@ class DoubleChannelUsbRelay(object):
         self._device.ctrl_transfer(0x21, 0x09, 0x0300, 0x0000, "".join(chr(n) for n in self._device_on[channel]), 1000)
 
 
+class TransientMemoryRelay(object):
+    def __init__(self, num_channels=4):
+        self._state = [0] * num_channels
+
+    def open(self, channel=0):
+        self._state[channel] = 0
+
+    def close(self, channel=0):
+        self._state[channel] = 1
+
+    def states(self):
+        return [bool(x) for x in self._state]
+
+
 class FourChannelUsbRelay(object):
     """
     Conrad Components 393905 Relay Module 5 V/DC
@@ -202,13 +217,22 @@ class SearchUsbRelayFactory(object):
 
 
 class StaticRelayHolder(object):
-    def __init__(self, relay, channels=(0,)):
+    def __init__(self, relay, default_channels=(0,)):
         self._relay = relay
-        self._channels = channels if isinstance(channels, tuple) or isinstance(channels, list) else (channels,)
+        self._default_channels = self._tup_or_li(default_channels)
+        self._pulse_channels = ()
         self._lock = multiprocessing.Lock()
 
+    @staticmethod
+    def _tup_or_li(arg):
+        return arg if isinstance(arg, tuple) or isinstance(arg, list) else (arg,)
+
     def _arg_(self, ch=None):
-        return self._channels if ch is None else ch if isinstance(ch, tuple) or isinstance(ch, list) else (ch,)
+        return self._default_channels if ch is None else self._tup_or_li(ch)
+
+    def set_pulse_channels(self, channels):
+        with self._lock:
+            self._pulse_channels = self._tup_or_li(channels)
 
     def open(self, channels=None):
         with self._lock:
@@ -216,32 +240,12 @@ class StaticRelayHolder(object):
 
     def close(self, channels=None):
         with self._lock:
-            [self._relay.close(ch) for ch in self._arg_(channels)]
+            for ch in self._arg_(channels):
+                self._relay.close(ch)
+                if ch in self._pulse_channels:
+                    time.sleep(0.100)
+                    self._relay.open(ch)
 
     def states(self):
         with self._lock:
             return self._relay.states()
-
-
-class StaticMemoryFakeHolder(object):
-    def __init__(self):
-        self._channels = (0,)
-        self._state = [1, 1, 0, 0]
-        self._lock = multiprocessing.Lock()
-
-    def _arg_(self, ch=None):
-        return self._channels if ch is None else ch if isinstance(ch, tuple) or isinstance(ch, list) else (ch,)
-
-    def open(self, channels=None):
-        with self._lock:
-            for c in self._arg_(channels):
-                self._state[c] = 0
-
-    def close(self, channels=None):
-        with self._lock:
-            for c in self._arg_(channels):
-                self._state[c] = 1
-
-    def states(self):
-        with self._lock:
-            return [bool(x) for x in self._state]

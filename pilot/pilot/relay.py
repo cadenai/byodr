@@ -68,7 +68,7 @@ class AbstractRelay(six.with_metaclass(ABCMeta, object)):
         pass
 
 
-class NoopRelay(AbstractRelay):
+class NoopMonitoringRelay(AbstractRelay):
     def setup(self):
         return []
 

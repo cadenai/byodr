@@ -427,7 +427,7 @@ def main():
         _relay = SearchUsbRelayFactory().get_relay()
         assert _relay.is_attached(), "The relay device is not attached."
 
-        holder = StaticRelayHolder(relay=_relay, channels=(0, 1))
+        holder = StaticRelayHolder(relay=_relay, default_channels=(0, 1))
         try:
             application = MainApplication(quit_event, relay=holder, hz=50, **kwargs)
 
