@@ -20,9 +20,8 @@ class RelayControlRequestHandler(web.RequestHandler):
 
     @tornado.gen.coroutine
     def get(self):
-        blob = dict(states=self._relay_holder.states())
-        message = json.dumps(blob)
         response_code = 200
+        message = json.dumps(dict(states=self._relay_holder.states()))
         self.set_header('Content-Type', 'application/json')
         self.set_header('Content-Length', len(message))
         self.set_status(response_code)
@@ -42,4 +41,22 @@ class RelayControlRequestHandler(web.RequestHandler):
             self._relay_holder.open(channel)
         states = self._relay_holder.states()
         message = json.dumps(dict(channel=channel, state=states[channel]))
+        self.write(message)
+
+
+class RelayConfigRequestHandler(web.RequestHandler):
+    # noinspection PyAttributeOutsideInit
+    def initialize(self, **kwargs):
+        self._relay_holder = kwargs.get('relay_holder')
+
+    def data_received(self, chunk):
+        pass
+
+    @tornado.gen.coroutine
+    def get(self):
+        response_code = 200
+        message = json.dumps(dict(config=self._relay_holder.pulse_config()))
+        self.set_header('Content-Type', 'application/json')
+        self.set_header('Content-Length', len(message))
+        self.set_status(response_code)
         self.write(message)

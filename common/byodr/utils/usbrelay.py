@@ -249,3 +249,7 @@ class StaticRelayHolder(object):
     def states(self):
         with self._lock:
             return self._relay.states()
+
+    def pulse_config(self):
+        with self._lock:
+            return [i in self._pulse_channels for i in range(len(self._relay.states()))]

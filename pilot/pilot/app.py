@@ -21,7 +21,7 @@ from byodr.utils.option import parse_option
 from byodr.utils.usbrelay import SearchUsbRelayFactory, StaticRelayHolder, TransientMemoryRelay
 from .core import CommandProcessor
 from .relay import RealMonitoringRelay, NoopMonitoringRelay
-from .web import RelayControlRequestHandler
+from .web import RelayControlRequestHandler, RelayConfigRequestHandler
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,6 @@ class PilotApplication(Application):
         super(PilotApplication, self).__init__(quit_event=event)
         self._config_dir = config_dir
         self._processor = processor
-        self._relay = relay
         self._monitor = None
         self._holder = None
         self.publisher = None
@@ -51,10 +50,9 @@ class PilotApplication(Application):
         self.ros = None
         self.vehicle = None
         self.inference = None
-        self._init()
+        self._init(relay)
 
-    def _init(self):
-        _relay = self._relay
+    def _init(self, _relay):
         if _relay.is_attached():
             self._holder = StaticRelayHolder(relay=_relay, default_channels=(0, 1))
             self._monitor = RealMonitoringRelay(relay=self._holder, config_dir=self._config_dir)
@@ -164,8 +162,10 @@ def main():
 
     try:
         # The api has partial control of the relay.
+        _holder = application.get_relay_holder()
         main_app = web.Application([
-            (r"/teleop/pilot/controls/relay", RelayControlRequestHandler, dict(relay_holder=application.get_relay_holder()))
+            (r"/teleop/pilot/controls/relay/state", RelayControlRequestHandler, dict(relay_holder=_holder)),
+            (r"/teleop/pilot/controls/relay/conf", RelayConfigRequestHandler, dict(relay_holder=_holder))
         ])
         http_server = HTTPServer(main_app, xheaders=True)
         http_server.bind(8082)

@@ -1,12 +1,15 @@
 class RealControlsBackend {
     constructor() {
     }
+    _call_get_channel_config(cb) {
+        $.get("/teleop/pilot/controls/relay/conf", function(response) {cb(response['config']);});
+    }
     _call_get_channel_states(cb) {
-        $.get("/teleop/pilot/controls/relay", function(response) {cb(response['states']);});
+        $.get("/teleop/pilot/controls/relay/state", function(response) {cb(response['states']);});
     }
     _call_save_channel_state(channel, value, cb) {
         const command = {'channel': channel, 'action': ((value == true || value == 'true')? 'on': 'off')};
-        $.post("/teleop/pilot/controls/relay", JSON.stringify(command)).done(function(response) {
+        $.post("/teleop/pilot/controls/relay/state", JSON.stringify(command)).done(function(response) {
             cb(response['channel'], response['value']);
         });
     }
@@ -15,7 +18,11 @@ class RealControlsBackend {
 class FakeControlsBackend extends RealControlsBackend {
     constructor() {
         super();
+        this._config = [false, false, true, false];
         this._states = [false, false, false, true];
+    }
+    _call_get_channel_config(cb) {
+        cb(this._config);
     }
     _call_get_channel_states(cb) {
         cb(this._states);
@@ -42,7 +49,19 @@ var menu_controls = {
         this._channels = [];
         this._channels.push(this._create_channel(div_relays, 3));
         this._channels.push(this._create_channel(div_relays, 4));
+        this._apply_backend_config();
         this._apply_backend_states();
+    },
+
+    _apply_backend_config: function() {
+        const channels = menu_controls._channels;
+        menu_controls._backend._call_get_channel_config(function(config) {
+            channels.forEach(function(channel) {
+                if (config[channel._index]) {
+                    channel.setPulsed();
+                }
+            });
+        });
     },
 
     _apply_backend_states: function() {
@@ -72,7 +91,8 @@ var menu_controls = {
         const _channel_container = $("<p/>");
         const _name = 'channel' + number;
         const _field = $("<fieldset/>", {id: _name});
-        _field.append($("<legend/>", {id: _name + '_label'}).text('Channel ' + number));
+        const _legend = $("<legend/>", {id: _name + '_label'}).text('Channel ' + number);
+        _field.append(_legend);
         _field.append($("<input/>", {id: _name + '_off', name: _name, type: 'radio', value: false, checked: true}));
         _field.append($("<label/>", {for: _name + '_off'}).text('Off'));
         _field.append($("<input/>", {id: _name + '_on', name: _name, type: 'radio', value: true}));
@@ -87,6 +107,7 @@ var menu_controls = {
             onSelect: function(event) {menu_controls._on_channel_select(_slider);}
         });
         _slider._index = number - 1;
+        _slider._legend = _legend;
         _slider._parent = _field;
         _slider._flagged = false;
         _slider.flag = function() {
@@ -101,6 +122,10 @@ var menu_controls = {
         }
         _slider.isFlagged = function() {
             return _slider._flagged;
+        }
+        _slider.setPulsed = function() {
+            _slider._legend.text(_slider._legend.text() + " (PULSED)");
+            return _slider;
         }
         _slider.isDisabled = function() {
             return _slider.find("input[name=" + _name + "]").is(':disabled');
