@@ -184,16 +184,22 @@ class RoverHandler(Configurable):
         # Set the front camera to the home position anytime the autopilot is switched on.
         if self._ptz_cameras and c_teleop is not None:
             c_camera = c_teleop.get('camera_id', -1)
-            button_north_pressed = bool(c_teleop.get('button_y', 0))
-            if button_north_pressed:
+            _north_pressed = bool(c_teleop.get('button_y', 0))
+            _is_teleop = (c_pilot is not None and c_pilot.get('driver') == 'driver_mode.teleop.direct')
+            if _north_pressed:
                 self._ptz_cameras[0].add({'goto_home': 1})
-            elif c_camera in (0, 1) and (c_camera == 1 or (c_pilot is not None and c_pilot.get('driver') == 'driver_mode.teleop.direct')):
-                button_south_pressed = bool(c_teleop.get('button_a', 0))
-                button_west_pressed = bool(c_teleop.get('button_x', 0))
-                command = {'pan': c_teleop.get('pan', 0),
-                           'tilt': c_teleop.get('tilt', 0),
-                           'set_home': 1 if button_west_pressed else 0,
-                           'goto_home': 1 if button_south_pressed else 0
+            elif c_camera in (0, 1) and (c_camera == 1 or _is_teleop):
+                # Ignore the pan value on the front camera unless explicitly specified with a button press.
+                _south_pressed = bool(c_teleop.get('button_a', 0))
+                _west_pressed = bool(c_teleop.get('button_x', 0))
+                _read_pan = _west_pressed or c_camera > 0
+                tilt_value = c_teleop.get('tilt', 0)
+                pan_value = c_teleop.get('pan', 0) if _read_pan else 0
+                _set_home = _west_pressed and abs(tilt_value) < 1e-2 and abs(pan_value) < 1e-2
+                command = {'pan': pan_value,
+                           'tilt': tilt_value,
+                           'set_home': 1 if _set_home else 0,
+                           'goto_home': 1 if _south_pressed else 0
                            }
                 self._ptz_cameras[c_camera].add(command)
 
