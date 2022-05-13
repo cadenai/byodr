@@ -17,7 +17,6 @@ from tornado.platform.asyncio import AnyThreadEventLoopPolicy
 
 from byodr.utils import Application, ApplicationExit
 from byodr.utils.ipc import CameraThread, json_collector
-from byodr.utils.option import parse_option
 from .core import *
 from .store import Event, create_data_source
 from .web import DataTableRequestHandler, JPEGImageRequestHandler
@@ -95,8 +94,9 @@ class PackageApplication(Application):
         self._user = user
         self._recorder_dir = get_or_create_directory(os.path.join(sessions_dir, 'autopilot'))
         self._photo_dir = get_or_create_directory(os.path.join(sessions_dir, 'photos', 'cam0'))
-        self._vehicle = parse_option('constant.vehicle.type', str, 'vehicle.byodr.2020', [], **{})
-        self._config = parse_option('constant.vehicle.config', str, 'latest', [], **{})
+        # The vehicle config fields cannot be determined here but the fields should not be empty.
+        self._vehicle = 'na'
+        self._config = 'na'
 
     def setup(self):
         pass

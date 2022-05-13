@@ -15,8 +15,3 @@ driver.cc.throttle.pid_controller.p = 0.2
 driver.cc.throttle.pid_controller.i = 1.0
 driver.cc.throttle.pid_controller.d = 0.0
 driver.handler.steering.low_pass.momentum = 0.95
-
-[recorder]
-image.persist.scale = 640x480
-constant.vehicle.type = vehicle.carla.car.tesla.model3
-constant.vehicle.config = 0.9.9_a
