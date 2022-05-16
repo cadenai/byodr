@@ -24,7 +24,6 @@ class ControlServerSocket(websocket.WebSocketHandler):
     # There can be only one operator in control at any time.
     # Do not use a single variable since class attributes mutate to be instance attributes.
     operators = set()
-    operator_access_control = collections.deque(maxlen=1)
 
     def _has_operators(self):
         return len(self.operators) > 0
@@ -43,13 +42,13 @@ class ControlServerSocket(websocket.WebSocketHandler):
         pass
 
     def open(self, *args, **kwargs):
-        if self._is_operator():
+        if not self._has_operators():
+            self.operators.add(self)
+            logger.info("Operator {} connected.".format(self.request.remote_ip))
+        elif self._is_operator():
             logger.info("Operator {} reconnected.".format(self.request.remote_ip))
         else:
-            took_over = self._has_operators()
-            self.operators.clear()
-            self.operators.add(self)
-            logger.info("Operator {} {}.".format(self.request.remote_ip, ('took over' if took_over else 'connected')))
+            logger.info("Viewer {} connected.".format(self.request.remote_ip))
 
     def on_close(self):
         if self._is_operator():
@@ -59,14 +58,16 @@ class ControlServerSocket(websocket.WebSocketHandler):
             logger.info("Viewer {} disconnected.".format(self.request.remote_ip))
 
     def on_message(self, json_message):
+        msg = json.loads(json_message)
         _response = json.dumps(dict(control='viewer'))
         if self._is_operator():
             _response = json.dumps(dict(control='operator'))
-            msg = json.loads(json_message)
-            _micro_time = timestamp()
-            msg['time'] = _micro_time
-            self.operator_access_control.append(_micro_time)
+            msg['time'] = timestamp()
             self._fn_control(msg)
+        elif msg.get('_operator') == 'force':
+            self.operators.clear()
+            self.operators.add(self)
+            logger.info("Viewer {} took over control and is now operator.".format(self.request.remote_ip))
         try:
             self.write_message(_response)
         except websocket.WebSocketClosedError:
@@ -139,7 +140,7 @@ class MessageServerSocket(websocket.WebSocketHandler):
             pilot = None if state is None else state[0]
             vehicle = None if state is None else state[1]
             inference = None if state is None else state[2]
-            recorder = None if state is None else state[3]
+            recorder = None
             speed_scale = 3.6
             pilot_navigation_active = 0 if pilot is None else int(pilot.get('navigation_active', False))
             pilot_match_image = -1 if pilot is None else pilot.get('navigation_match_image', -1)

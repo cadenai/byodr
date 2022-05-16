@@ -96,9 +96,8 @@ def main():
     pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
     vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
     inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
-    recorder = json_collector(url='ipc:///byodr/recorder.sock', topic=b'aav/recorder/state', event=quit_event)
 
-    threads = [camera_front, camera_rear, pilot, vehicle, inference, recorder]
+    threads = [camera_front, camera_rear, pilot, vehicle, inference]
     if quit_event.is_set():
         return 0
 
@@ -111,7 +110,6 @@ def main():
                                     'ipc:///byodr/inference_c.sock',
                                     'ipc:///byodr/vehicle_c.sock',
                                     'ipc:///byodr/relay_c.sock',
-                                    'ipc:///byodr/recorder_c.sock',
                                     'ipc:///byodr/camera_c.sock'])
 
     def on_options_save():
@@ -138,14 +136,13 @@ def main():
     #     external_publisher.publish(nav_request)
 
     try:
-        main_redirect_url = '/index.htm?v=0.65.32'
+        main_redirect_url = '/index.htm?v=0.65.41'
         main_app = web.Application([
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
              dict(fn_state=(lambda: (pilot.get(),
                                      vehicle.get(),
-                                     inference.get(),
-                                     recorder.get())))),
+                                     inference.get())))),
             (r"/ws/cam/front", CameraMJPegSocket, dict(image_capture=(lambda: camera_front.capture()))),
             (r"/ws/cam/rear", CameraMJPegSocket, dict(image_capture=(lambda: camera_rear.capture()))),
             (r'/ws/nav', NavImageHandler, dict(fn_get_image=(lambda image_id: get_navigation_image(image_id)))),

@@ -132,10 +132,18 @@ class FakeServerSocket extends RealServerSocket {
 
 
 class RealGamepadSocket {
+    constructor() {
+        // noop.
+    }
     _send(command) {
         if (this.socket != undefined && this.socket.readyState == 1) {
             this.socket.send(JSON.stringify(command));
         }
+    }
+    _request_take_over_control() {
+        var command = {};
+        command._operator = 'force';
+        this._send(command);
     }
     _capture(server_response) {
         const gc_active = gamepad_controller.is_active();
@@ -200,12 +208,19 @@ class RealGamepadSocket {
 
 
 class FakeGamepadSocket extends RealGamepadSocket {
+    constructor() {
+        super();
+        this._operator = dev_tools._random_choice(['operator', 'viewer']);
+    }
     _send(command) {
+    }
+    _request_take_over_control() {
+        this._operator = 'operator';
     }
     _poll() {
         const _instance = this;
         if (_instance._running) {
-            super._capture(JSON.parse('{"control":"operator"}'));
+            super._capture(JSON.parse('{"control":"' + _instance._operator + '"}'));
             setTimeout(function() {_instance._poll();}, 100);
         }
     }
@@ -242,5 +257,8 @@ function teleop_stop_all() {
 document.addEventListener("DOMContentLoaded", function() {
     server_socket.add_server_message_listener(function(message) {
         teleop_screen._server_message(message);
+    });
+    $("input#message_box_button_take_control").click(function() {
+        gamepad_socket._request_take_over_control();
     });
 });

@@ -127,8 +127,7 @@ var gamepad_controller = {
         return result;
     },
 
-    _connect: function(event, connecting) {
-        var gamepad = event.gamepad;
+    _connect: function(gamepad, connecting) {
         if (connecting) {
             controller = this._create_gamepad(gamepad);
             if (controller != undefined) {
@@ -196,5 +195,5 @@ var gamepad_controller = {
     }
 }
 
-window.addEventListener("gamepadconnected", function(e) { gamepad_controller._connect(e, true); }, false);
-window.addEventListener("gamepaddisconnected", function(e) { gamepad_controller._connect(e, false); }, false);
+window.addEventListener("gamepadconnected", function(e) { gamepad_controller._connect(e.gamepad, true); }, false);
+window.addEventListener("gamepaddisconnected", function(e) { gamepad_controller._connect(e.gamepad, false); }, false);

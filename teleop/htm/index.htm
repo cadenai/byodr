@@ -21,10 +21,10 @@ body {
   transform: translate(-50%, 0);
 }
 
-#message_box.warning_message {
+#message_box_message.warning_message {
   background-color: #ffffcc;
 }
-#message_box.error_message {
+#message_box_message.error_message {
   background-color: #f7432f;
 }
 
@@ -100,11 +100,11 @@ div.overlay_distance {
    <!-- <script src="jmuxer/jmuxer-21.07.min.js"></script>-->
     <script src="live-player/http-live-player.js?v=0.65.0"></script>
     <script src="performance-polyfill.js?v=0.65.0"></script>
-	<script src="index_a_utils.js?v=0.65.0"></script>
-	<script src="index_b_gamepad.js?v=0.65.2"></script>
-	<script src="index_c_screen.js?v=0.65.1"></script>
+	<script src="index_a_utils.js?v=0.65.41"></script>
+	<script src="index_b_gamepad.js?v=0.65.41"></script>
+	<script src="index_c_screen.js?v=0.65.41"></script>
 	<script src="index_d_navigator.js?v=0.65.0"></script>
-	<script src="index_e_teleop.js?v=0.65.0"></script>
+	<script src="index_e_teleop.js?v=0.65.41"></script>
 	<script src="index_video_hlp.js?v=0.65.0"></script>
     <script src="index_video_mjpeg.js?v=0.65.0"></script>
 </head>
@@ -137,12 +137,19 @@ div.overlay_distance {
                 </p>
             </div>
         </div>
-        <div id="message_box"
-             style="height: 30px;
+        <div id="message_box_container" style="display: flex;">
+            <div style="flex: 1;">
+                <input id="message_box_button_take_control"
+                       type="button"
+                       value="Take over control"
+                       style="height: 100%; font-size: 18; text-align: center;">
+            </div>
+            <div id="message_box_message"
+                 style="height: 30px; width: 100%;
                     color: #000; font-family: Verdana; font-size; 13px;
                     border: 1px solid #ccc;
-                    padding: 8px 0 0 8px;
-                    display: none;">
+                    padding: 8px 0 0 8px;">
+            </div>
         </div>
         <div id="horizontal_bar"
              style="overflow: hidden; width: 100% !important;

@@ -19,6 +19,9 @@ function extend(proto, literal) {
 }
 
 var socket_utils = {
+    _init: function() {
+        // noop.
+    },
     create_socket: function(path, binary=true, reconnect=100, assign=function(e) {}) {
         ws_protocol = (document.location.protocol === "https:") ? "wss://" : "ws://";
         ws_url = ws_protocol + document.location.hostname + ":" + document.location.port + path;
@@ -120,6 +123,10 @@ var dev_tools = {
 var page_utils = {
     _capabilities: null,
 
+    _init: function() {
+        // noop.
+    },
+
     request_capabilities: function(callback) {
         const _instance = this;
         if (_instance._capabilities == undefined) {
@@ -159,7 +166,9 @@ var page_utils = {
 
 
 // --------------------------------------------------- Initialisations follow --------------------------------------------------------- //
+socket_utils._init();
 dev_tools._init();
+page_utils._init();
 
 document.addEventListener("DOMContentLoaded", function() {
     page_utils.request_capabilities(function(_capabilities) {

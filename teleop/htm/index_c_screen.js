@@ -152,7 +152,7 @@ var teleop_screen = {
     controller_status: 0,
     c_msg_connection_lost: "Connection lost - please wait or refresh the page.",
     c_msg_controller_err: "Controller not detected - please press a button on the device.",
-    c_msg_teleop_view_only: "Another user is in control - please remain as viewer or refresh the page to attempt control.",
+    c_msg_teleop_view_only: "Another user is in control - you can remain as viewer or take over.",
     active_camera: 'front',  // The active camera is rendered on the main display.
     _debug_values_listeners: [],
     camera_activation_listeners: [],
@@ -163,11 +163,14 @@ var teleop_screen = {
     _last_server_message: null,
 
     _init() {
+        this.controller_status = gamepad_controller.is_active();
         this.el_viewport_container = $("div#viewport_container");
         this.el_drive_bar = $("div#debug_drive_bar");
         this.el_drive_values = $("div#debug_drive_values");
         this.el_pilot_bar = $("div#pilot_drive_values");
-        this.el_message_box = $("div#message_box");
+        this.el_message_box_container = $("div#message_box_container");
+        this.el_message_box_message = this.el_message_box_container.find("div#message_box_message");
+        this.el_button_take_control = this.el_message_box_container.find("input#message_box_button_take_control");
         this.overlay_center_markers = [$("div#overlay_center_distance0"), $("div#overlay_center_distance1")];
         this.overlay_left_markers = [$("div#overlay_left_marker0"), $("div#overlay_left_marker1")];
         this.overlay_right_markers = [$("div#overlay_right_marker0"), $("div#overlay_right_marker1")];
@@ -398,34 +401,43 @@ var teleop_screen = {
     },
 
     controller_update: function(command) {
-        const message_box = this.el_message_box;
+        const message_box_container = this.el_message_box_container;
+        const message_box_message = this.el_message_box_message;
+        const button_take_control = this.el_button_take_control;
         const is_connection_ok = this.is_connection_ok;
         const controller_status = this.controller_status;
         const c_msg_connection_lost = this.c_msg_connection_lost;
         const c_msg_controller_err = this.c_msg_controller_err;
         const c_msg_teleop_view_only = this.c_msg_teleop_view_only;
         var show_message = false;
+        var show_button = false;
         if (!is_connection_ok) {
-            message_box.text(c_msg_connection_lost);
-            message_box.removeClass();
-            message_box.addClass('error_message');
+            message_box_message.text(c_msg_connection_lost);
+            message_box_message.removeClass();
+            message_box_message.addClass('error_message');
             show_message = true;
         } else if (controller_status == 0) {
-            message_box.text(c_msg_controller_err);
-            message_box.removeClass();
-            message_box.addClass('warning_message');
+            message_box_message.text(c_msg_controller_err);
+            message_box_message.removeClass();
+            message_box_message.addClass('warning_message');
             show_message = true;
         } else if (controller_status == 2) {
-            message_box.text(c_msg_teleop_view_only);
-            message_box.removeClass();
-            message_box.addClass('warning_message');
+            message_box_message.text(c_msg_teleop_view_only);
+            message_box_message.removeClass();
+            message_box_message.addClass('warning_message');
             show_message = true;
+            show_button = true;
         }
         if (show_message) {
-            message_box.show();
+            if (show_button) {
+                button_take_control.show();
+            } else {
+                button_take_control.hide();
+            }
+            message_box_container.show();
             this._on_viewport_container_resize();
         } else {
-            message_box.hide();
+            message_box_container.hide();
             this._on_viewport_container_resize();
         }
         //
