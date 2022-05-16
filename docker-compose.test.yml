@@ -45,12 +45,6 @@ services:
     volumes:
       - ./common:/common
       - ./pilot:/app
-  recorder:
-    restart: 'no'
-    command: ["python", "-m", "pytest", "-vvv", "tests.py"]
-    volumes:
-      - ./common:/common
-      - ./recorder:/app
   inference:
     restart: 'no'
     command: ["python3", "-m", "pytest", "-vvv", "inference/tests.py"]
