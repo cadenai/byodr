@@ -1,6 +1,7 @@
-FROM centipede2donald/ubuntu-bionic:python27-opencv32-gstreamer10
+FROM centipede2donald/ubuntu-bionic:python36-opencv32-gstreamer10
 
-RUN pip install "tornado==4.5.3"
+RUN pip3 install "pymongo==4.0.1"
+RUN pip3 install "tornado==6.1"
 
 COPY ./common common/
 COPY ./teleop app/
@@ -9,5 +10,3 @@ WORKDIR /app
 EXPOSE 9100
 
 ENV PYTHONPATH "${PYTHONPATH}:/common"
-
-CMD ["python", "app.py", "--port=9100"]

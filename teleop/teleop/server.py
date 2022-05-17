@@ -1,17 +1,20 @@
 #!/usr/bin/env python
 
+from __future__ import absolute_import
+
 import collections
-import datetime
 import json
 import logging
 import os
 import threading
 import traceback
+from io import open
 
 import cv2
 import numpy as np
 import tornado
-from ConfigParser import SafeConfigParser
+from six.moves import range
+from six.moves.configparser import SafeConfigParser
 from tornado import web, websocket
 from tornado.gen import coroutine
 
@@ -246,7 +249,6 @@ class NavImageHandler(web.RequestHandler):
     def data_received(self, chunk):
         pass
 
-    @tornado.web.asynchronous
     @tornado.gen.coroutine
     def get(self):
         try:
@@ -259,7 +261,6 @@ class NavImageHandler(web.RequestHandler):
         self.set_header('Content-Type', 'image/jpeg')
         self.set_header('Content-Length', len(chunk))
         self.write(chunk.tobytes())
-        yield tornado.gen.Task(self.flush)
 
 
 class UserOptions(object):
@@ -358,76 +359,6 @@ class UnknownPointNavigationRequestError(Exception):
 def delayed_open(store, route_name):
     if store.get_selected_route() != route_name:
         threading.Thread(target=store.open, args=(route_name,)).start()
-
-
-class SimpleRequestNavigationHandler(web.RequestHandler):
-    # noinspection PyAttributeOutsideInit
-    def initialize(self, **kwargs):
-        self._store = kwargs.get('route_store')
-        self._fn_override = kwargs.get('fn_override')
-
-    def data_received(self, chunk):
-        pass
-
-    @tornado.web.asynchronous
-    @tornado.gen.coroutine
-    def get(self):
-        nav_request = dict(
-            action=self.get_query_argument('action', default=None),
-            route=self.get_query_argument('route', default=None),
-            point=self.get_query_argument('point', default=None),
-            speed=self.get_query_argument('speed', default=None)
-        )
-        logger.info("{}".format(nav_request))
-        response_code = 200
-        blob = {}
-        try:
-            #   /navigate?action='halt'
-            #   /navigate?action='halt'&route=''&point=''
-            #   /navigate?action='resume'&route=''&speed=1
-            action = nav_request.get('action', None)
-            route = nav_request.get('route', None)
-            point = nav_request.get('point', None)
-            speed = nav_request.get('speed', None)
-            # Only the latest non-executed request is to be processed.
-            if action not in ('resume', 'halt'):
-                raise IllegalActionNavigationRequestError()
-            if route is not None and route not in self._store.list_routes():
-                raise UnknownRouteNavigationRequestError()
-            if action == 'halt' and route is not None and (point is None or not self._store.has_navigation_point(route, point)):
-                raise UnknownPointNavigationRequestError()
-            if speed is not None:
-                _speed_value = float(speed)
-                if _speed_value < 0:
-                    raise AssertionError("The use of a negative value for speed is not allowed.")
-            # We are the authority on route state.
-            if route is not None:
-                delayed_open(self._store, route)
-            self._fn_override(nav_request)
-            blob['message'] = 'Your request has been successfully completed'
-        except IllegalActionNavigationRequestError:
-            response_code = 404
-            blob['message'] = 'The action is invalid'
-        except UnknownRouteNavigationRequestError:
-            response_code = 404
-            blob['message'] = 'The route is invalid'
-        except UnknownPointNavigationRequestError:
-            response_code = 404
-            blob['message'] = 'The navigation point is invalid'
-        except StandardError as se:
-            logger.info(se)
-            response_code = 404
-            blob['message'] = 'An illegal value error occurred'
-
-        blob['status'] = 'ok' if response_code == 200 else 'error'
-        blob['timestamp'] = datetime.datetime.utcnow().strftime('%b %d %H:%M:%S.%s UTC')
-        message = json.dumps(blob)
-        # self.set_header('Content-Type', 'text/plain; charset=UTF-8')
-        self.set_header('Content-Type', 'application/json')
-        self.set_header('Content-Length', len(message))
-        self.set_status(response_code)
-        self.write(message)
-        yield tornado.gen.Task(self.flush)
 
 
 class JSONNavigationHandler(JSONRequestHandler):

@@ -1,31 +1,31 @@
 #!/usr/bin/env python
+from __future__ import absolute_import
+
 import argparse
+import asyncio
 import glob
-import logging
 import multiprocessing
-import os
 import signal
 
-import cv2
-import numpy as np
-from ConfigParser import SafeConfigParser
-from tornado import web, ioloop
+from pymongo import MongoClient
+from tornado import ioloop
 from tornado.httpserver import HTTPServer
+from tornado.platform.asyncio import AnyThreadEventLoopPolicy
 
-from byodr.utils import Application, hash_dict
-from byodr.utils import timestamp
+from byodr.utils import Application, hash_dict, ApplicationExit
 from byodr.utils.ipc import CameraThread, JSONPublisher, JSONZmqClient, json_collector
 from byodr.utils.navigate import FileSystemRouteDataSource, ReloadableDataSource
-from server import CameraMJPegSocket, ControlServerSocket, MessageServerSocket, ApiUserOptionsHandler, UserOptions, \
-    JSONMethodDumpRequestHandler, NavImageHandler, JSONNavigationHandler
+from logbox.app import LogApplication, PackageApplication
+from logbox.core import MongoLogBox, SharedUser, SharedState
+from logbox.web import DataTableRequestHandler, JPEGImageRequestHandler
+from .server import *
 
 logger = logging.getLogger(__name__)
 
 log_format = '%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s'
 
-io_loop = ioloop.IOLoop.instance()
-signal.signal(signal.SIGINT, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
-signal.signal(signal.SIGTERM, lambda sig, frame: io_loop.add_callback_from_signal(_interrupt))
+signal.signal(signal.SIGINT, lambda sig, frame: _interrupt())
+signal.signal(signal.SIGTERM, lambda sig, frame: _interrupt())
 
 quit_event = multiprocessing.Event()
 
@@ -33,7 +33,6 @@ quit_event = multiprocessing.Event()
 def _interrupt():
     logger.info("Received interrupt, quitting.")
     quit_event.set()
-    io_loop.stop()
 
 
 def _load_nav_image(fname):
@@ -78,7 +77,12 @@ def main():
     parser.add_argument('--name', type=str, default='none', help='Process name.')
     parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
     parser.add_argument('--routes', type=str, default='/routes', help='Directory with the navigation routes.')
+    parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
     args = parser.parse_args()
+
+    # The mongo client is thread-safe and provides for transparent connection pooling.
+    _mongo = MongoLogBox(MongoClient())
+    _mongo.ensure_indexes()
 
     route_store = ReloadableDataSource(
         FileSystemRouteDataSource(
@@ -93,11 +97,19 @@ def main():
 
     camera_front = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
     camera_rear = CameraThread(url='ipc:///byodr/camera_1.sock', topic=b'aav/camera/1', event=quit_event)
-    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event)
-    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event)
-    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event)
+    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event, hwm=20)
+    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event, hwm=20)
+    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event, hwm=20)
 
-    threads = [camera_front, camera_rear, pilot, vehicle, inference]
+    logbox_user = SharedUser()
+    logbox_state = SharedState(channels=(camera_front, (lambda: pilot.get()), (lambda: vehicle.get()), (lambda: inference.get())), hz=16)
+    log_application = LogApplication(_mongo, logbox_user, logbox_state, event=quit_event, config_dir=args.config)
+    package_application = PackageApplication(_mongo, logbox_user, event=quit_event, hz=0.100, sessions_dir=args.sessions)
+
+    logbox_thread = threading.Thread(target=log_application.run)
+    package_thread = threading.Thread(target=package_application.run)
+
+    threads = [camera_front, camera_rear, pilot, vehicle, inference, logbox_thread, package_thread]
     if quit_event.is_set():
         return 0
 
@@ -130,19 +142,24 @@ def main():
         cmd['navigator'] = dict(route=route_store.get_selected_route())
         teleop_publisher.publish(cmd)
 
-    # def override_publish(nav_request):
-    # We are the authority on route state.
-    # if nav_request is not None:
-    #     external_publisher.publish(nav_request)
+    asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
+    io_loop = ioloop.IOLoop.instance()
+    _conditional_exit = ApplicationExit(quit_event, lambda: io_loop.stop())
+    _periodic = ioloop.PeriodicCallback(lambda: _conditional_exit(), 5e3)
+    _periodic.start()
 
     try:
         main_redirect_url = '/index.htm?v=0.65.41'
         main_app = web.Application([
+            (r"/api/datalog/event/v10/table", DataTableRequestHandler, dict(mongo_box=_mongo)),
+            (r"/api/datalog/event/v10/image", JPEGImageRequestHandler, dict(mongo_box=_mongo)),
             (r"/ws/ctl", ControlServerSocket, dict(fn_control=teleop_publish)),
             (r"/ws/log", MessageServerSocket,
-             dict(fn_state=(lambda: (pilot.get(),
-                                     vehicle.get(),
-                                     inference.get())))),
+             dict(fn_state=(lambda: (pilot.peek(),
+                                     vehicle.peek(),
+                                     inference.peek())))),
             (r"/ws/cam/front", CameraMJPegSocket, dict(image_capture=(lambda: camera_front.capture()))),
             (r"/ws/cam/rear", CameraMJPegSocket, dict(image_capture=(lambda: camera_rear.capture()))),
             (r'/ws/nav', NavImageHandler, dict(fn_get_image=(lambda image_id: get_navigation_image(image_id)))),
@@ -162,6 +179,9 @@ def main():
         io_loop.start()
     except KeyboardInterrupt:
         quit_event.set()
+    finally:
+        _mongo.close()
+        _periodic.stop()
 
     route_store.quit()
 

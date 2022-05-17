@@ -1,7 +1,9 @@
+from __future__ import absolute_import
 import multiprocessing
-from ConfigParser import SafeConfigParser
+from six.moves.configparser import SafeConfigParser
 
-from app import TeleopApplication
+from .app import TeleopApplication
+from io import open
 
 
 def create_application(config_dir):

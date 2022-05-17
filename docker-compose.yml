@@ -88,20 +88,19 @@ services:
     volumes:
       - volume_mongodb_config:/config:rw
       - volume_mongodb_data:/data/db:rw
-  logbox:
+  teleop:
     cpuset: "0"
     build:
       context: .
-      dockerfile: logbox/Dockerfile
+      dockerfile: teleop/Dockerfile
     restart: always
-    command: ["python3", "-m", "logbox.app", "--name", "logbox"]
-    stop_signal: SIGKILL
+    command: ["python3", "-m", "teleop.app", "--name", "teleop", "--routes", "/sessions/routes"]
     network_mode: host
     environment:
       LD_PRELOAD: libgomp.so.1
     volumes:
       - volume_byodr_sockets:/byodr:rw
-      - volume_byodr_config:/config:ro
+      - volume_byodr_config:/config:rw
       - volume_byodr_sessions:/sessions:rw
   vehicle:
     cpuset: "1"
@@ -117,21 +116,6 @@ services:
     volumes:
       - volume_byodr_sockets:/byodr:rw
       - volume_byodr_config:/config:rw
-  teleop:
-    cpuset: "2"
-    build:
-      context: .
-      dockerfile: teleop/Dockerfile
-    restart: always
-    command: ["python", "app.py", "--name", "teleop", "--routes", "/sessions/routes"]
-    ports:
-      - "8080:8080"
-    environment:
-      LD_PRELOAD: libgomp.so.1
-    volumes:
-      - volume_byodr_sockets:/byodr:rw
-      - volume_byodr_config:/config:rw
-      - volume_byodr_sessions:/sessions:ro
   pilot:
     cpuset: "2"
     build:

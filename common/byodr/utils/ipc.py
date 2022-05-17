@@ -100,6 +100,9 @@ class JSONReceiver(object):
             self._queue.clear()
         return _view
 
+    def peek(self):
+        return self._queue[0] if self._queue else None
+
 
 class CollectorThread(threading.Thread):
     def __init__(self, receivers, event=None, hz=1000):
@@ -113,6 +116,9 @@ class CollectorThread(threading.Thread):
         # Get the latest message without blocking.
         # _receiver.consume() -- blocks; perform at thread.run()
         return self._receivers[index].get()
+
+    def peek(self, index=0):
+        return self._receivers[index].peek()
 
     def quit(self):
         self._quit_event.set()

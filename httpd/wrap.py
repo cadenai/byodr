@@ -35,7 +35,8 @@ def main():
 
     config_file = args.config
     if os.path.exists(config_file):
-        _check_config(config_file)
+        # _check_config(config_file)
+        pass
     else:
         shutil.copyfile('haproxy.template', config_file)
         logger.info("Created a new non ssl proxy configuration.")

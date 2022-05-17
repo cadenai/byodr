@@ -16,11 +16,9 @@ frontend localhost
    acl is_stream1 dst_port 9001
    acl is_stream2 dst_port 9002
    acl is_pilot_api path_beg /teleop/pilot
-   acl is_datalog_api path_beg /api/datalog
    use_backend stream1 if is_stream1
    use_backend stream2 if is_stream2
    use_backend pilot if is_pilot_api
-   use_backend datalog if is_datalog_api
 
 backend main
     mode http
@@ -29,10 +27,6 @@ backend main
 backend pilot
     mode http
     server rover 127.0.0.1:8082 check
-
-backend datalog
-    mode http
-    server rover 127.0.0.1:8085 check
 
 backend stream1
     mode http

@@ -1,25 +1,15 @@
 from __future__ import absolute_import
 
-import argparse
-import asyncio
 import logging
 import multiprocessing
 import signal
 import sys
-import threading
 import traceback
 from datetime import datetime
 
-from pymongo import MongoClient
-from tornado import web, ioloop
-from tornado.httpserver import HTTPServer
-from tornado.platform.asyncio import AnyThreadEventLoopPolicy
-
-from byodr.utils import Application, ApplicationExit
-from byodr.utils.ipc import CameraThread, json_collector
+from byodr.utils import Application
 from .core import *
 from .store import Event, create_data_source
-from .web import DataTableRequestHandler, JPEGImageRequestHandler
 
 if sys.version_info > (3,):
     pass
@@ -288,70 +278,3 @@ class LogApplication(Application):
         if any([cmd.get('button_right', 0) == 1 for cmd in ([] if pilot_all is None else pilot_all)]):
             self._photos.append(_contents)
         list(map(lambda x: self._insert(TRIGGER_PHOTO_SNAPSHOT, content=x, save_image=True), self._photos.pop_all()))
-
-
-def main():
-    parser = argparse.ArgumentParser(description='Logger black box service.')
-    parser.add_argument('--name', type=str, default='none', help='Process name.')
-    parser.add_argument('--sessions', type=str, default='/sessions', help='Sessions directory.')
-    parser.add_argument('--config', type=str, default='/config', help='Config directory path.')
-    args = parser.parse_args()
-
-    primary_hz = 16
-
-    # The mongo client is thread-safe and provides for transparent connection pooling.
-    _mongo = MongoLogBox(MongoClient())
-    _mongo.ensure_indexes()
-
-    # Never miss out on pilot commands - pop a large buffer.
-    _camera = CameraThread(url='ipc:///byodr/camera_0.sock', topic=b'aav/camera/0', event=quit_event)
-    pilot = json_collector(url='ipc:///byodr/pilot.sock', topic=b'aav/pilot/output', event=quit_event, pop=True, hwm=20)
-    vehicle = json_collector(url='ipc:///byodr/vehicle.sock', topic=b'aav/vehicle/state', event=quit_event, pop=True, hwm=20)
-    inference = json_collector(url='ipc:///byodr/inference.sock', topic=b'aav/inference/state', event=quit_event, pop=True, hwm=20)
-
-    _user = SharedUser()
-    _state = SharedState(channels=(_camera, (lambda: pilot.get()), (lambda: vehicle.get()), (lambda: inference.get())), hz=primary_hz)
-
-    log_application = LogApplication(_mongo, _user, _state, event=quit_event, config_dir=args.config)
-    package_application = PackageApplication(_mongo, _user, event=quit_event, hz=0.100, sessions_dir=args.sessions)
-
-    application_thread = threading.Thread(target=log_application.run)
-    package_thread = threading.Thread(target=package_application.run)
-    threads = [_camera, pilot, vehicle, inference, application_thread, package_thread]
-    if quit_event.is_set():
-        return 0
-
-    [t.start() for t in threads]
-
-    asyncio.set_event_loop_policy(AnyThreadEventLoopPolicy())
-    asyncio.set_event_loop(asyncio.new_event_loop())
-
-    io_loop = ioloop.IOLoop.instance()
-    _conditional_exit = ApplicationExit(quit_event, lambda: io_loop.stop())
-    _periodic = ioloop.PeriodicCallback(lambda: _conditional_exit(), 5e3)
-    _periodic.start()
-
-    try:
-        main_app = web.Application([
-            (r"/api/datalog/event/v10/table", DataTableRequestHandler, dict(mongo_box=_mongo)),
-            (r"/api/datalog/event/v10/image", JPEGImageRequestHandler, dict(mongo_box=_mongo))
-        ])
-        http_server = HTTPServer(main_app, xheaders=True)
-        http_server.bind(8085)
-        http_server.start()
-        logger.info("Data table web services starting on port 8085.")
-        io_loop.start()
-    except KeyboardInterrupt:
-        quit_event.set()
-    finally:
-        _mongo.close()
-        _periodic.stop()
-
-    logger.info("Waiting on threads to stop.")
-    [t.join() for t in threads]
-
-
-if __name__ == "__main__":
-    logging.basicConfig(format='%(levelname)s: %(asctime)s %(filename)s %(funcName)s %(message)s', datefmt='%Y%m%d:%H:%M:%S %p %Z')
-    logging.getLogger().setLevel(logging.INFO)
-    main()
