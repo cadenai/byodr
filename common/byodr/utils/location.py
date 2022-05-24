@@ -9,8 +9,11 @@ def path(current_position, previous_position):
     p_latitude, p_longitude = previous_position
     # noinspection PyUnresolvedReferences
     _g = Geodesic.WGS84.Inverse(p_latitude, p_longitude, c_latitude, c_longitude)
-    _distance = _g['s12']  # Meters.
-    _bearing = _g['azi1']  # Degrees from North.
+    # Distance in meters.
+    _distance = _g['s12']
+    # The azimuth is the heading measured clockwise from north.
+    # azi2 is the "forward" azimuth, i.e., the heading that takes you beyond point 2 not back to point 1.
+    _bearing = _g['azi2']
     return _distance, _bearing
 
 
