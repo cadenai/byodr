@@ -293,7 +293,7 @@ class UserOptions(object):
             for option in parser.options(section):
                 if not self._parser.has_option(section, option):
                     self.set_option(section, option, parser.get(section, option))
-        with open(self._fname, 'wb') as f:
+        with open(self._fname, 'w') as f:
             self._parser.write(f)
 
 

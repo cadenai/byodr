@@ -92,7 +92,7 @@ def test_monitor_relay(tmpdir):
     _parser = SafeConfigParser()
     _parser.add_section('vehicle')
     _parser.set('vehicle', 'ras.master.uri', 'localhost-' + str(random.random()))
-    with open(os.path.join(config_directory, 'test_config.ini'), 'wb') as f:
+    with open(os.path.join(config_directory, 'test_config.ini'), 'w') as f:
         _parser.write(f)
     application.setup()
     assert receiver.is_started()

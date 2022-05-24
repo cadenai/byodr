@@ -56,7 +56,7 @@ def test_create_and_setup(tmpdir):
         _parser = SafeConfigParser()
         _parser.add_section('pilot')
         _parser.set('pilot', 'clock.hz', str(new_process_frequency))
-        with open(os.path.join(directory, 'test_config.ini'), 'wb') as f:
+        with open(os.path.join(directory, 'test_config.ini'), 'w') as f:
             _parser.write(f)
         #
         # Issue the restart request.
