@@ -22,7 +22,6 @@ class GeoTrackerThread(threading.Thread):
         super(GeoTrackerThread, self).__init__()
         self._world = world
         self._actor = actor
-        self._sleep = .50
         self._quit_event = threading.Event()
         self._tracker = GeoTracker()
         self._queue = collections.deque(maxlen=1)
@@ -32,7 +31,7 @@ class GeoTrackerThread(threading.Thread):
         return None if location is None else self._world.get_map().transform_to_geolocation(location)
 
     def _track(self):
-        # Getting the geo location from carla takes 150ms on average.
+        # Getting the geolocation from carla takes 150ms on average.
         c_geo = self._location()
         if c_geo is not None:
             latitude, longitude = (c_geo.latitude, c_geo.longitude)
@@ -51,7 +50,8 @@ class GeoTrackerThread(threading.Thread):
                 self._track()
             except RuntimeError:
                 pass
-            time.sleep(self._sleep)
+            # Determines this thread's run frequency.
+            time.sleep(0.200)
 
 
 class CarlaHandler(Configurable):

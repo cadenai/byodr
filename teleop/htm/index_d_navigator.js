@@ -133,7 +133,7 @@ class RealNavigatorController {
     _server_message(message) {
         $('span#navigation_geo_lat').text(message.geo_lat.toFixed(6));
         $('span#navigation_geo_long').text(message.geo_long.toFixed(6));
-        $('span#navigation_heading').text(message.geo_head.toFixed(2));
+        $('span#navigation_heading').text(message.geo_head_text);
         if (this.started) {
             if (message.inf_surprise != undefined) {
                 const _nni_dist = Math.min(1, message.nav_distance[1]);

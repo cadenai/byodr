@@ -151,7 +151,7 @@ def main():
     _periodic.start()
 
     try:
-        main_redirect_url = '/index.htm?v=0.65.41'
+        main_redirect_url = '/index.htm?v=0.65.50'
         main_app = web.Application([
             (r"/api/datalog/event/v10/table", DataTableRequestHandler, dict(mongo_box=_mongo)),
             (r"/api/datalog/event/v10/image", JPEGImageRequestHandler, dict(mongo_box=_mongo)),

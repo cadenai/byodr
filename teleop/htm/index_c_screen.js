@@ -25,6 +25,11 @@ var screen_utils = {
     _decorate_server_message: function(message) {
         message._is_on_autopilot = message.ctl == 5;
         message._has_passage = message.inf_total_penalty < 1;
+        if (message.geo_head == undefined) {
+            message.geo_head_text = 'n/a';
+        } else {
+            message.geo_head_text = message.geo_head.toFixed(2);
+        }
         return message;
     },
 
